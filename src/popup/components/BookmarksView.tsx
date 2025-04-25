@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Box from '@mui/material/Box';
+import BookmarkGrid from './BookmarkGrid';
 import BookmarkList from './BookmarkList';
 import LoadingIndicator from './LoadingIndicator';
+import ViewToggleButton from './ViewToggleButton';
 import { ToastRef } from './Toast';
 import bookmarkService, { BookmarkItem, BookmarkResult } from '../../utils/bookmark-service';
-import storageService from '../../utils/storage-service';
+import storageService, { UserSettings } from '../../utils/storage-service';
 
 interface BookmarksViewProps {
   toastRef: React.RefObject<ToastRef>;
@@ -16,17 +18,47 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [folderStack, setFolderStack] = useState<BookmarkItem[]>([]);
   const [currentBookmarks, setCurrentBookmarks] = useState<BookmarkItem[]>([]);
+  const [viewType, setViewType] = useState<'list' | 'grid'>('grid'); // 默认使用网格视图
   const bookmarksMap = useRef<Map<string, BookmarkItem>>(new Map());
 
-  // 加载所有书签树
+  // 加载所有书签树和用户设置
   useEffect(() => {
     loadBookmarks();
+    loadUserSettings();
   }, []);
 
   // 当文件夹变化时更新当前显示的书签
   useEffect(() => {
     updateCurrentBookmarks();
   }, [currentFolderId, bookmarks]);
+
+  // 加载用户设置
+  const loadUserSettings = async () => {
+    try {
+      const result = await storageService.getSettings();
+      if (result.success && result.data) {
+        const settings = result.data as UserSettings;
+        setViewType(settings.viewType);
+      }
+    } catch (error) {
+      console.error('加载用户设置错误:', error);
+    }
+  };
+
+  // 保存视图类型设置
+  const saveViewTypeSetting = async (type: 'list' | 'grid') => {
+    try {
+      await storageService.updateSettings({ viewType: type });
+    } catch (error) {
+      console.error('保存视图类型设置错误:', error);
+    }
+  };
+
+  // 处理视图类型切换
+  const handleViewTypeChange = (type: 'list' | 'grid') => {
+    setViewType(type);
+    saveViewTypeSetting(type);
+  };
 
   // 加载书签树
   const loadBookmarks = async () => {
@@ -157,24 +189,36 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
     handleResult(result, '文件夹已删除');
   };
 
+  // 渲染书签视图
+  const renderBookmarkView = () => {
+    if (isLoading) {
+      return <LoadingIndicator message="加载书签中..." />;
+    }
+
+    const commonProps = {
+      bookmarks: currentBookmarks,
+      parentFolder: folderStack.length > 0 ? folderStack[folderStack.length - 1] : undefined,
+      isLoading: isLoading,
+      onAddBookmark: handleAddBookmark,
+      onAddFolder: handleAddFolder,
+      onEditBookmark: handleEditBookmark,
+      onDeleteBookmark: handleDeleteBookmark,
+      onDeleteFolder: handleDeleteFolder,
+      onNavigateToFolder: navigateToFolder,
+      onNavigateBack: navigateBack,
+      viewType: viewType,
+      onViewTypeChange: handleViewTypeChange
+    };
+
+    return viewType === 'grid' ? 
+      <BookmarkGrid {...commonProps} /> : 
+      <BookmarkList {...commonProps} />;
+  };
+
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      {isLoading ? (
-        <LoadingIndicator message="加载书签中..." />
-      ) : (
-        <BookmarkList
-          bookmarks={currentBookmarks}
-          parentFolder={folderStack.length > 0 ? folderStack[folderStack.length - 1] : undefined}
-          isLoading={isLoading}
-          onAddBookmark={handleAddBookmark}
-          onAddFolder={handleAddFolder}
-          onEditBookmark={handleEditBookmark}
-          onDeleteBookmark={handleDeleteBookmark}
-          onDeleteFolder={handleDeleteFolder}
-          onNavigateToFolder={navigateToFolder}
-          onNavigateBack={navigateBack}
-        />
-      )}
+      {/* 书签内容区域 */}
+      {renderBookmarkView()}
     </Box>
   );
 };

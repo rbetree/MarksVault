@@ -2,6 +2,7 @@
 export interface UserSettings {
   isDarkMode: boolean;
   syncEnabled: boolean;
+  viewType: 'list' | 'grid'; // 视图类型：列表或网格
   // 更多设置项...
 }
 
@@ -29,7 +30,8 @@ class StorageService {
       const result = await chrome.storage.local.get('settings');
       const settings = result.settings || {
         isDarkMode: false,
-        syncEnabled: false
+        syncEnabled: false,
+        viewType: 'grid' // 默认使用网格视图
       };
       
       return {

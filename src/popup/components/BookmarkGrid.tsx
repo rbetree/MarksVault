@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
-import List from '@mui/material/List';
+import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Divider from '@mui/material/Divider';
-import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
 import InputBase from '@mui/material/InputBase';
 import IconButton from '@mui/material/IconButton';
@@ -10,8 +9,6 @@ import SearchIcon from '@mui/icons-material/Search';
 import ClearIcon from '@mui/icons-material/Clear';
 import AddIcon from '@mui/icons-material/Add';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import BookmarkItem from './BookmarkItem';
-import { BookmarkItem as BookmarkItemType } from '../../utils/bookmark-service';
 import Fab from '@mui/material/Fab';
 import Dialog from '@mui/material/Dialog';
 import DialogActions from '@mui/material/DialogActions';
@@ -22,9 +19,45 @@ import TextField from '@mui/material/TextField';
 import Button from '@mui/material/Button';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Switch from '@mui/material/Switch';
+import { styled } from '@mui/material/styles';
+import BookmarkGridItem from './BookmarkGridItem';
+import { BookmarkItem as BookmarkItemType } from '../../utils/bookmark-service';
 import ViewToggleButton from './ViewToggleButton';
 
-interface BookmarkListProps {
+// 样式化组件
+const GridContainer = styled(Box)(({ theme }) => ({
+  display: 'flex',
+  flexWrap: 'wrap',
+  padding: theme.spacing(1, 2),
+  justifyContent: 'flex-start',
+  width: '100%',
+  height: '100%',
+  gap: theme.spacing(1),
+  alignContent: 'flex-start',
+  overflowY: 'auto',
+  backgroundColor: theme.palette.background.paper,
+}));
+
+const NavigationArea = styled(Box)(({ theme }) => ({
+  padding: theme.spacing(1, 2),
+  display: 'flex',
+  alignItems: 'center',
+  borderBottom: `1px solid ${theme.palette.divider}`,
+}));
+
+const SearchArea = styled(Box)(({ theme }) => ({
+  padding: theme.spacing(1),
+  backgroundColor: theme.palette.background.paper,
+}));
+
+const EmptyState = styled(Box)(({ theme }) => ({
+  width: '100%',
+  textAlign: 'center',
+  padding: theme.spacing(3),
+  color: theme.palette.text.secondary,
+}));
+
+interface BookmarkGridProps {
   bookmarks: BookmarkItemType[];
   parentFolder?: BookmarkItemType;
   isLoading?: boolean;
@@ -39,7 +72,7 @@ interface BookmarkListProps {
   onViewTypeChange: (viewType: 'list' | 'grid') => void;
 }
 
-const BookmarkList: React.FC<BookmarkListProps> = ({
+const BookmarkGrid: React.FC<BookmarkGridProps> = ({
   bookmarks,
   parentFolder,
   isLoading = false,
@@ -192,16 +225,16 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* 导航栏 */}
-      <Box sx={{ p: 1, bgcolor: 'background.paper' }}>
+      <SearchArea>
         {parentFolder && (
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+          <NavigationArea>
             <IconButton onClick={onNavigateBack} size="small">
               <ArrowBackIcon />
             </IconButton>
             <Typography variant="subtitle1" noWrap sx={{ ml: 1 }}>
               {parentFolder.title}
             </Typography>
-          </Box>
+          </NavigationArea>
         )}
         
         {/* 搜索框 */}
@@ -237,90 +270,96 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
             />
           </Box>
         </Paper>
-      </Box>
+      </SearchArea>
 
       <Divider />
 
-      {/* 书签列表 */}
-      <Box sx={{ flexGrow: 1, overflow: 'auto', p: 0 }}>
+      {/* 书签网格 */}
+      <Box sx={{ 
+        flexGrow: 1, 
+        overflow: 'auto',
+        display: 'flex',
+        flexDirection: 'column',
+        height: 'calc(100% - 57px)', // 减去搜索栏高度，确保高度正确
+        position: 'relative' // 为fixed定位的子元素提供定位上下文
+      }}>
         {filteredBookmarks.length === 0 ? (
-          <Box sx={{ p: 3, textAlign: 'center' }}>
+          <EmptyState>
             <Typography color="text.secondary">
               {searchText ? '没有找到匹配的书签' : '没有书签'}
             </Typography>
-          </Box>
+          </EmptyState>
         ) : (
-          <List disablePadding>
+          <GridContainer>
             {filteredBookmarks.map((bookmark) => (
-              <React.Fragment key={bookmark.id}>
-                <BookmarkItem
-                  bookmark={bookmark}
-                  onEdit={handleEdit}
-                  onDelete={handleDelete}
-                  onOpen={handleBookmarkOpen}
-                  onOpenFolder={handleFolderOpen}
-                />
-                <Divider variant="inset" component="li" />
-              </React.Fragment>
+              <BookmarkGridItem
+                key={bookmark.id}
+                bookmark={bookmark}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+                onOpen={handleBookmarkOpen}
+                onOpenFolder={handleFolderOpen}
+              />
             ))}
-          </List>
+          </GridContainer>
         )}
       </Box>
 
-      {/* 添加按钮 */}
+      {/* 添加按钮 - 修改为与列表视图一致 */}
       <Box sx={{ position: 'fixed', right: 16, bottom: 72 }}>
-        <Fab color="primary" aria-label="添加" onClick={handleAddClick} size="medium">
+        <Fab color="primary" size="medium" onClick={handleAddClick} aria-label="添加">
           <AddIcon />
         </Fab>
       </Box>
 
       {/* 添加对话框 */}
       <Dialog open={addDialogOpen} onClose={handleAddDialogClose}>
-        <DialogTitle>
-          {isFolder ? '添加文件夹' : '添加书签'}
-        </DialogTitle>
+        <DialogTitle>{isFolder ? '创建文件夹' : '添加书签'}</DialogTitle>
         <DialogContent>
-          <Box sx={{ mb: 2 }}>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={isFolder}
-                  onChange={(e) => setIsFolder(e.target.checked)}
-                />
-              }
-              label="创建文件夹"
-            />
-          </Box>
+          <DialogContentText>
+            请输入{isFolder ? '文件夹' : '书签'}的详细信息。
+          </DialogContentText>
+          
+          <FormControlLabel
+            control={
+              <Switch
+                checked={isFolder}
+                onChange={(e) => setIsFolder(e.target.checked)}
+                color="primary"
+              />
+            }
+            label="这是一个文件夹"
+            sx={{ my: 2 }}
+          />
+          
           <TextField
             autoFocus
             margin="dense"
-            label="标题"
+            id="title"
+            label="名称"
             type="text"
             fullWidth
-            variant="outlined"
             value={formTitle}
             onChange={(e) => setFormTitle(e.target.value)}
           />
+          
           {!isFolder && (
             <TextField
               margin="dense"
+              id="url"
               label="URL"
               type="url"
               fullWidth
-              variant="outlined"
               value={formUrl}
               onChange={(e) => setFormUrl(e.target.value)}
             />
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleAddDialogClose}>取消</Button>
-          <Button
-            onClick={handleAddSubmit}
-            disabled={
-              !formTitle.trim() || (!isFolder && !formUrl.trim())
-            }
-          >
+          <Button onClick={handleAddDialogClose} color="primary">
+            取消
+          </Button>
+          <Button onClick={handleAddSubmit} color="primary" disabled={formTitle.trim() === '' || (!isFolder && formUrl.trim() === '')}>
             添加
           </Button>
         </DialogActions>
@@ -328,39 +367,39 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
 
       {/* 编辑对话框 */}
       <Dialog open={editDialogOpen} onClose={handleEditDialogClose}>
-        <DialogTitle>
-          {currentBookmark?.isFolder ? '编辑文件夹' : '编辑书签'}
-        </DialogTitle>
+        <DialogTitle>{currentBookmark?.isFolder ? '编辑文件夹' : '编辑书签'}</DialogTitle>
         <DialogContent>
           <TextField
             autoFocus
             margin="dense"
-            label="标题"
+            id="edit-title"
+            label="名称"
             type="text"
             fullWidth
-            variant="outlined"
             value={formTitle}
             onChange={(e) => setFormTitle(e.target.value)}
           />
+          
           {currentBookmark && !currentBookmark.isFolder && (
             <TextField
               margin="dense"
+              id="edit-url"
               label="URL"
               type="url"
               fullWidth
-              variant="outlined"
               value={formUrl}
               onChange={(e) => setFormUrl(e.target.value)}
             />
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleEditDialogClose}>取消</Button>
-          <Button
-            onClick={handleEditSubmit}
-            disabled={
-              !formTitle.trim() || (currentBookmark ? (!currentBookmark.isFolder && !formUrl.trim()) : false)
-            }
+          <Button onClick={handleEditDialogClose} color="primary">
+            取消
+          </Button>
+          <Button 
+            onClick={handleEditSubmit} 
+            color="primary" 
+            disabled={formTitle.trim() === '' || (!!currentBookmark && !currentBookmark.isFolder && formUrl.trim() === '')}
           >
             保存
           </Button>
@@ -372,13 +411,15 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
         <DialogTitle>确认删除</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            {currentBookmark?.isFolder
-              ? `确定要删除文件夹 "${currentBookmark.title}" 及其包含的所有书签吗？`
+            {currentBookmark?.isFolder 
+              ? `确定要删除文件夹 "${currentBookmark?.title}" 及其所有内容吗？` 
               : `确定要删除书签 "${currentBookmark?.title}" 吗？`}
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleConfirmDeleteClose}>取消</Button>
+          <Button onClick={handleConfirmDeleteClose} color="primary">
+            取消
+          </Button>
           <Button onClick={handleConfirmDelete} color="error">
             删除
           </Button>
@@ -388,4 +429,4 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
   );
 };
 
-export default BookmarkList; 
+export default BookmarkGrid; 
