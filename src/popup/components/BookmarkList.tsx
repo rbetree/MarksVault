@@ -237,6 +237,13 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
             </IconButton>
           )}
           <Box sx={{ display: 'flex', alignItems: 'center', ml: 0.5 }}>
+            <IconButton 
+              sx={{ p: 0.5 }} 
+              aria-label="添加书签" 
+              onClick={handleAddClick}
+            >
+              <AddIcon fontSize="small" />
+            </IconButton>
             <ViewToggleButton 
               viewType={viewType} 
               onChange={onViewTypeChange} 
@@ -283,13 +290,6 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
             ))}
           </List>
         )}
-      </Box>
-
-      {/* 添加按钮 */}
-      <Box sx={{ position: 'fixed', right: 16, bottom: 72 }}>
-        <Fab color="primary" aria-label="添加" onClick={handleAddClick} size="medium">
-          <AddIcon />
-        </Fab>
       </Box>
 
       {/* 添加对话框 */}

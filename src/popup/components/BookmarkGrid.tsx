@@ -256,6 +256,13 @@ const BookmarkGrid: React.FC<BookmarkGridProps> = ({
             </IconButton>
           )}
           <Box sx={{ display: 'flex', alignItems: 'center', ml: 0.5 }}>
+            <IconButton 
+              sx={{ p: 0.5 }} 
+              aria-label="添加书签" 
+              onClick={handleAddClick}
+            >
+              <AddIcon fontSize="small" />
+            </IconButton>
             <ViewToggleButton 
               viewType={viewType} 
               onChange={onViewTypeChange} 
@@ -307,13 +314,6 @@ const BookmarkGrid: React.FC<BookmarkGridProps> = ({
             ))}
           </GridContainer>
         )}
-      </Box>
-
-      {/* 添加按钮 - 修改为与列表视图一致 */}
-      <Box sx={{ position: 'fixed', right: 16, bottom: 72 }}>
-        <Fab color="primary" size="medium" onClick={handleAddClick} aria-label="添加">
-          <AddIcon />
-        </Fab>
       </Box>
 
       {/* 添加对话框 */}
