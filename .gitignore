@@ -1,0 +1,33 @@
+# 依赖包
+/node_modules
+
+# 构建输出
+/dist
+
+# 开发工具文件
+/.idea
+/.vscode
+*.sublime-project
+*.sublime-workspace
+.specstory
+.cursor
+.cursorindexingignore
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 日志文件
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 环境配置
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# 测试覆盖率
+/coverage 
