@@ -227,6 +227,55 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
     handleResult(result, '文件夹已删除');
   };
 
+  // 添加书签移动处理方法
+  const handleMoveBookmark = async (bookmarkId: string, destinationFolderId: string, index?: number) => {
+    try {
+      // 获取当前书签信息以确认是否是文件夹
+      const bookmarkItem = bookmarksMap.current.get(bookmarkId);
+      
+      // 检查是否是尝试将文件夹拖入其子文件夹（这是不允许的）
+      if (bookmarkItem?.isFolder) {
+        if (isSubfolder(bookmarkId, destinationFolderId)) {
+          toastRef.current?.showToast('不能将文件夹移动到其子文件夹中', 'error');
+          return false;
+        }
+      }
+      
+      const destination: { parentId: string; index?: number } = {
+        parentId: destinationFolderId
+      };
+      
+      // 如果提供了索引，也传入索引
+      if (index !== undefined) {
+        destination.index = index;
+      }
+      
+      const result = await bookmarkService.moveBookmark(bookmarkId, destination);
+      return handleResult(result, '书签已移动');
+    } catch (error) {
+      console.error('移动书签错误:', error);
+      toastRef.current?.showToast('移动书签时发生错误', 'error');
+      return false;
+    }
+  };
+  
+  // 检查是否是子文件夹的辅助函数
+  const isSubfolder = (folderId: string, possibleSubfolderId: string): boolean => {
+    // 如果尝试移动到自己，返回true（不允许）
+    if (folderId === possibleSubfolderId) {
+      return true;
+    }
+    
+    let folder = bookmarksMap.current.get(possibleSubfolderId);
+    while (folder && folder.parentId) {
+      if (folder.parentId === folderId) {
+        return true;
+      }
+      folder = bookmarksMap.current.get(folder.parentId);
+    }
+    return false;
+  };
+
   // 渲染书签视图
   const renderBookmarkView = () => {
     if (isLoading) {
@@ -244,6 +293,7 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
       onDeleteFolder: handleDeleteFolder,
       onNavigateToFolder: navigateToFolder,
       onNavigateBack: navigateBack,
+      onMoveBookmark: handleMoveBookmark,
       viewType: viewType,
       onViewTypeChange: handleViewTypeChange,
       sortMethod: sortMethod,

@@ -43,6 +43,9 @@ const SearchArea = styled(Box)(({ theme }) => ({
   backgroundColor: theme.palette.background.paper,
 }));
 
+// 拖拽数据类型，与BookmarkItem保持一致
+const DRAG_TYPE = 'application/marksvault-bookmark';
+
 interface BookmarkListProps {
   bookmarks: BookmarkItemType[];
   parentFolder?: BookmarkItemType;
@@ -54,6 +57,7 @@ interface BookmarkListProps {
   onDeleteFolder?: (id: string) => Promise<void>;
   onNavigateToFolder?: (folderId: string) => void;
   onNavigateBack?: () => void;
+  onMoveBookmark?: (bookmarkId: string, destinationFolderId: string, index?: number) => Promise<boolean>;
   viewType: 'list' | 'grid';
   onViewTypeChange: (viewType: 'list' | 'grid') => void;
   sortMethod: 'default' | 'name' | 'dateAdded';
@@ -71,6 +75,7 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
   onDeleteFolder,
   onNavigateToFolder,
   onNavigateBack,
+  onMoveBookmark,
   viewType,
   onViewTypeChange,
   sortMethod,
@@ -237,6 +242,39 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
     setCurrentBookmark(null);
   };
 
+  // 处理列表区域拖拽悬停
+  const handleListDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+    if (event.dataTransfer.types.includes(DRAG_TYPE)) {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+    }
+  };
+
+  // 处理列表区域放置，将项目移动到当前文件夹末尾
+  const handleListDrop = async (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    
+    // 确保是直接放在列表区域而不是某个特定书签上
+    if (event.target === event.currentTarget) {
+      try {
+        const dragData = JSON.parse(event.dataTransfer.getData(DRAG_TYPE));
+        
+        // 确定目标文件夹，如果是根目录则使用书签栏
+        if (onMoveBookmark) {
+          const targetParentId = parentFolder?.id;
+          
+          // 只有当有目标父ID时才移动
+          if (targetParentId) {
+            // 移动到文件夹末尾（不指定索引）
+            await onMoveBookmark(dragData.id, targetParentId);
+          }
+        }
+      } catch (error) {
+        console.error('列表拖放处理错误:', error);
+      }
+    }
+  };
+
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* 搜索区域 - 现在总是在顶部 */}
@@ -306,8 +344,12 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
 
       <Divider />
 
-      {/* 书签列表 */}
-      <Box sx={{ flexGrow: 1, overflow: 'auto', p: 0 }}>
+      {/* 书签列表 - 添加拖拽支持 */}
+      <Box 
+        sx={{ flexGrow: 1, overflow: 'auto', p: 0 }}
+        onDragOver={handleListDragOver}
+        onDrop={handleListDrop}
+      >
         {filteredBookmarks.length === 0 ? (
           <Box sx={{ p: 3, textAlign: 'center' }}>
             <Typography color="text.secondary">
@@ -324,6 +366,7 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
                   onDelete={handleDelete}
                   onOpen={handleBookmarkOpen}
                   onOpenFolder={handleFolderOpen}
+                  onMoveBookmark={onMoveBookmark}
                 />
                 <Divider variant="inset" component="li" />
               </React.Fragment>
