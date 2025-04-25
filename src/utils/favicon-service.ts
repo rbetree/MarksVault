@@ -24,14 +24,23 @@ export const getDomainFromUrl = (url: string): string => {
  */
 export const getFaviconUrl = (url: string): string => {
   try {
-    const domain = getDomainFromUrl(url);
-    if (!domain) return '';
+    // 检查URL是否有效
+    if (!url) return '';
     
-    // 使用Google的favicon服务
-    return `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+    // 直接使用Chrome的favicon URL格式
+    // 注意：这种方式不使用chrome.runtime.getURL，而是直接构建URL
+    return `chrome-extension://${chrome.runtime.id}/_favicon/?pageUrl=${encodeURIComponent(url)}&size=32`;
   } catch (error) {
     console.error('获取图标URL失败:', error);
-    return '';
+    
+    // 如果Chrome API失败，回退到Google的favicon服务
+    try {
+      const domain = getDomainFromUrl(url);
+      if (!domain) return '';
+      return `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+    } catch {
+      return '';
+    }
   }
 };
 

@@ -17,7 +17,14 @@
   },
   "permissions": [
     "bookmarks",
-    "storage"
+    "storage",
+    "favicon"
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["_favicon/*"],
+      "matches": ["<all_urls>"]
+    }
   ],
   "icons": {
     "16": "assets/icons/logo/icon16.png",

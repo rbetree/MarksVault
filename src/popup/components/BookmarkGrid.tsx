@@ -39,14 +39,16 @@ const GridContainer = styled(Box)(({ theme }) => ({
 }));
 
 const NavigationArea = styled(Box)(({ theme }) => ({
-  padding: theme.spacing(1, 2),
+  padding: theme.spacing(0.75, 1),
   display: 'flex',
   alignItems: 'center',
-  borderBottom: `1px solid ${theme.palette.divider}`,
+  backgroundColor: theme.palette.background.default,
+  borderRadius: theme.shape.borderRadius,
+  margin: theme.spacing(0.5, 0.5, 0),
 }));
 
 const SearchArea = styled(Box)(({ theme }) => ({
-  padding: theme.spacing(1),
+  padding: theme.spacing(0.5, 0.5, 0, 0.5),
   backgroundColor: theme.palette.background.paper,
 }));
 
@@ -224,52 +226,54 @@ const BookmarkGrid: React.FC<BookmarkGridProps> = ({
 
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      {/* 导航栏 */}
+      {/* 搜索区域 - 现在总是在顶部 */}
       <SearchArea>
-        {parentFolder && (
-          <NavigationArea>
-            <IconButton onClick={onNavigateBack} size="small">
-              <ArrowBackIcon />
-            </IconButton>
-            <Typography variant="subtitle1" noWrap sx={{ ml: 1 }}>
-              {parentFolder.title}
-            </Typography>
-          </NavigationArea>
-        )}
-        
         {/* 搜索框 */}
         <Paper
           sx={{
-            p: '2px 4px',
+            p: '1px 4px',
             display: 'flex',
             alignItems: 'center',
             width: '100%',
             boxShadow: 'none',
             border: '1px solid',
-            borderColor: 'divider'
+            borderColor: 'divider',
+            height: '40px',
           }}
         >
-          <IconButton sx={{ p: 1 }} aria-label="搜索">
-            <SearchIcon />
+          <IconButton sx={{ p: 0.5 }} aria-label="搜索">
+            <SearchIcon fontSize="small" />
           </IconButton>
           <InputBase
-            sx={{ ml: 1, flex: 1 }}
+            sx={{ ml: 0.5, flex: 1, fontSize: '0.9rem' }}
             placeholder="搜索书签..."
             value={searchText}
             onChange={handleSearchChange}
           />
           {searchText && (
-            <IconButton sx={{ p: 1 }} aria-label="清除" onClick={clearSearch}>
-              <ClearIcon />
+            <IconButton sx={{ p: 0.5 }} aria-label="清除" onClick={clearSearch}>
+              <ClearIcon fontSize="small" />
             </IconButton>
           )}
-          <Box sx={{ display: 'flex', alignItems: 'center', ml: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', ml: 0.5 }}>
             <ViewToggleButton 
               viewType={viewType} 
               onChange={onViewTypeChange} 
             />
           </Box>
         </Paper>
+        
+        {/* 导航区域 - 移到搜索框下方 */}
+        {parentFolder && (
+          <NavigationArea>
+            <IconButton onClick={onNavigateBack} size="small" sx={{ p: 0.5 }}>
+              <ArrowBackIcon fontSize="small" />
+            </IconButton>
+            <Typography variant="body2" noWrap sx={{ ml: 0.5, fontWeight: 500 }}>
+              {parentFolder.title}
+            </Typography>
+          </NavigationArea>
+        )}
       </SearchArea>
 
       <Divider />
@@ -280,7 +284,7 @@ const BookmarkGrid: React.FC<BookmarkGridProps> = ({
         overflow: 'auto',
         display: 'flex',
         flexDirection: 'column',
-        height: 'calc(100% - 57px)', // 减去搜索栏高度，确保高度正确
+        height: 'calc(100% - 50px)', // 减去搜索栏和导航栏高度
         position: 'relative' // 为fixed定位的子元素提供定位上下文
       }}>
         {filteredBookmarks.length === 0 ? (

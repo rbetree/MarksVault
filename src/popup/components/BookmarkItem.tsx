@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import ListItem from '@mui/material/ListItem';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
@@ -13,6 +13,7 @@ import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { BookmarkItem as BookmarkItemType } from '../../utils/bookmark-service';
+import { getFaviconUrl } from '../../utils/favicon-service';
 
 interface BookmarkItemProps {
   bookmark: BookmarkItemType;
@@ -30,7 +31,16 @@ const BookmarkItem: React.FC<BookmarkItemProps> = ({
   onOpenFolder
 }) => {
   const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
+  const [iconUrl, setIconUrl] = useState<string>('');
+  const [iconError, setIconError] = useState<boolean>(false);
   const isMenuOpen = Boolean(menuAnchorEl);
+
+  useEffect(() => {
+    if (!bookmark.isFolder && bookmark.url) {
+      setIconUrl(getFaviconUrl(bookmark.url));
+      setIconError(false);
+    }
+  }, [bookmark.url, bookmark.isFolder]);
 
   const handleMenuClick = (event: React.MouseEvent<HTMLElement>) => {
     event.stopPropagation();
@@ -73,6 +83,10 @@ const BookmarkItem: React.FC<BookmarkItemProps> = ({
     }
   };
 
+  const handleIconError = () => {
+    setIconError(true);
+  };
+
   return (
     <ListItem
       disablePadding
@@ -92,7 +106,16 @@ const BookmarkItem: React.FC<BookmarkItemProps> = ({
           {bookmark.isFolder ? (
             <FolderIcon color="primary" />
           ) : (
-            <InsertLinkIcon color="secondary" />
+            iconUrl && !iconError ? (
+              <img 
+                src={iconUrl} 
+                alt={bookmark.title}
+                style={{ width: '24px', height: '24px' }}
+                onError={handleIconError}
+              />
+            ) : (
+              <InsertLinkIcon color="secondary" />
+            )
           )}
         </ListItemIcon>
         <ListItemText 

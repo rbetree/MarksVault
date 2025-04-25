@@ -4,6 +4,9 @@
 # 构建输出
 /dist
 
+# 笔记或参考
+/docs
+
 # 开发工具文件
 /.idea
 /.vscode
