@@ -19,6 +19,7 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
   const [folderStack, setFolderStack] = useState<BookmarkItem[]>([]);
   const [currentBookmarks, setCurrentBookmarks] = useState<BookmarkItem[]>([]);
   const [viewType, setViewType] = useState<'list' | 'grid'>('grid'); // 默认使用网格视图
+  const [bookmarkBarId, setBookmarkBarId] = useState<string | null>(null); // 添加书签栏ID状态变量
   const bookmarksMap = useRef<Map<string, BookmarkItem>>(new Map());
 
   // 加载所有书签树和用户设置
@@ -105,6 +106,8 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
         || bookmarks[0].children?.[0];
       
       if (bookmarkBar && bookmarkBar.children) {
+        // 存储书签栏ID以便后续使用
+        setBookmarkBarId(bookmarkBar.id);
         setCurrentBookmarks(bookmarkBar.children);
       } else {
         setCurrentBookmarks([]);
@@ -161,12 +164,20 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
 
   // 添加书签
   const handleAddBookmark = async (bookmark: { parentId?: string; title: string; url: string }) => {
+    // 如果没有指定parentId且当前在根级别，使用书签栏ID
+    if (!bookmark.parentId && !currentFolderId && bookmarkBarId) {
+      bookmark.parentId = bookmarkBarId;
+    }
     const result = await bookmarkService.createBookmark(bookmark);
     handleResult(result, '书签已添加');
   };
 
   // 添加文件夹
   const handleAddFolder = async (folder: { parentId?: string; title: string }) => {
+    // 如果没有指定parentId且当前在根级别，使用书签栏ID
+    if (!folder.parentId && !currentFolderId && bookmarkBarId) {
+      folder.parentId = bookmarkBarId;
+    }
     const result = await bookmarkService.createFolder(folder);
     handleResult(result, '文件夹已创建');
   };
