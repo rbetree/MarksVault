@@ -12,8 +12,10 @@ import MoreVertIcon from '@mui/icons-material/MoreVert';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import { BookmarkItem as BookmarkItemType } from '../../utils/bookmark-service';
 import { getFaviconUrl } from '../../utils/favicon-service';
+import bookmarkService from '../../utils/bookmark-service';
 
 interface BookmarkItemProps {
   bookmark: BookmarkItemType;
@@ -33,6 +35,7 @@ const BookmarkItem: React.FC<BookmarkItemProps> = ({
   const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
   const [iconUrl, setIconUrl] = useState<string>('');
   const [iconError, setIconError] = useState<boolean>(false);
+  const [itemCount, setItemCount] = useState<number | null>(null);
   const isMenuOpen = Boolean(menuAnchorEl);
 
   useEffect(() => {
@@ -41,6 +44,20 @@ const BookmarkItem: React.FC<BookmarkItemProps> = ({
       setIconError(false);
     }
   }, [bookmark.url, bookmark.isFolder]);
+
+  // 当组件挂载或书签ID变化时，获取文件夹项目计数
+  useEffect(() => {
+    if (bookmark.isFolder) {
+      const fetchItemCount = async () => {
+        const result = await bookmarkService.getFolderItemCount(bookmark.id);
+        if (result.success) {
+          setItemCount(result.data);
+        }
+      };
+      
+      fetchItemCount();
+    }
+  }, [bookmark.id, bookmark.isFolder]);
 
   const handleMenuClick = (event: React.MouseEvent<HTMLElement>) => {
     event.stopPropagation();
@@ -83,6 +100,34 @@ const BookmarkItem: React.FC<BookmarkItemProps> = ({
     }
   };
 
+  const handleOpenAllInNewTabs = async (event: React.MouseEvent<HTMLElement>) => {
+    event.stopPropagation();
+    handleMenuClose();
+    
+    if (bookmark.isFolder) {
+      // 获取文件夹中的所有书签
+      const result = await bookmarkService.getBookmarksInFolder(bookmark.id);
+      if (result.success && result.data) {
+        // 打开所有有URL的项
+        result.data.forEach((item: BookmarkItemType) => {
+          if (item.url) {
+            chrome.tabs.create({ url: item.url });
+          }
+        });
+      }
+    }
+  };
+
+  const handleExportFolder = (event: React.MouseEvent<HTMLElement>) => {
+    event.stopPropagation();
+    handleMenuClose();
+    
+    if (bookmark.isFolder) {
+      // 实现文件夹导出逻辑
+      alert(`导出文件夹功能正在开发中...`);
+    }
+  };
+
   const handleIconError = () => {
     setIconError(true);
   };
@@ -120,14 +165,18 @@ const BookmarkItem: React.FC<BookmarkItemProps> = ({
         </ListItemIcon>
         <ListItemText 
           primary={bookmark.title} 
-          secondary={!bookmark.isFolder && bookmark.url ? bookmark.url : null}
+          secondary={
+            bookmark.isFolder 
+              ? (itemCount !== null ? `${itemCount} 项` : '') 
+              : bookmark.url
+          }
           primaryTypographyProps={{ 
             noWrap: true,
             title: bookmark.title
           }}
           secondaryTypographyProps={{ 
             noWrap: true,
-            title: bookmark.url
+            title: bookmark.isFolder ? '' : bookmark.url
           }}
         />
       </ListItemButton>
@@ -150,6 +199,22 @@ const BookmarkItem: React.FC<BookmarkItemProps> = ({
             </ListItemIcon>
             <ListItemText>新标签页打开</ListItemText>
           </MenuItem>
+        )}
+        {bookmark.isFolder && (
+          <>
+            <MenuItem onClick={handleOpenAllInNewTabs}>
+              <ListItemIcon>
+                <OpenInNewIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>新标签页打开所有</ListItemText>
+            </MenuItem>
+            <MenuItem onClick={handleExportFolder}>
+              <ListItemIcon>
+                <FileDownloadIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>导出文件夹</ListItemText>
+            </MenuItem>
+          </>
         )}
         <MenuItem onClick={handleDelete}>
           <ListItemIcon>

@@ -10,6 +10,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import ClearIcon from '@mui/icons-material/Clear';
 import AddIcon from '@mui/icons-material/Add';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import SortIcon from '@mui/icons-material/Sort';
 import BookmarkItem from './BookmarkItem';
 import { BookmarkItem as BookmarkItemType } from '../../utils/bookmark-service';
 import Fab from '@mui/material/Fab';
@@ -24,6 +25,8 @@ import FormControlLabel from '@mui/material/FormControlLabel';
 import Switch from '@mui/material/Switch';
 import ViewToggleButton from './ViewToggleButton';
 import { styled } from '@mui/material/styles';
+import Menu from '@mui/material/Menu';
+import MenuItem from '@mui/material/MenuItem';
 
 // 样式化组件
 const NavigationArea = styled(Box)(({ theme }) => ({
@@ -53,6 +56,8 @@ interface BookmarkListProps {
   onNavigateBack?: () => void;
   viewType: 'list' | 'grid';
   onViewTypeChange: (viewType: 'list' | 'grid') => void;
+  sortMethod: 'default' | 'name' | 'dateAdded';
+  onSortChange: (method: 'default' | 'name' | 'dateAdded') => void;
 }
 
 const BookmarkList: React.FC<BookmarkListProps> = ({
@@ -67,7 +72,9 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
   onNavigateToFolder,
   onNavigateBack,
   viewType,
-  onViewTypeChange
+  onViewTypeChange,
+  sortMethod,
+  onSortChange
 }) => {
   const [searchText, setSearchText] = useState('');
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -77,6 +84,8 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
   const [formTitle, setFormTitle] = useState('');
   const [formUrl, setFormUrl] = useState('');
   const [currentBookmark, setCurrentBookmark] = useState<BookmarkItemType | null>(null);
+  const [sortMenuAnchorEl, setSortMenuAnchorEl] = useState<null | HTMLElement>(null);
+  const isSortMenuOpen = Boolean(sortMenuAnchorEl);
 
   // 过滤书签
   const filteredBookmarks = searchText
@@ -94,6 +103,29 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
 
   const clearSearch = () => {
     setSearchText('');
+  };
+
+  // 处理排序
+  const handleSortClick = (event: React.MouseEvent<HTMLElement>) => {
+    setSortMenuAnchorEl(event.currentTarget);
+  };
+
+  const handleSortClose = () => {
+    setSortMenuAnchorEl(null);
+  };
+
+  const handleSortSelect = (method: 'default' | 'name' | 'dateAdded') => {
+    onSortChange(method);
+    handleSortClose();
+  };
+
+  // 获取排序方法的显示名称
+  const getSortMethodName = (method: 'default' | 'name' | 'dateAdded'): string => {
+    switch (method) {
+      case 'name': return '按名称';
+      case 'dateAdded': return '按日期';
+      default: return '默认';
+    }
   };
 
   // 打开添加对话框
@@ -239,6 +271,14 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
           <Box sx={{ display: 'flex', alignItems: 'center', ml: 0.5 }}>
             <IconButton 
               sx={{ p: 0.5 }} 
+              aria-label="排序" 
+              onClick={handleSortClick}
+              title={`排序: ${getSortMethodName(sortMethod)}`}
+            >
+              <SortIcon fontSize="small" color={sortMethod !== 'default' ? 'primary' : 'inherit'} />
+            </IconButton>
+            <IconButton 
+              sx={{ p: 0.5 }} 
               aria-label="添加书签" 
               onClick={handleAddClick}
             >
@@ -291,6 +331,32 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
           </List>
         )}
       </Box>
+
+      {/* 排序菜单 */}
+      <Menu
+        anchorEl={sortMenuAnchorEl}
+        open={isSortMenuOpen}
+        onClose={handleSortClose}
+      >
+        <MenuItem 
+          onClick={() => handleSortSelect('default')}
+          selected={sortMethod === 'default'}
+        >
+          默认排序
+        </MenuItem>
+        <MenuItem 
+          onClick={() => handleSortSelect('name')}
+          selected={sortMethod === 'name'}
+        >
+          按名称排序
+        </MenuItem>
+        <MenuItem 
+          onClick={() => handleSortSelect('dateAdded')}
+          selected={sortMethod === 'dateAdded'}
+        >
+          按添加日期排序
+        </MenuItem>
+      </Menu>
 
       {/* 添加对话框 */}
       <Dialog open={addDialogOpen} onClose={handleAddDialogClose}>

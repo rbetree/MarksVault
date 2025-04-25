@@ -9,6 +9,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import ClearIcon from '@mui/icons-material/Clear';
 import AddIcon from '@mui/icons-material/Add';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import SortIcon from '@mui/icons-material/Sort';
 import Fab from '@mui/material/Fab';
 import Dialog from '@mui/material/Dialog';
 import DialogActions from '@mui/material/DialogActions';
@@ -23,6 +24,8 @@ import { styled } from '@mui/material/styles';
 import BookmarkGridItem from './BookmarkGridItem';
 import { BookmarkItem as BookmarkItemType } from '../../utils/bookmark-service';
 import ViewToggleButton from './ViewToggleButton';
+import Menu from '@mui/material/Menu';
+import MenuItem from '@mui/material/MenuItem';
 
 // 样式化组件
 const GridContainer = styled(Box)(({ theme }) => ({
@@ -72,6 +75,8 @@ interface BookmarkGridProps {
   onNavigateBack?: () => void;
   viewType: 'list' | 'grid';
   onViewTypeChange: (viewType: 'list' | 'grid') => void;
+  sortMethod: 'default' | 'name' | 'dateAdded';
+  onSortChange: (method: 'default' | 'name' | 'dateAdded') => void;
 }
 
 const BookmarkGrid: React.FC<BookmarkGridProps> = ({
@@ -86,7 +91,9 @@ const BookmarkGrid: React.FC<BookmarkGridProps> = ({
   onNavigateToFolder,
   onNavigateBack,
   viewType,
-  onViewTypeChange
+  onViewTypeChange,
+  sortMethod,
+  onSortChange
 }) => {
   const [searchText, setSearchText] = useState('');
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -96,6 +103,8 @@ const BookmarkGrid: React.FC<BookmarkGridProps> = ({
   const [formTitle, setFormTitle] = useState('');
   const [formUrl, setFormUrl] = useState('');
   const [currentBookmark, setCurrentBookmark] = useState<BookmarkItemType | null>(null);
+  const [sortMenuAnchorEl, setSortMenuAnchorEl] = useState<null | HTMLElement>(null);
+  const isSortMenuOpen = Boolean(sortMenuAnchorEl);
 
   // 过滤书签
   const filteredBookmarks = searchText
@@ -113,6 +122,20 @@ const BookmarkGrid: React.FC<BookmarkGridProps> = ({
 
   const clearSearch = () => {
     setSearchText('');
+  };
+
+  // 处理排序
+  const handleSortClick = (event: React.MouseEvent<HTMLElement>) => {
+    setSortMenuAnchorEl(event.currentTarget);
+  };
+
+  const handleSortClose = () => {
+    setSortMenuAnchorEl(null);
+  };
+
+  const handleSortSelect = (method: 'default' | 'name' | 'dateAdded') => {
+    onSortChange(method);
+    handleSortClose();
   };
 
   // 打开添加对话框
@@ -224,6 +247,15 @@ const BookmarkGrid: React.FC<BookmarkGridProps> = ({
     setCurrentBookmark(null);
   };
 
+  // 获取排序方法的显示名称
+  const getSortMethodName = (method: 'default' | 'name' | 'dateAdded'): string => {
+    switch (method) {
+      case 'name': return '按名称';
+      case 'dateAdded': return '按日期';
+      default: return '默认';
+    }
+  };
+
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* 搜索区域 - 现在总是在顶部 */}
@@ -256,6 +288,14 @@ const BookmarkGrid: React.FC<BookmarkGridProps> = ({
             </IconButton>
           )}
           <Box sx={{ display: 'flex', alignItems: 'center', ml: 0.5 }}>
+            <IconButton 
+              sx={{ p: 0.5 }} 
+              aria-label="排序" 
+              onClick={handleSortClick}
+              title={`排序: ${getSortMethodName(sortMethod)}`}
+            >
+              <SortIcon fontSize="small" color={sortMethod !== 'default' ? 'primary' : 'inherit'} />
+            </IconButton>
             <IconButton 
               sx={{ p: 0.5 }} 
               aria-label="添加书签" 
@@ -315,6 +355,32 @@ const BookmarkGrid: React.FC<BookmarkGridProps> = ({
           </GridContainer>
         )}
       </Box>
+
+      {/* 排序菜单 */}
+      <Menu
+        anchorEl={sortMenuAnchorEl}
+        open={isSortMenuOpen}
+        onClose={handleSortClose}
+      >
+        <MenuItem 
+          onClick={() => handleSortSelect('default')}
+          selected={sortMethod === 'default'}
+        >
+          默认排序
+        </MenuItem>
+        <MenuItem 
+          onClick={() => handleSortSelect('name')}
+          selected={sortMethod === 'name'}
+        >
+          按名称排序
+        </MenuItem>
+        <MenuItem 
+          onClick={() => handleSortSelect('dateAdded')}
+          selected={sortMethod === 'dateAdded'}
+        >
+          按添加日期排序
+        </MenuItem>
+      </Menu>
 
       {/* 添加对话框 */}
       <Dialog open={addDialogOpen} onClose={handleAddDialogClose}>

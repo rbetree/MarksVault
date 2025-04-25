@@ -11,9 +11,11 @@ import MoreHorizIcon from '@mui/icons-material/MoreHoriz';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import { styled } from '@mui/material/styles';
 import { BookmarkItem as BookmarkItemType } from '../../utils/bookmark-service';
 import { getFaviconUrl } from '../../utils/favicon-service';
+import bookmarkService from '../../utils/bookmark-service';
 
 // 样式化组件
 const GridItemContainer = styled(Box)(({ theme }) => ({
@@ -57,19 +59,29 @@ const ItemTitle = styled(Typography)(({ theme }) => ({
   lineHeight: 1.2,
 }));
 
+const ItemCount = styled(Typography)(({ theme }) => ({
+  fontSize: '10px',
+  color: theme.palette.text.secondary,
+  marginTop: theme.spacing(0.2),
+  marginRight: theme.spacing(0.5),
+}));
+
+// 修改按钮样式，移除绝对定位
 const MenuButton = styled(IconButton)(({ theme }) => ({
-  position: 'absolute',
-  top: '2px',
-  right: '2px',
-  opacity: 0,
-  transition: 'opacity 0.2s',
-  padding: '2px',
+  padding: 1,
+  fontSize: '1rem',
+  color: theme.palette.text.secondary,
   '&:hover': {
     backgroundColor: theme.palette.action.hover,
-  },
-  [`${GridItemContainer}:hover &`]: {
-    opacity: 1,
-  },
+  }
+}));
+
+// 添加一个容器用于包装计数和菜单按钮
+const InfoContainer = styled(Box)(({ theme }) => ({
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  marginTop: theme.spacing(0.2),
 }));
 
 interface BookmarkGridItemProps {
@@ -89,6 +101,7 @@ const BookmarkGridItem: React.FC<BookmarkGridItemProps> = ({
 }) => {
   const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
   const [iconUrl, setIconUrl] = useState<string>('');
+  const [itemCount, setItemCount] = useState<number | null>(null);
   const isMenuOpen = Boolean(menuAnchorEl);
 
   // 加载网站图标
@@ -97,6 +110,20 @@ const BookmarkGridItem: React.FC<BookmarkGridItemProps> = ({
       setIconUrl(getFaviconUrl(bookmark.url));
     }
   }, [bookmark.url, bookmark.isFolder]);
+
+  // 当组件挂载或书签ID变化时，获取文件夹项目计数
+  useEffect(() => {
+    if (bookmark.isFolder) {
+      const fetchItemCount = async () => {
+        const result = await bookmarkService.getFolderItemCount(bookmark.id);
+        if (result.success) {
+          setItemCount(result.data);
+        }
+      };
+      
+      fetchItemCount();
+    }
+  }, [bookmark.id, bookmark.isFolder]);
 
   const handleMenuClick = (event: React.MouseEvent<HTMLElement>) => {
     event.stopPropagation();
@@ -139,6 +166,34 @@ const BookmarkGridItem: React.FC<BookmarkGridItemProps> = ({
     }
   };
 
+  const handleOpenAllInNewTabs = async (event: React.MouseEvent<HTMLElement>) => {
+    event.stopPropagation();
+    handleMenuClose();
+    
+    if (bookmark.isFolder) {
+      // 获取文件夹中的所有书签
+      const result = await bookmarkService.getBookmarksInFolder(bookmark.id);
+      if (result.success && result.data) {
+        // 打开所有有URL的项
+        result.data.forEach((item: BookmarkItemType) => {
+          if (item.url) {
+            chrome.tabs.create({ url: item.url });
+          }
+        });
+      }
+    }
+  };
+
+  const handleExportFolder = (event: React.MouseEvent<HTMLElement>) => {
+    event.stopPropagation();
+    handleMenuClose();
+    
+    if (bookmark.isFolder) {
+      // 实现文件夹导出逻辑
+      alert(`导出文件夹功能正在开发中...`);
+    }
+  };
+
   return (
     <GridItemContainer onClick={handleItemClick}>
       <IconContainer>
@@ -161,13 +216,29 @@ const BookmarkGridItem: React.FC<BookmarkGridItemProps> = ({
         {bookmark.title}
       </ItemTitle>
 
-      <MenuButton
-        size="small"
-        onClick={handleMenuClick}
-        aria-label="更多操作"
-      >
-        <MoreHorizIcon fontSize="small" />
-      </MenuButton>
+      {bookmark.isFolder && itemCount !== null && (
+        <InfoContainer>
+          <ItemCount>{itemCount} 项</ItemCount>
+          <MenuButton
+            size="small"
+            onClick={handleMenuClick}
+            aria-label="更多操作"
+          >
+            <MoreHorizIcon fontSize="small" />
+          </MenuButton>
+        </InfoContainer>
+      )}
+
+      {(!bookmark.isFolder || itemCount === null) && (
+        <MenuButton
+          size="small"
+          onClick={handleMenuClick}
+          aria-label="更多操作"
+          sx={{ mt: 0.5 }}
+        >
+          <MoreHorizIcon fontSize="small" />
+        </MenuButton>
+      )}
 
       <Menu
         anchorEl={menuAnchorEl}
@@ -189,6 +260,23 @@ const BookmarkGridItem: React.FC<BookmarkGridItemProps> = ({
             </ListItemIcon>
             <ListItemText>新标签页打开</ListItemText>
           </MenuItem>
+        )}
+        
+        {bookmark.isFolder && (
+          <>
+            <MenuItem onClick={handleOpenAllInNewTabs}>
+              <ListItemIcon>
+                <OpenInNewIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>新标签页打开所有</ListItemText>
+            </MenuItem>
+            <MenuItem onClick={handleExportFolder}>
+              <ListItemIcon>
+                <FileDownloadIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>导出文件夹</ListItemText>
+            </MenuItem>
+          </>
         )}
         
         <MenuItem onClick={handleDelete}>

@@ -65,6 +65,85 @@ class BookmarkService {
   }
 
   /**
+   * 获取文件夹中包含的项目数量
+   * @param folderId 文件夹ID
+   * @returns Promise<BookmarkResult> 包含项目计数的结果
+   */
+  async getFolderItemCount(folderId: string): Promise<BookmarkResult> {
+    try {
+      const subTree = await chrome.bookmarks.getSubTree(folderId);
+      if (subTree.length === 0 || !subTree[0].children) {
+        return {
+          success: true,
+          data: 0
+        };
+      }
+      
+      return {
+        success: true,
+        data: subTree[0].children.length
+      };
+    } catch (error) {
+      console.error('获取文件夹项目计数失败:', error);
+      return {
+        success: false,
+        error: '获取文件夹项目计数失败: ' + (error instanceof Error ? error.message : String(error))
+      };
+    }
+  }
+
+  /**
+   * 获取文件夹中的所有书签（包括子文件夹中的）
+   * @param folderId 文件夹ID
+   * @returns Promise<BookmarkResult>
+   */
+  async getBookmarksInFolder(folderId: string): Promise<BookmarkResult> {
+    try {
+      const subTree = await chrome.bookmarks.getSubTree(folderId);
+      if (subTree.length === 0 || !subTree[0].children) {
+        return {
+          success: true,
+          data: []
+        };
+      }
+      
+      // 收集所有非文件夹的书签
+      const bookmarks: BookmarkItem[] = [];
+      
+      const collectBookmarks = (items: chrome.bookmarks.BookmarkTreeNode[]) => {
+        items.forEach(item => {
+          if (item.url) {
+            bookmarks.push({
+              id: item.id,
+              parentId: item.parentId,
+              title: item.title,
+              url: item.url,
+              dateAdded: item.dateAdded,
+              index: item.index,
+              isFolder: false
+            });
+          } else if (item.children) {
+            collectBookmarks(item.children);
+          }
+        });
+      };
+      
+      collectBookmarks(subTree[0].children);
+      
+      return {
+        success: true,
+        data: bookmarks
+      };
+    } catch (error) {
+      console.error('获取文件夹中的书签失败:', error);
+      return {
+        success: false,
+        error: '获取文件夹中的书签失败: ' + (error instanceof Error ? error.message : String(error))
+      };
+    }
+  }
+
+  /**
    * 创建新书签
    * @param bookmark 书签信息
    * @returns Promise<BookmarkResult>

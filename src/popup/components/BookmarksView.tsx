@@ -20,6 +20,7 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
   const [currentBookmarks, setCurrentBookmarks] = useState<BookmarkItem[]>([]);
   const [viewType, setViewType] = useState<'list' | 'grid'>('grid'); // 默认使用网格视图
   const [bookmarkBarId, setBookmarkBarId] = useState<string | null>(null); // 添加书签栏ID状态变量
+  const [sortMethod, setSortMethod] = useState<'default' | 'name' | 'dateAdded'>('default');
   const bookmarksMap = useRef<Map<string, BookmarkItem>>(new Map());
 
   // 加载所有书签树和用户设置
@@ -31,7 +32,7 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
   // 当文件夹变化时更新当前显示的书签
   useEffect(() => {
     updateCurrentBookmarks();
-  }, [currentFolderId, bookmarks]);
+  }, [currentFolderId, bookmarks, sortMethod]);
 
   // 加载用户设置
   const loadUserSettings = async () => {
@@ -40,6 +41,7 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
       if (result.success && result.data) {
         const settings = result.data as UserSettings;
         setViewType(settings.viewType);
+        // 可以在这里也加载排序设置，如果需要保存
       }
     } catch (error) {
       console.error('加载用户设置错误:', error);
@@ -59,6 +61,30 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
   const handleViewTypeChange = (type: 'list' | 'grid') => {
     setViewType(type);
     saveViewTypeSetting(type);
+  };
+
+  // 处理排序方法变更
+  const handleSortChange = (method: 'default' | 'name' | 'dateAdded') => {
+    setSortMethod(method);
+  };
+
+  // 排序书签列表
+  const sortBookmarks = (bookmarks: BookmarkItem[], method: 'default' | 'name' | 'dateAdded'): BookmarkItem[] => {
+    if (method === 'default') return bookmarks;
+    
+    return [...bookmarks].sort((a, b) => {
+      // 确保文件夹始终排在前面
+      if (a.isFolder && !b.isFolder) return -1;
+      if (!a.isFolder && b.isFolder) return 1;
+      
+      // 然后根据排序方法排序
+      if (method === 'name') {
+        return a.title.localeCompare(b.title);
+      } else if (method === 'dateAdded') {
+        return (b.dateAdded || 0) - (a.dateAdded || 0);
+      }
+      return 0;
+    });
   };
 
   // 加载书签树
@@ -100,6 +126,8 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
   const updateCurrentBookmarks = () => {
     if (!bookmarks.length) return;
     
+    let items: BookmarkItem[] = [];
+    
     if (!currentFolderId) {
       // 根级书签，通常是书签栏文件夹
       const bookmarkBar = bookmarks[0].children?.find(b => b.title === "书签栏") 
@@ -108,18 +136,17 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
       if (bookmarkBar && bookmarkBar.children) {
         // 存储书签栏ID以便后续使用
         setBookmarkBarId(bookmarkBar.id);
-        setCurrentBookmarks(bookmarkBar.children);
-      } else {
-        setCurrentBookmarks([]);
+        items = bookmarkBar.children;
       }
     } else {
       const folder = bookmarksMap.current.get(currentFolderId);
       if (folder && folder.children) {
-        setCurrentBookmarks(folder.children);
-      } else {
-        setCurrentBookmarks([]);
+        items = folder.children;
       }
     }
+    
+    // 应用排序
+    setCurrentBookmarks(sortBookmarks(items, sortMethod));
   };
 
   // 导航到指定文件夹
@@ -218,7 +245,9 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
       onNavigateToFolder: navigateToFolder,
       onNavigateBack: navigateBack,
       viewType: viewType,
-      onViewTypeChange: handleViewTypeChange
+      onViewTypeChange: handleViewTypeChange,
+      sortMethod: sortMethod,
+      onSortChange: handleSortChange
     };
 
     return viewType === 'grid' ? 
