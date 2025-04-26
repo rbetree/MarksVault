@@ -6,6 +6,11 @@ export interface UserSettings {
   // 更多设置项...
 }
 
+// GitHub认证凭据类型
+export interface GitHubCredentials {
+  token: string;
+}
+
 // 书签自定义数据类型
 export interface BookmarkCustomData {
   lastUpdated: number | null;
@@ -180,6 +185,65 @@ class StorageService {
   }
 
   /**
+   * 保存GitHub认证凭据
+   * @param credentials GitHub认证凭据
+   * @returns Promise<StorageResult>
+   */
+  async saveGitHubCredentials(credentials: GitHubCredentials): Promise<StorageResult> {
+    try {
+      await chrome.storage.sync.set({ 'github_credentials': credentials });
+      return {
+        success: true
+      };
+    } catch (error) {
+      console.error('保存GitHub凭据失败:', error);
+      return {
+        success: false,
+        error: '保存GitHub凭据失败: ' + (error instanceof Error ? error.message : String(error))
+      };
+    }
+  }
+
+  /**
+   * 获取GitHub认证凭据
+   * @returns Promise<StorageResult>
+   */
+  async getGitHubCredentials(): Promise<StorageResult> {
+    try {
+      const result = await chrome.storage.sync.get('github_credentials');
+      return {
+        success: true,
+        data: result.github_credentials || null
+      };
+    } catch (error) {
+      console.error('获取GitHub凭据失败:', error);
+      return {
+        success: false,
+        error: '获取GitHub凭据失败: ' + (error instanceof Error ? error.message : String(error))
+      };
+    }
+  }
+
+  /**
+   * 清除GitHub认证凭据
+   * @returns Promise<StorageResult>
+   */
+  async clearGitHubCredentials(): Promise<StorageResult> {
+    try {
+      await chrome.storage.sync.remove('github_credentials');
+      return {
+        success: true
+      };
+    } catch (error) {
+      console.error('清除GitHub凭据失败:', error);
+      return {
+        success: false,
+        error: '清除GitHub凭据失败: ' + (error instanceof Error ? error.message : String(error))
+      };
+    }
+  }
+
+  /**
    * 清除所有存储数据
    * @returns Promise<StorageResult>
    */
@@ -199,5 +263,6 @@ class StorageService {
   }
 }
 
-// 导出存储服务单例
-export default new StorageService(); 
+// 导出StorageService单例
+const storageService = new StorageService();
+export default storageService; 

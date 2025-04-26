@@ -6,10 +6,10 @@ import AppBottomNavigation, { NavOption } from './BottomNavigation';
 import BookmarksView from './BookmarksView';
 import ErrorBoundary from './ErrorBoundary';
 import Toast, { ToastRef } from './Toast';
+import SyncView from './SyncView/SyncView';
 
 // 不同导航项的内容组件
 const TasksView = () => <Box sx={{ p: 3 }}><h2>任务管理</h2><p>任务管理功能正在开发中...</p></Box>;
-const SyncView = () => <Box sx={{ p: 3 }}><h2>同步设置</h2><p>同步功能正在开发中...</p></Box>;
 const SettingsView = () => <Box sx={{ p: 3 }}><h2>系统设置</h2><p>设置功能正在开发中...</p></Box>;
 
 const App: React.FC = () => {
@@ -24,7 +24,7 @@ const App: React.FC = () => {
       case 'tasks':
         return <TasksView />;
       case 'sync':
-        return <SyncView />;
+        return <SyncView toastRef={toastRef} />;
       case 'settings':
         return <SettingsView />;
       default:

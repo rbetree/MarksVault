@@ -20,6 +20,9 @@
     "storage",
     "favicon"
   ],
+  "host_permissions": [
+    "https://api.github.com/*"
+  ],
   "web_accessible_resources": [
     {
       "resources": ["_favicon/*"],
