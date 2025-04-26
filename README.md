@@ -71,6 +71,7 @@ MarksVault采用现代化、简洁的UI设计，专注于用户体验和易用�
 - **一致性** - 统一的色彩、字体和交互方式
 - **响应式** - 适应不同尺寸的弹出窗口
 - **层次分明** - 清晰的信息层级和视觉引导
+- **单一界面** - 所有功能集成在弹出窗口中，不使用独立的选项页面
 
 ### 布局结构
 
@@ -165,41 +166,49 @@ MarksVault采用经典三栏布局设计：
 MarksVault/
 ├── src/                      # 源代码
 │   ├── background/           # 扩展后台脚本
-│   │   ├── background.js     # 主后台脚本
-│   │   ├── github-api.js     # GitHub API接口
-│   │   ├── sync-manager.js   # 同步管理器
-│   │   └── task-manager.js   # 任务管理器
+│   │   └── background.ts     # 后台Service Worker脚本
 │   ├── popup/                # 弹出窗口界面
 │   │   ├── components/       # React组件
+│   │   │   ├── BookmarksView/# 书签管理视图组件
+│   │   │   ├── TasksView/    # 任务管理视图组件
+│   │   │   ├── SyncView/     # 同步设置视图组件
+│   │   │   ├── SettingsView/ # 系统设置视图组件
+│   │   │   └── shared/       # 共享组件
+│   │   │       ├── Header.tsx        # 顶部栏组件
+│   │   │       ├── BottomNavigation.tsx # 底部导航组件
+│   │   │       ├── Toast.tsx         # 通知提示组件
+│   │   │       └── LoadingIndicator.tsx # 加载指示器
 │   │   ├── styles/           # CSS样式文件
 │   │   ├── popup.html        # 弹出窗口HTML
-│   │   └── popup.js          # 弹出窗口脚本
-│   ├── options/              # 设置页面
-│   │   ├── components/       # 设置页面组件
-│   │   ├── pages/            # 设置页面子页面
-│   │   │   ├── general.js    # 常规设置
-│   │   │   ├── github.js     # GitHub设置
-│   │   │   └── tasks.js      # 任务管理设置
-│   │   ├── options.html      # 设置页面HTML
-│   │   └── options.js        # 设置页面脚本
-│   ├── content/              # 内容脚本
-│   │   └── content.js        # 网页内容交互脚本
+│   │   └── popup.tsx         # 弹出窗口脚本入口
+│   ├── services/             # 服务层
+│   ├── types/                # TypeScript类型定义
+│   ├── content/              # 内容脚本(如需要)
 │   └── utils/                # 工具函数
-│       ├── storage.js        # 存储工具
-│       ├── bookmark-parser.js # 书签解析工具
-│       ├── task-scheduler.js # 任务调度工具
-│       └── auth.js           # 认证工具
 ├── assets/                   # 静态资源
 │   ├── images/               # 图片资源
 │   └── icons/                # 图标资源
+│       └── logo/             # 扩展图标
 ├── dist/                     # 构建输出目录
-├── manifest.json             # 扩展清单文件
+├── manifest.json             # 扩展清单文件(定义权限、扩展点等)
 ├── webpack.config.js         # Webpack配置
 ├── package.json              # npm配置
-├── .eslintrc                 # ESLint配置
-├── jest.config.js            # Jest测试配置
+├── tsconfig.json             # TypeScript配置
 └── README.md                 # 项目说明文档
 ```
+
+### 主要目录结构说明
+
+- **background/**: 包含扩展的后台Service Worker脚本，负责处理全局事件和状态
+- **popup/**: 弹出窗口界面，包含所有用户交互的UI组件
+  - 采用基于功能的组织方式，将不同功能视图分开管理
+  - 共享组件位于shared目录，可被多个视图复用
+- **services/**: 服务层，处理与外部API的交互，如GitHub API
+- **utils/**: 提供各种工具服务，如书签管理、存储操作、任务调度等
+- **types/**: TypeScript类型定义，确保类型安全
+- **content/**: 内容脚本，在需要时可以注入到网页中
+
+该结构遵循职责分离原则，将UI组件、业务逻辑和数据操作清晰分开，同时符合Chrome扩展的架构特点。
 
 ## 📥 安装指南
 
@@ -239,13 +248,14 @@ MarksVault/
 4. 点击"下载"获取您的书签
 
 **自动化任务示例:**
-1. 进入选项页面，切换到"任务管理"标签
-2. 点击"创建新任务"按钮
-3. 配置任务:
+1. 点击MarksVault图标打开扩展
+2. 在底部导航栏中选择"任务管理"选项
+3. 点击"创建新任务"按钮
+4. 配置任务:
    - 名称: "自动备份"
    - 触发条件: "浏览器启动后5秒"
    - 操作: "上传书签到GitHub"
    - 参数: 可选择是否包含特定文件夹
-4. 保存任务并开启
-5. 现在每次打开浏览器5秒后，MarksVault将自动上传您的书签!
+5. 保存任务并开启
+6. 现在每次打开浏览器5秒后，MarksVault将自动上传您的书签!
 
