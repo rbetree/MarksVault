@@ -2,11 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import Box from '@mui/material/Box';
 import BookmarkGrid from './BookmarkGrid';
 import BookmarkList from './BookmarkList';
-import LoadingIndicator from './LoadingIndicator';
+import LoadingIndicator from '../shared/LoadingIndicator';
 import ViewToggleButton from './ViewToggleButton';
-import { ToastRef } from './Toast';
-import bookmarkService, { BookmarkItem, BookmarkResult } from '../../utils/bookmark-service';
-import storageService, { UserSettings } from '../../utils/storage-service';
+import { ToastRef } from '../shared/Toast';
+import bookmarkService, { BookmarkItem, BookmarkResult } from '../../../utils/bookmark-service';
+import storageService, { UserSettings } from '../../../utils/storage-service';
 
 interface BookmarksViewProps {
   toastRef: React.RefObject<ToastRef>;

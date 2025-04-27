@@ -1,11 +1,11 @@
 import React, { useState, useRef } from 'react';
 import Box from '@mui/material/Box';
 import Container from '@mui/material/Container';
-import Header from './Header';
-import AppBottomNavigation, { NavOption } from './BottomNavigation';
-import BookmarksView from './BookmarksView';
-import ErrorBoundary from './ErrorBoundary';
-import Toast, { ToastRef } from './Toast';
+import Header from './shared/Header';
+import AppBottomNavigation, { NavOption } from './shared/BottomNavigation';
+import BookmarksView from './BookmarksView/BookmarksView';
+import ErrorBoundary from './shared/ErrorBoundary';
+import Toast, { ToastRef } from './shared/Toast';
 import SyncView from './SyncView/SyncView';
 
 // 不同导航项的内容组件

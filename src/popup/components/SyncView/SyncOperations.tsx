@@ -18,7 +18,7 @@ import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
 import VerifiedIcon from '@mui/icons-material/Verified';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import { GitHubUser } from '../../../types/github';
-import { ToastRef } from '../Toast';
+import { ToastRef } from '../shared/Toast';
 
 interface SyncOperationsProps {
   user: GitHubUser;

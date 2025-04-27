@@ -1,51 +1,33 @@
 import React, { useState, useEffect } from 'react';
-import Box from '@mui/material/Box';
-import Typography from '@mui/material/Typography';
+import ListItem from '@mui/material/ListItem';
+import ListItemIcon from '@mui/material/ListItemIcon';
+import ListItemText from '@mui/material/ListItemText';
 import IconButton from '@mui/material/IconButton';
 import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
-import ListItemIcon from '@mui/material/ListItemIcon';
-import ListItemText from '@mui/material/ListItemText';
+import ListItemButton from '@mui/material/ListItemButton';
+import InsertLinkIcon from '@mui/icons-material/InsertLink';
 import FolderIcon from '@mui/icons-material/Folder';
-import MoreHorizIcon from '@mui/icons-material/MoreHoriz';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
+import { BookmarkItem as BookmarkItemType } from '../../../utils/bookmark-service';
+import { getFaviconUrl } from '../../../utils/favicon-service';
+import bookmarkService from '../../../utils/bookmark-service';
 import { styled } from '@mui/material/styles';
-import { BookmarkItem as BookmarkItemType } from '../../utils/bookmark-service';
-import { getFaviconUrl } from '../../utils/favicon-service';
-import bookmarkService from '../../utils/bookmark-service';
 
-// 拖拽数据类型 - 与BookmarkItem保持一致
-const DRAG_TYPE = 'application/marksvault-bookmark';
-
-// 样式化组件
-const GridItemContainer = styled(Box, {
-  shouldForwardProp: (prop) => prop !== 'isOver' && prop !== 'isFolder'
-})<{ isOver?: boolean; isFolder?: boolean }>(({ theme, isOver, isFolder }) => ({
-  width: '80px',
-  minHeight: '90px',
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  justifyContent: 'flex-start',
-  borderRadius: theme.shape.borderRadius,
-  padding: theme.spacing(1),
-  margin: theme.spacing(0.5, 0),
-  cursor: 'pointer',
-  textAlign: 'center',
+// 添加可拖放的文件夹样式
+const DropTargetFolder = styled(ListItemButton, {
+  shouldForwardProp: (prop) => prop !== 'isOver'
+})<{ isOver?: boolean }>(({ theme, isOver }) => ({
   transition: 'all 0.15s ease-in-out',
-  position: 'relative',
-  '&:hover': {
-    backgroundColor: theme.palette.action.hover,
-    transform: 'translateY(-2px)',
-  },
-  ...(isOver && isFolder && {
+  ...(isOver && {
     backgroundColor: theme.palette.action.selected,
     boxShadow: `inset 0 0 0 2px ${theme.palette.primary.main}`,
-    transform: 'translateY(-2px) scale(1.05)',
-    '& .MuiSvgIcon-root': {
+    transform: 'translateY(-1px)',
+    '& .MuiListItemIcon-root': {
       color: theme.palette.primary.main,
       transform: 'scale(1.1)',
       transition: 'transform 0.15s ease-in-out',
@@ -53,50 +35,14 @@ const GridItemContainer = styled(Box, {
   }),
 }));
 
-const IconContainer = styled(Box)(({ theme }) => ({
-  width: '48px',
-  height: '48px',
-  display: 'flex',
-  justifyContent: 'center',
-  alignItems: 'center',
-  marginBottom: theme.spacing(1),
-  overflow: 'hidden',
-}));
-
-const ItemTitle = styled(Typography)(({ theme }) => ({
-  fontSize: '12px',
-  fontWeight: 400,
-  maxWidth: '80px',
-  overflow: 'hidden',
-  textOverflow: 'ellipsis',
-  whiteSpace: 'nowrap',
-  marginTop: theme.spacing(0.5),
-  lineHeight: 1.2,
-}));
-
-const ItemCount = styled(Typography)(({ theme }) => ({
-  fontSize: '10px',
-  color: theme.palette.text.secondary,
-  marginTop: theme.spacing(0.2),
-  marginRight: theme.spacing(0.5),
-}));
-
-// 修改按钮样式，移除绝对定位
-const MenuButton = styled(IconButton)(({ theme }) => ({
-  padding: 1,
-  fontSize: '1rem',
-  color: theme.palette.text.secondary,
-  '&:hover': {
-    backgroundColor: theme.palette.action.hover,
-  }
-}));
-
-// 添加一个容器用于包装计数和菜单按钮
-const InfoContainer = styled(Box)(({ theme }) => ({
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  marginTop: theme.spacing(0.2),
+// 添加位置指示器样式
+const PositionIndicator = styled('div')(({ theme }) => ({
+  position: 'absolute',
+  left: 0,
+  right: 0,
+  height: '2px',
+  backgroundColor: theme.palette.primary.main,
+  zIndex: 1,
 }));
 
 // 添加左侧位置指示器样式
@@ -128,7 +74,16 @@ type InteractionMode = 'sort' | 'move';
 // 拖放位置类型
 type DropPosition = 'left' | 'right' | 'center';
 
-interface BookmarkGridItemProps {
+// 包装ListItemButton以支持位置指示器
+const ItemContainer = styled(ListItemButton)<{ isOver?: boolean }>(({ theme, isOver }) => ({
+  position: 'relative',
+  transition: 'all 0.15s ease-in-out',
+  ...(isOver && {
+    backgroundColor: theme.palette.action.hover,
+  }),
+}));
+
+interface BookmarkItemProps {
   bookmark: BookmarkItemType;
   onEdit?: (bookmark: BookmarkItemType) => void;
   onDelete?: (bookmark: BookmarkItemType) => void;
@@ -137,7 +92,10 @@ interface BookmarkGridItemProps {
   onMoveBookmark?: (bookmarkId: string, destinationFolderId: string, index?: number) => Promise<boolean>;
 }
 
-const BookmarkGridItem: React.FC<BookmarkGridItemProps> = ({
+// 拖拽数据类型
+const DRAG_TYPE = 'application/marksvault-bookmark';
+
+const BookmarkItem: React.FC<BookmarkItemProps> = ({
   bookmark,
   onEdit,
   onDelete,
@@ -147,6 +105,7 @@ const BookmarkGridItem: React.FC<BookmarkGridItemProps> = ({
 }) => {
   const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
   const [iconUrl, setIconUrl] = useState<string>('');
+  const [iconError, setIconError] = useState<boolean>(false);
   const [itemCount, setItemCount] = useState<number | null>(null);
   const [isOver, setIsOver] = useState<boolean>(false); // 拖拽悬停状态
   const [dropPosition, setDropPosition] = useState<DropPosition>('center'); // 拖拽位置
@@ -154,12 +113,12 @@ const BookmarkGridItem: React.FC<BookmarkGridItemProps> = ({
   const isMenuOpen = Boolean(menuAnchorEl);
 
   // 定义拖拽区域边缘宽度（像素）
-  const EDGE_WIDTH = 20;
+  const EDGE_WIDTH = 40; // 列表视图需要更宽的边缘区域
 
-  // 加载网站图标
   useEffect(() => {
     if (!bookmark.isFolder && bookmark.url) {
       setIconUrl(getFaviconUrl(bookmark.url));
+      setIconError(false);
     }
   }, [bookmark.url, bookmark.isFolder]);
 
@@ -233,7 +192,7 @@ const BookmarkGridItem: React.FC<BookmarkGridItemProps> = ({
     }
   };
 
-  // 拖拽悬停处理（文件夹可以接收拖拽项，非文件夹用于排序）
+  // 拖拽悬停处理
   const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
     // 检查是否有正确的数据类型
     if (event.dataTransfer.types.includes(DRAG_TYPE)) {
@@ -360,65 +319,98 @@ const BookmarkGridItem: React.FC<BookmarkGridItemProps> = ({
     }
   };
 
+  const handleIconError = () => {
+    setIconError(true);
+  };
+
   return (
-    <GridItemContainer 
-      onClick={handleItemClick}
-      draggable={true} // 所有项目都可拖拽，包括文件夹
-      onDragStart={handleDragStart}
-      onDragOver={handleDragOver}
-      onDragEnter={handleDragEnter}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
-      isOver={isOver && interactionMode === 'move'} // 只有在移动模式下才应用全局高亮
-      isFolder={bookmark.isFolder}
-    >
-      {/* 根据交互模式和拖拽位置显示不同的指示器 */}
-      {isOver && interactionMode === 'sort' && (
-        <>
-          {dropPosition === 'left' && <LeftPositionIndicator />}
-          {dropPosition === 'right' && <RightPositionIndicator />}
-        </>
-      )}
-      
-      <IconContainer>
-        {bookmark.isFolder ? (
-          <FolderIcon sx={{ fontSize: 48, color: isOver && interactionMode === 'move' ? 'primary.main' : 'primary.main' }} />
-        ) : (
-          iconUrl ? (
-            <img 
-              src={iconUrl} 
-              alt={bookmark.title} 
-              style={{ maxWidth: '100%', maxHeight: '100%' }} 
-            />
-          ) : (
-            <img 
-              src={chrome.runtime.getURL('assets/icons/default-favicon.png')} 
-              alt={bookmark.title} 
-              style={{ maxWidth: '100%', maxHeight: '100%' }} 
-              onError={(e) => {
-                // 如果默认图标加载失败，使用占位符
-                (e.target as HTMLImageElement).style.display = 'none';
-              }}
-            />
-          )
-        )}
-      </IconContainer>
-
-      <ItemTitle title={bookmark.title}>
-        {bookmark.title}
-      </ItemTitle>
-
-      <InfoContainer>
-        {bookmark.isFolder && itemCount !== null && (
-          <ItemCount>{itemCount} 项</ItemCount>
-        )}
-        <MenuButton 
-          size="small" 
+    <ListItem
+      disablePadding
+      secondaryAction={
+        <IconButton 
+          edge="end" 
+          aria-label="操作" 
           onClick={handleMenuClick}
+          size="small"
         >
-          <MoreHorizIcon fontSize="small" />
-        </MenuButton>
-      </InfoContainer>
+          <MoreVertIcon fontSize="small" />
+        </IconButton>
+      }
+    >
+      {bookmark.isFolder ? (
+        <DropTargetFolder 
+          onClick={handleItemClick}
+          isOver={isOver && interactionMode === 'move'} // 只有在移动模式下才应用全局高亮
+          draggable={true} // 允许文件夹拖拽
+          onDragStart={handleDragStart}
+          onDragOver={handleDragOver}
+          onDragEnter={handleDragEnter}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        >
+          {/* 根据交互模式和拖拽位置显示不同的指示器 */}
+          {isOver && interactionMode === 'sort' && (
+            <>
+              {dropPosition === 'left' && <LeftPositionIndicator />}
+              {dropPosition === 'right' && <RightPositionIndicator />}
+            </>
+          )}
+          <ListItemIcon>
+            <FolderIcon color={isOver && interactionMode === 'move' ? "primary" : "primary"} />
+          </ListItemIcon>
+          <ListItemText 
+            primary={bookmark.title} 
+            secondary={itemCount !== null ? `${itemCount} 项` : ''}
+            primaryTypographyProps={{ 
+              noWrap: true,
+              title: bookmark.title
+            }}
+          />
+        </DropTargetFolder>
+      ) : (
+        <ItemContainer
+          onClick={handleItemClick}
+          draggable={true}
+          onDragStart={handleDragStart}
+          onDragOver={handleDragOver}
+          onDragEnter={handleDragEnter}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          isOver={isOver && interactionMode === 'move'} // 只有在移动模式下才应用全局高亮
+        >
+          {/* 根据交互模式和拖拽位置显示不同的指示器 */}
+          {isOver && interactionMode === 'sort' && (
+            <>
+              {dropPosition === 'left' && <LeftPositionIndicator />}
+              {dropPosition === 'right' && <RightPositionIndicator />}
+            </>
+          )}
+          <ListItemIcon>
+            {iconUrl && !iconError ? (
+              <img 
+                src={iconUrl} 
+                alt={bookmark.title}
+                style={{ width: '24px', height: '24px' }}
+                onError={handleIconError}
+              />
+            ) : (
+              <InsertLinkIcon color="secondary" />
+            )}
+          </ListItemIcon>
+          <ListItemText 
+            primary={bookmark.title} 
+            secondary={bookmark.url}
+            primaryTypographyProps={{ 
+              noWrap: true,
+              title: bookmark.title
+            }}
+            secondaryTypographyProps={{ 
+              noWrap: true,
+              title: bookmark.url
+            }}
+          />
+        </ItemContainer>
+      )}
 
       <Menu
         anchorEl={menuAnchorEl}
@@ -462,8 +454,8 @@ const BookmarkGridItem: React.FC<BookmarkGridItemProps> = ({
           <ListItemText>删除</ListItemText>
         </MenuItem>
       </Menu>
-    </GridItemContainer>
+    </ListItem>
   );
 };
 
-export default BookmarkGridItem; 
+export default BookmarkItem; 

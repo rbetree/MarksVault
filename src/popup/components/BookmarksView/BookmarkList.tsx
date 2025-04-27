@@ -12,7 +12,7 @@ import AddIcon from '@mui/icons-material/Add';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import SortIcon from '@mui/icons-material/Sort';
 import BookmarkItem from './BookmarkItem';
-import { BookmarkItem as BookmarkItemType } from '../../utils/bookmark-service';
+import { BookmarkItem as BookmarkItemType } from '../../../utils/bookmark-service';
 import Fab from '@mui/material/Fab';
 import Dialog from '@mui/material/Dialog';
 import DialogActions from '@mui/material/DialogActions';

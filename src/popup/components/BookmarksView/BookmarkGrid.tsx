@@ -22,7 +22,7 @@ import FormControlLabel from '@mui/material/FormControlLabel';
 import Switch from '@mui/material/Switch';
 import { styled } from '@mui/material/styles';
 import BookmarkGridItem from './BookmarkGridItem';
-import { BookmarkItem as BookmarkItemType } from '../../utils/bookmark-service';
+import { BookmarkItem as BookmarkItemType } from '../../../utils/bookmark-service';
 import ViewToggleButton from './ViewToggleButton';
 import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
