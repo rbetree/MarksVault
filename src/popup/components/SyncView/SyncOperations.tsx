@@ -194,52 +194,6 @@ const SyncOperations: React.FC<SyncOperationsProps> = ({ user, onLogout, toastRe
 
   return (
     <Card variant="outlined" sx={{ m: 0 }}>
-      {/* 用户信息头部 */}
-      <CardHeader
-        avatar={
-          <Badge
-            overlap="circular"
-            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-            badgeContent={
-              <Tooltip title="已验证连接">
-                <VerifiedIcon color="success" fontSize="small" />
-              </Tooltip>
-            }
-          >
-            <Avatar
-              src={user.avatar_url}
-              alt={user.login}
-              sx={{ width: 40, height: 40 }}
-            />
-          </Badge>
-        }
-        title={
-          <Typography variant="subtitle1" fontWeight="medium">
-            {user.login}
-          </Typography>
-        }
-        subheader={
-          <Typography variant="body2" color="text.secondary">
-            已连接到GitHub账号
-          </Typography>
-        }
-        action={
-          <Button
-            variant="outlined"
-            color="primary"
-            startIcon={<LogoutIcon />}
-            onClick={onLogout}
-            size="small"
-            sx={{ mt: 1 }}
-          >
-            断开连接
-          </Button>
-        }
-      />
-      
-      <Divider />
-      
-      {/* 同步操作区域 */}
       <CardContent>
         <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           同步操作
@@ -249,7 +203,6 @@ const SyncOperations: React.FC<SyncOperationsProps> = ({ user, onLogout, toastRe
         <Box sx={{ mb: 2 }}>
           {backupStatus.lastBackupTime ? (
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-              <AccessTimeIcon fontSize="small" color="action" sx={{ mr: 1 }} />
               <Typography variant="body2" color="text.secondary">
                 上次备份时间: {formatDateTime(backupStatus.lastBackupTime)}
               </Typography>
@@ -262,7 +215,6 @@ const SyncOperations: React.FC<SyncOperationsProps> = ({ user, onLogout, toastRe
           
           {backupStatus.lastRestoreTime && (
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-              <AccessTimeIcon fontSize="small" color="action" sx={{ mr: 1 }} />
               <Typography variant="body2" color="text.secondary">
                 上次恢复时间: {formatDateTime(backupStatus.lastRestoreTime)}
               </Typography>

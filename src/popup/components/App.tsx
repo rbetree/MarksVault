@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import Box from '@mui/material/Box';
 import Container from '@mui/material/Container';
 import Header from './shared/Header';
@@ -7,6 +7,10 @@ import BookmarksView from './BookmarksView/BookmarksView';
 import ErrorBoundary from './shared/ErrorBoundary';
 import Toast, { ToastRef } from './shared/Toast';
 import SyncView from './SyncView/SyncView';
+import { AuthStatus, GitHubUser } from '../../types/github';
+import { GitHubCredentials } from '../../utils/storage-service';
+import storageService from '../../utils/storage-service';
+import githubService from '../../services/github-service';
 
 // 不同导航项的内容组件
 const TasksView = () => <Box sx={{ p: 3 }}><h2>任务管理</h2><p>任务管理功能正在开发中...</p></Box>;
@@ -15,6 +19,75 @@ const SettingsView = () => <Box sx={{ p: 3 }}><h2>系统设置</h2><p>设置功�
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<NavOption>('bookmarks');
   const toastRef = useRef<ToastRef>(null);
+  
+  // GitHub用户状态管理
+  const [authStatus, setAuthStatus] = useState<AuthStatus>(AuthStatus.INITIAL);
+  const [user, setUser] = useState<GitHubUser | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // 组件挂载时检查现有凭据
+  useEffect(() => {
+    const checkExistingAuth = async () => {
+      try {
+        setIsLoading(true);
+        const credentialsResult = await storageService.getGitHubCredentials();
+        
+        if (credentialsResult.success && credentialsResult.data) {
+          try {
+            const userData = await githubService.validateCredentials(credentialsResult.data);
+            setUser(userData);
+            setAuthStatus(AuthStatus.AUTHENTICATED);
+          } catch (error) {
+            console.error('Stored credentials are invalid:', error);
+            setAuthStatus(AuthStatus.INITIAL);
+            await storageService.clearGitHubCredentials();
+          }
+        } else {
+          setAuthStatus(AuthStatus.INITIAL);
+        }
+      } catch (error) {
+        console.error('Error checking auth status:', error);
+        setAuthStatus(AuthStatus.INITIAL);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    checkExistingAuth();
+  }, []);
+
+  // 处理认证
+  const handleAuth = async (credentials: GitHubCredentials) => {
+    setAuthStatus(AuthStatus.AUTHENTICATING);
+    
+    try {
+      const userData = await githubService.validateCredentials(credentials);
+      
+      // 存储有效的凭据
+      await storageService.saveGitHubCredentials(credentials);
+      
+      setUser(userData);
+      setAuthStatus(AuthStatus.AUTHENTICATED);
+      
+      toastRef?.current?.showToast('GitHub认证成功', 'success');
+    } catch (error) {
+      console.error('Authentication failed:', error);
+      setAuthStatus(AuthStatus.FAILED);
+    }
+  };
+
+  // 处理注销
+  const handleLogout = async () => {
+    try {
+      await storageService.clearGitHubCredentials();
+      setUser(null);
+      setAuthStatus(AuthStatus.INITIAL);
+      toastRef?.current?.showToast('已断开GitHub连接', 'info');
+    } catch (error) {
+      console.error('Logout failed:', error);
+      toastRef?.current?.showToast('断开连接失败', 'error');
+    }
+  };
 
   // 根据当前选中的导航项渲染不同的内容
   const renderContent = () => {
@@ -24,7 +97,16 @@ const App: React.FC = () => {
       case 'tasks':
         return <TasksView />;
       case 'sync':
-        return <SyncView toastRef={toastRef} />;
+        return (
+          <SyncView 
+            toastRef={toastRef} 
+            authStatus={authStatus}
+            user={user}
+            onAuth={handleAuth}
+            onLogout={handleLogout}
+            isLoading={isLoading}
+          />
+        );
       case 'settings':
         return <SettingsView />;
       default:
@@ -48,7 +130,10 @@ const App: React.FC = () => {
           overflow: 'hidden',
         }}
       >
-        <Header />
+        <Header 
+          user={user}
+          onLogout={handleLogout}
+        />
         
         <Container
           disableGutters

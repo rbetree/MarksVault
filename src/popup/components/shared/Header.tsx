@@ -4,14 +4,19 @@ import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
 import Avatar from '@mui/material/Avatar';
 import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
+import LogoutIcon from '@mui/icons-material/Logout';
+import Tooltip from '@mui/material/Tooltip';
+import Badge from '@mui/material/Badge';
+import VerifiedIcon from '@mui/icons-material/Verified';
+import { GitHubUser } from '../../../types/github';
 
-interface HeaderProps {}
+interface HeaderProps {
+  user: GitHubUser | null;
+  onLogout: () => Promise<void>;
+}
 
-const Header: React.FC<HeaderProps> = () => {
-  // 临时使用默认头像，后续会替换为GitHub用户头像
-  const avatarSrc = undefined;
-  const username = "未登录";
-
+const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
   return (
     <AppBar position="static" color="primary" sx={{ height: 64 }}>
       <Toolbar>
@@ -31,21 +36,51 @@ const Header: React.FC<HeaderProps> = () => {
         <Box sx={{ flexGrow: 1 }} />
         
         <Box display="flex" alignItems="center">
-          <Box display="flex" alignItems="center">
-            <Avatar
-              src={avatarSrc}
-              alt={username}
-              sx={{ width: 32, height: 32, bgcolor: 'secondary.main' }}
-            >
-              {username.charAt(0).toUpperCase()}
-            </Avatar>
-            <Typography
-              variant="body2"
-              sx={{ ml: 1, display: { xs: 'none', sm: 'block' } }}
-            >
-              {username}
-            </Typography>
-          </Box>
+          {user ? (
+            <Box display="flex" alignItems="center" gap={1}>
+              <Avatar
+                src={user.avatar_url}
+                alt={user.login}
+                sx={{ width: 32, height: 32 }}
+              />
+              <Box sx={{ display: { xs: 'none', sm: 'block' } }}>
+                <Typography variant="body2" fontWeight="medium">
+                  {user.login}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  已连接到GitHub账号
+                </Typography>
+              </Box>
+              <Tooltip title="断开连接">
+                <Button
+                  color="inherit"
+                  size="small"
+                  onClick={onLogout}
+                  sx={{ 
+                    minWidth: 'auto', 
+                    p: 0.5,
+                    ml: 1
+                  }}
+                >
+                  <LogoutIcon fontSize="small" />
+                </Button>
+              </Tooltip>
+            </Box>
+          ) : (
+            <Box display="flex" alignItems="center">
+              <Avatar
+                sx={{ width: 32, height: 32, bgcolor: 'secondary.main' }}
+              >
+                未
+              </Avatar>
+              <Typography
+                variant="body2"
+                sx={{ ml: 1, display: { xs: 'none', sm: 'block' } }}
+              >
+                未登录
+              </Typography>
+            </Box>
+          )}
         </Box>
       </Toolbar>
     </AppBar>
