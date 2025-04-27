@@ -25,6 +25,9 @@ export interface StorageResult {
   error?: string;
 }
 
+// 导入备份状态类型
+import { BackupStatus } from '../types/backup';
+
 class StorageService {
   /**
    * 获取用户设置
@@ -244,20 +247,74 @@ class StorageService {
   }
 
   /**
+   * 保存备份状态信息
+   * @param status 备份状态
+   * @returns Promise<StorageResult>
+   */
+  async saveBackupStatus(status: BackupStatus): Promise<StorageResult> {
+    try {
+      // 先获取当前状态
+      const currentResult = await this.getBackupStatus();
+      const currentStatus = currentResult.success ? currentResult.data : {};
+      
+      // 合并现有状态和新状态
+      const mergedStatus = {
+        ...currentStatus,
+        ...status
+      };
+      
+      await chrome.storage.local.set({ 'backup_status': mergedStatus });
+      return {
+        success: true
+      };
+    } catch (error) {
+      console.error('保存备份状态失败:', error);
+      return {
+        success: false,
+        error: '保存备份状态失败: ' + (error instanceof Error ? error.message : String(error))
+      };
+    }
+  }
+  
+  /**
+   * 获取备份状态信息
+   * @returns Promise<StorageResult>
+   */
+  async getBackupStatus(): Promise<StorageResult> {
+    try {
+      const result = await chrome.storage.local.get('backup_status');
+      return {
+        success: true,
+        data: result.backup_status || {}
+      };
+    } catch (error) {
+      console.error('获取备份状态失败:', error);
+      return {
+        success: false,
+        error: '获取备份状态失败: ' + (error instanceof Error ? error.message : String(error))
+      };
+    }
+  }
+
+  /**
    * 清除所有存储数据
    * @returns Promise<StorageResult>
    */
   async clearAllData(): Promise<StorageResult> {
     try {
-      await chrome.storage.local.clear();
+      await Promise.all([
+        chrome.storage.local.clear(),
+        chrome.storage.sync.clear()
+      ]);
+      
       return {
         success: true
       };
     } catch (error) {
-      console.error('清除数据失败:', error);
+      console.error('清除所有数据失败:', error);
       return {
         success: false,
-        error: '清除数据失败: ' + (error instanceof Error ? error.message : String(error))
+        error: '清除所有数据失败: ' + (error instanceof Error ? error.message : String(error))
       };
     }
   }

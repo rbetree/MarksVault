@@ -46,6 +46,224 @@ export class GitHubService {
     headers.append('Authorization', `token ${credentials.token}`);
     return headers;
   }
+
+  /**
+   * 创建或更新仓库文件
+   * @param credentials GitHub凭据
+   * @param owner 仓库所有者用户名
+   * @param repo 仓库名称
+   * @param path 文件路径
+   * @param content 文件内容
+   * @param message 提交消息
+   * @param sha 如果更新现有文件则需要提供此参数
+   * @returns 创建或更新的文件信息
+   */
+  async createOrUpdateFile(
+    credentials: GitHubCredentials,
+    owner: string,
+    repo: string,
+    path: string,
+    content: string,
+    message: string,
+    sha?: string
+  ): Promise<any> {
+    const headers = this.getAuthHeaders(credentials);
+    const url = `${this.baseUrl}/repos/${owner}/${repo}/contents/${path}`;
+    
+    // Base64编码内容
+    const contentEncoded = btoa(unescape(encodeURIComponent(content)));
+    
+    const body: any = {
+      message,
+      content: contentEncoded,
+    };
+    
+    // 如果提供了SHA，添加到请求体中（表示更新现有文件）
+    if (sha) {
+      body.sha = sha;
+    }
+    
+    try {
+      const response = await fetch(url, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify(body)
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`GitHub API error: ${response.status} - ${JSON.stringify(errorData)}`);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('Creating/updating file failed:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * 获取仓库文件内容
+   * @param credentials GitHub凭据
+   * @param owner 仓库所有者用户名
+   * @param repo 仓库名称
+   * @param path 文件路径
+   * @returns 文件内容和元数据
+   */
+  async getFileContent(
+    credentials: GitHubCredentials,
+    owner: string,
+    repo: string,
+    path: string
+  ): Promise<{ content: string; sha: string; metadata: any }> {
+    const headers = this.getAuthHeaders(credentials);
+    const url = `${this.baseUrl}/repos/${owner}/${repo}/contents/${path}`;
+    
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers
+      });
+      
+      if (!response.ok) {
+        // 处理404特殊情况（文件不存在）
+        if (response.status === 404) {
+          throw new Error('File not found');
+        }
+        const errorData = await response.json();
+        throw new Error(`GitHub API error: ${response.status} - ${JSON.stringify(errorData)}`);
+      }
+      
+      const data = await response.json();
+      
+      // GitHub返回的内容是Base64编码的
+      const content = decodeURIComponent(escape(atob(data.content)));
+      
+      return {
+        content,
+        sha: data.sha,
+        metadata: {
+          name: data.name,
+          path: data.path,
+          size: data.size,
+          url: data.html_url,
+          downloadUrl: data.download_url
+        }
+      };
+    } catch (error) {
+      console.error('Getting file content failed:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 判断仓库是否存在
+   * @param credentials GitHub凭据
+   * @param owner 仓库所有者用户名
+   * @param repo 仓库名称
+   * @returns 仓库是否存在
+   */
+  async repoExists(
+    credentials: GitHubCredentials,
+    owner: string,
+    repo: string
+  ): Promise<boolean> {
+    const headers = this.getAuthHeaders(credentials);
+    const url = `${this.baseUrl}/repos/${owner}/${repo}`;
+    
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers
+      });
+      
+      return response.ok;
+    } catch (error) {
+      console.error('Checking repo existence failed:', error);
+      return false;
+    }
+  }
+
+  /**
+   * 创建新仓库
+   * @param credentials GitHub凭据
+   * @param name 仓库名称
+   * @param isPrivate 是否为私有仓库
+   * @returns 创建的仓库信息
+   */
+  async createRepo(
+    credentials: GitHubCredentials,
+    name: string,
+    isPrivate: boolean = true
+  ): Promise<any> {
+    const headers = this.getAuthHeaders(credentials);
+    const url = `${this.baseUrl}/user/repos`;
+    
+    const body = {
+      name,
+      private: isPrivate,
+      auto_init: true, // 自动初始化仓库
+      description: 'MarksVault书签备份仓库'
+    };
+    
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body)
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`创建仓库失败: ${response.status} - ${JSON.stringify(errorData)}`);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('Creating repo failed:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 获取仓库中的所有文件列表
+   * @param credentials GitHub凭据
+   * @param owner 仓库所有者用户名
+   * @param repo 仓库名称
+   * @param path 可选的目录路径
+   * @returns 文件列表
+   */
+  async getRepositoryFiles(
+    credentials: GitHubCredentials,
+    owner: string,
+    repo: string,
+    path: string = ''
+  ): Promise<Array<{name: string; path: string; sha: string; size: number; url: string; download_url: string; type: string}>> {
+    const headers = this.getAuthHeaders(credentials);
+    const url = `${this.baseUrl}/repos/${owner}/${repo}/contents/${path}`;
+    
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`GitHub API error: ${response.status} - ${JSON.stringify(errorData)}`);
+      }
+      
+      const data = await response.json();
+      
+      // 过滤只返回文件（不包括目录）
+      return Array.isArray(data) 
+        ? data.filter(item => item.type === 'file') 
+        : [];
+    } catch (error) {
+      console.error('Getting repository files failed:', error);
+      throw error;
+    }
+  }
 }
 
 export default GitHubService.getInstance(); 

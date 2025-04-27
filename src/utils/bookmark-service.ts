@@ -332,6 +332,38 @@ class BookmarkService {
       };
     }
   }
+
+  /**
+   * 获取书签根文件夹
+   * @returns Promise<BookmarkResult> 包含根文件夹的书签项
+   */
+  async getBookmarkRoots(): Promise<BookmarkResult> {
+    try {
+      const bookmarkTree = await chrome.bookmarks.getTree();
+      
+      if (bookmarkTree.length === 0 || !bookmarkTree[0].children) {
+        return {
+          success: false,
+          error: '无法获取书签根文件夹'
+        };
+      }
+      
+      // Chrome浏览器中，根文件夹的children通常包含：
+      // - id为"0"的是"其他书签"
+      // - id为"1"的是"书签栏"
+      // - id为"2"的是"移动设备书签"
+      return {
+        success: true,
+        data: this.transformBookmarkTree(bookmarkTree[0].children)
+      };
+    } catch (error) {
+      console.error('获取书签根失败:', error);
+      return {
+        success: false,
+        error: '获取书签根失败: ' + (error instanceof Error ? error.message : String(error))
+      };
+    }
+  }
 }
 
 // 导出书签服务单例
