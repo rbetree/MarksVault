@@ -346,7 +346,7 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
 
       {/* 书签列表 - 添加拖拽支持 */}
       <Box 
-        sx={{ flexGrow: 1, overflow: 'auto', p: 0 }}
+        sx={{ flexGrow: 1, overflow: 'auto', px: 2 }}
         onDragOver={handleListDragOver}
         onDrop={handleListDrop}
       >
