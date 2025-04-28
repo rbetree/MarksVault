@@ -140,7 +140,7 @@ const App: React.FC = () => {
           maxWidth={false}
           sx={{
             flexGrow: 1,
-            overflow: 'hidden',
+            overflow: 'auto',
             display: 'flex',
             flexDirection: 'column',
             pb: 7, // 留出底部导航的高度

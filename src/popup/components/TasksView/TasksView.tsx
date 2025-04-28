@@ -18,12 +18,26 @@ import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
 import DialogContentText from '@mui/material/DialogContentText';
 import DialogTitle from '@mui/material/DialogTitle';
+import Tooltip from '@mui/material/Tooltip';
+import Paper from '@mui/material/Paper';
+import ToggleButton from '@mui/material/ToggleButton';
+import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
+import ViewListIcon from '@mui/icons-material/ViewList';
+import ViewModuleIcon from '@mui/icons-material/ViewModule';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import IconButton from '@mui/material/IconButton';
 import { ToastRef } from '../shared/Toast';
 import { Task, TaskStatus } from '../../../types/task';
 import taskService from '../../../services/task-service';
 import TaskCard from './TaskCard';
 import TaskListItem from './TaskListItem';
 import EmptyTaskList from './EmptyTaskList';
+import TaskSkeleton from './TaskSkeleton';
+import { 
+  taskHeaderStyles, 
+  filterContainerStyles,
+  fabStyles
+} from '../../styles/TaskStyles';
 
 interface TasksViewProps {
   toastRef?: React.RefObject<ToastRef>;
@@ -45,6 +59,7 @@ const TasksView: React.FC<TasksViewProps> = ({ toastRef }) => {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [deleteTaskId, setDeleteTaskId] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   
   // 加载任务数据
   useEffect(() => {
@@ -70,6 +85,7 @@ const TasksView: React.FC<TasksViewProps> = ({ toastRef }) => {
         setError('加载任务时发生错误');
       } finally {
         setLoading(false);
+        setIsRefreshing(false);
       }
     };
     
@@ -78,6 +94,7 @@ const TasksView: React.FC<TasksViewProps> = ({ toastRef }) => {
   
   // 刷新任务列表
   const refreshTasks = () => {
+    setIsRefreshing(true);
     setRefreshTrigger(prev => prev + 1);
   };
   
@@ -136,8 +153,13 @@ const TasksView: React.FC<TasksViewProps> = ({ toastRef }) => {
   };
   
   // 切换视图模式
-  const toggleViewMode = () => {
-    setViewMode(prev => prev === 'card' ? 'list' : 'card');
+  const handleViewModeChange = (
+    event: React.MouseEvent<HTMLElement>,
+    newMode: ViewMode | null,
+  ) => {
+    if (newMode !== null) {
+      setViewMode(newMode);
+    }
   };
   
   // 过滤器变更处理
@@ -148,16 +170,20 @@ const TasksView: React.FC<TasksViewProps> = ({ toastRef }) => {
   // 渲染任务列表
   const renderTasks = () => {
     if (loading) {
-      return (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-          <CircularProgress />
-        </Box>
-      );
+      return <TaskSkeleton mode={viewMode} count={3} />;
     }
     
     if (error) {
       return (
-        <Alert severity="error" sx={{ my: 2 }}>
+        <Alert 
+          severity="error" 
+          sx={{ my: 2 }}
+          action={
+            <Button color="inherit" size="small" onClick={refreshTasks}>
+              重试
+            </Button>
+          }
+        >
           {error}
         </Alert>
       );
@@ -166,7 +192,6 @@ const TasksView: React.FC<TasksViewProps> = ({ toastRef }) => {
     if (tasks.length === 0) {
       return (
         <EmptyTaskList 
-          onCreateTask={() => setShowCreateModal(true)}
           filtered={filterStatus !== 'all'}
         />
       );
@@ -188,17 +213,19 @@ const TasksView: React.FC<TasksViewProps> = ({ toastRef }) => {
       );
     } else {
       return (
-        <List sx={{ width: '100%', mt: 2 }}>
-          {tasks.map(task => (
-            <TaskListItem
-              key={task.id}
-              task={task}
-              onStatusChange={handleTaskStatusChange}
-              onEdit={handleEditTask}
-              onDelete={handleDeleteConfirm}
-            />
-          ))}
-        </List>
+        <Paper variant="outlined" sx={{ mt: 2 }}>
+          <List sx={{ width: '100%' }}>
+            {tasks.map(task => (
+              <TaskListItem
+                key={task.id}
+                task={task}
+                onStatusChange={handleTaskStatusChange}
+                onEdit={handleEditTask}
+                onDelete={handleDeleteConfirm}
+              />
+            ))}
+          </List>
+        </Paper>
       );
     }
   };
@@ -206,22 +233,38 @@ const TasksView: React.FC<TasksViewProps> = ({ toastRef }) => {
   return (
     <Box sx={{ p: 2 }}>
       {/* 头部区域 */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+      <Box sx={taskHeaderStyles}>
         <Typography variant="h5" component="h1">
           任务管理
         </Typography>
         
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <Button 
-            variant="outlined"
-            startIcon={viewMode === 'card' ? <FilterListIcon /> : <FilterListIcon />}
-            onClick={toggleViewMode}
+        <Box sx={filterContainerStyles}>
+          <Tooltip title="刷新任务列表">
+            <IconButton 
+              onClick={refreshTasks} 
+              disabled={loading || isRefreshing}
+              size="small"
+            >
+              <RefreshIcon />
+            </IconButton>
+          </Tooltip>
+          
+          <ToggleButtonGroup
+            value={viewMode}
+            exclusive
+            onChange={handleViewModeChange}
+            aria-label="视图模式"
             size="small"
           >
-            {viewMode === 'card' ? '列表视图' : '卡片视图'}
-          </Button>
+            <ToggleButton value="card" aria-label="卡片视图">
+              <ViewModuleIcon fontSize="small" />
+            </ToggleButton>
+            <ToggleButton value="list" aria-label="列表视图">
+              <ViewListIcon fontSize="small" />
+            </ToggleButton>
+          </ToggleButtonGroup>
           
-          <FormControl size="small" sx={{ minWidth: 120 }}>
+          <FormControl size="small" sx={{ minWidth: 100 }}>
             <InputLabel id="task-status-filter-label">状态</InputLabel>
             <Select
               labelId="task-status-filter-label"
@@ -242,24 +285,27 @@ const TasksView: React.FC<TasksViewProps> = ({ toastRef }) => {
       
       {/* 任务列表区域 */}
       <Box sx={{ position: 'relative' }}>
+        {isRefreshing && !loading && (
+          <Box sx={{ position: 'absolute', top: 8, right: 8, zIndex: 1 }}>
+            <CircularProgress size={24} />
+          </Box>
+        )}
         {renderTasks()}
       </Box>
       
-      {/* 悬浮添加按钮 - 仅在有任务或正在过滤时显示 */}
-      {(tasks.length > 0 || filterStatus !== 'all') && (
-        <Fab 
-          color="primary" 
-          aria-label="添加任务"
-          sx={{ 
-            position: 'fixed',
-            bottom: 80, // 考虑底部导航栏的高度
-            right: 16
-          }}
-          onClick={() => setShowCreateModal(true)}
-        >
-          <AddIcon />
-        </Fab>
-      )}
+      {/* 悬浮添加按钮 - 固定显示，提升可发现性 */}
+      <Fab 
+        color="primary" 
+        aria-label="添加任务"
+        sx={{
+          ...fabStyles,
+          // 增加阴影效果，提高视觉层级
+          boxShadow: 3
+        }}
+        onClick={() => setShowCreateModal(true)}
+      >
+        <AddIcon />
+      </Fab>
       
       {/* 删除确认对话框 */}
       <Dialog
@@ -284,6 +330,8 @@ const TasksView: React.FC<TasksViewProps> = ({ toastRef }) => {
       <Dialog
         open={showCreateModal}
         onClose={() => setShowCreateModal(false)}
+        maxWidth="sm"
+        fullWidth
       >
         <DialogTitle>创建新任务</DialogTitle>
         <DialogContent>

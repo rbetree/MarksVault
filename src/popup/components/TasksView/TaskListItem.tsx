@@ -6,13 +6,21 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import Box from '@mui/material/Box';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
-import { Task, TaskStatus } from '../../../types/task';
+import Chip from '@mui/material/Chip';
+import { Task, TaskStatus, TriggerType } from '../../../types/task';
 import TaskStatusChip from './TaskStatusChip';
 import TaskTriggerInfo from './TaskTriggerInfo';
 import taskService from '../../../services/task-service';
+import { 
+  taskListItemStyles, 
+  getTaskCardBorderStyle, 
+  dateDisplayStyles,
+  combineStyles 
+} from '../../styles/TaskStyles';
 
 interface TaskListItemProps {
   task: Task;
@@ -72,30 +80,55 @@ const TaskListItem: React.FC<TaskListItemProps> = ({
     onDelete?.(task.id);
   };
   
+  // 格式化相对时间
+  const formatRelativeTime = (timestamp: number) => {
+    const now = Date.now();
+    const diff = timestamp - now;
+    
+    // 如果时间已过，返回"已过期"
+    if (diff < 0) return '已过期';
+    
+    const seconds = Math.floor(diff / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+    
+    if (days > 0) {
+      return `${days}天后`;
+    } else if (hours > 0) {
+      return `${hours}小时后`;
+    } else if (minutes > 0) {
+      return `${minutes}分钟后`;
+    } else {
+      return '即将执行';
+    }
+  };
+  
+  // 获取任务下次执行时间
+  const getNextExecutionTime = () => {
+    if (task.status !== TaskStatus.ENABLED) {
+      return null;
+    }
+    
+    if (task.trigger.type === TriggerType.TIME && 'nextTrigger' in task.trigger && task.trigger.nextTrigger) {
+      return task.trigger.nextTrigger;
+    }
+    
+    return null;
+  };
+  
   // 判断任务是否可以启用/禁用
   const canToggleStatus = task.status !== TaskStatus.COMPLETED && 
                           task.status !== TaskStatus.RUNNING;
   
+  // 获取下次执行时间
+  const nextExecutionTime = getNextExecutionTime();
+  
   return (
     <ListItem
-      button
       onClick={handleClick}
       divider
-      sx={{
-        borderLeft: '4px solid',
-        borderLeftColor: theme => 
-          task.status === TaskStatus.ENABLED 
-            ? theme.palette.success.main
-            : task.status === TaskStatus.RUNNING
-              ? theme.palette.primary.main
-              : task.status === TaskStatus.FAILED
-                ? theme.palette.error.main
-                : 'transparent',
-        '&:hover': {
-          backgroundColor: 'rgba(0, 0, 0, 0.04)'
-        },
-        py: 1
-      }}
+      sx={combineStyles(taskListItemStyles, getTaskCardBorderStyle(task.status))}
     >
       <ListItemText
         primary={
@@ -109,9 +142,28 @@ const TaskListItem: React.FC<TaskListItemProps> = ({
           </Box>
         }
         secondary={
-          <Box sx={{ mt: 0.5 }}>
-            <TaskTriggerInfo trigger={task.trigger} compact />
-          </Box>
+          <>
+            <Box sx={{ mt: 0.5 }}>
+              <TaskTriggerInfo trigger={task.trigger} compact />
+            </Box>
+            
+            {/* 下次执行时间 */}
+            {nextExecutionTime && (
+              <Box sx={combineStyles(dateDisplayStyles, { mt: 0.5 })}>
+                <AccessTimeIcon fontSize="inherit" sx={{ mr: 0.5 }} />
+                <span>下次执行: {formatRelativeTime(nextExecutionTime)}</span>
+                {task.history.lastExecution && !task.history.lastExecution.success && (
+                  <Chip 
+                    label="上次失败" 
+                    color="error" 
+                    size="small" 
+                    variant="outlined" 
+                    sx={{ ml: 1, height: 20, fontSize: '0.6rem' }}
+                  />
+                )}
+              </Box>
+            )}
+          </>
         }
       />
       
@@ -129,13 +181,13 @@ const TaskListItem: React.FC<TaskListItemProps> = ({
           </span>
         </Tooltip>
         
-        <Tooltip title="编辑">
+        <Tooltip title="编辑任务">
           <IconButton onClick={handleEdit} size="small">
             <EditIcon />
           </IconButton>
         </Tooltip>
         
-        <Tooltip title="删除">
+        <Tooltip title="删除任务">
           <IconButton onClick={handleDelete} size="small">
             <DeleteIcon />
           </IconButton>
