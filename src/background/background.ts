@@ -1,8 +1,10 @@
 // MarksVault 后台脚本
 // 负责处理事件监听和后台任务
+import taskService from '../services/task-service';
+import { createDefaultTaskStorage } from '../types/task';
 
 // 监听安装事件
-chrome.runtime.onInstalled.addListener((details) => {
+chrome.runtime.onInstalled.addListener(async (details) => {
   if (details.reason === 'install') {
     console.log('MarksVault 扩展已安装');
     // 初始化存储
@@ -14,11 +16,15 @@ chrome.runtime.onInstalled.addListener((details) => {
       bookmarks: {
         lastUpdated: null,
         customData: {},
-      }
+      },
+      tasks_data: createDefaultTaskStorage() // 初始化任务存储
     });
   } else if (details.reason === 'update') {
     console.log('MarksVault 扩展已更新到版本 ' + chrome.runtime.getManifest().version);
   }
+  
+  // 初始化任务服务
+  await taskService.init();
 });
 
 // 可以添加更多的事件监听器和后台功能

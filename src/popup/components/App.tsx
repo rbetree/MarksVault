@@ -7,13 +7,13 @@ import BookmarksView from './BookmarksView/BookmarksView';
 import ErrorBoundary from './shared/ErrorBoundary';
 import Toast, { ToastRef } from './shared/Toast';
 import SyncView from './SyncView/SyncView';
+import TasksView from './TasksView/TasksView';
 import { AuthStatus, GitHubUser } from '../../types/github';
 import { GitHubCredentials } from '../../utils/storage-service';
 import storageService from '../../utils/storage-service';
 import githubService from '../../services/github-service';
 
-// 不同导航项的内容组件
-const TasksView = () => <Box sx={{ p: 3 }}><h2>任务管理</h2><p>任务管理功能正在开发中...</p></Box>;
+// 设置页面暂时使用临时组件
 const SettingsView = () => <Box sx={{ p: 3 }}><h2>系统设置</h2><p>设置功能正在开发中...</p></Box>;
 
 const App: React.FC = () => {
@@ -95,7 +95,7 @@ const App: React.FC = () => {
       case 'bookmarks':
         return <BookmarksView toastRef={toastRef} />;
       case 'tasks':
-        return <TasksView />;
+        return <TasksView toastRef={toastRef} />;
       case 'sync':
         return (
           <SyncView 

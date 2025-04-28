@@ -297,6 +297,48 @@ class StorageService {
   }
 
   /**
+   * 获取存储中的数据
+   * @param key 存储键名
+   * @returns Promise<StorageResult>
+   */
+  async getStorageData(key: string): Promise<StorageResult> {
+    try {
+      const result = await chrome.storage.local.get(key);
+      return {
+        success: true,
+        data: result[key] || null
+      };
+    } catch (error) {
+      console.error(`获取存储数据 ${key} 失败:`, error);
+      return {
+        success: false,
+        error: `获取存储数据失败: ` + (error instanceof Error ? error.message : String(error))
+      };
+    }
+  }
+
+  /**
+   * 保存数据到存储
+   * @param key 存储键名
+   * @param data 要保存的数据
+   * @returns Promise<StorageResult>
+   */
+  async setStorageData(key: string, data: any): Promise<StorageResult> {
+    try {
+      await chrome.storage.local.set({ [key]: data });
+      return {
+        success: true
+      };
+    } catch (error) {
+      console.error(`保存数据到 ${key} 失败:`, error);
+      return {
+        success: false,
+        error: `保存数据失败: ` + (error instanceof Error ? error.message : String(error))
+      };
+    }
+  }
+
+  /**
    * 清除所有存储数据
    * @returns Promise<StorageResult>
    */
