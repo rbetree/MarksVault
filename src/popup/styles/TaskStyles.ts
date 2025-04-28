@@ -68,7 +68,8 @@ export const fabStyles: SxProps<Theme> = {
   position: 'fixed',
   bottom: 80, // 考虑底部导航栏的高度
   right: 16,
-  zIndex: 1000
+  zIndex: 1000,
+  boxShadow: 3 // 增加阴影效果，提高视觉层级
 };
 
 // 日期显示样式
@@ -78,6 +79,43 @@ export const dateDisplayStyles: SxProps<Theme> = {
   color: 'text.secondary',
   fontSize: '0.75rem',
   mt: 1
+};
+
+// 表单字段容器样式
+export const formFieldContainerStyles: SxProps<Theme> = {
+  mt: 2,
+  mb: 2
+};
+
+// 表单分隔符样式
+export const formDividerStyles: SxProps<Theme> = {
+  my: 2
+};
+
+// 表单分组标题样式
+export const formSectionTitleStyles: SxProps<Theme> = {
+  fontWeight: 500,
+  mt: 2,
+  mb: 1
+};
+
+// 表单操作按钮样式
+export const formButtonStyles: SxProps<Theme> = {
+  mr: 1
+};
+
+// 表单操作面板样式
+export const formActionsStyles: SxProps<Theme> = {
+  display: 'flex',
+  justifyContent: 'flex-end',
+  pt: 2,
+  pb: 1
+};
+
+// 表单错误文本样式
+export const formErrorTextStyles: SxProps<Theme> = {
+  color: 'error.main',
+  my: 1
 };
 
 /**

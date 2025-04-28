@@ -33,6 +33,7 @@ import TaskCard from './TaskCard';
 import TaskListItem from './TaskListItem';
 import EmptyTaskList from './EmptyTaskList';
 import TaskSkeleton from './TaskSkeleton';
+import TaskDialog from './TaskForm';
 import { 
   taskHeaderStyles, 
   filterContainerStyles,
@@ -58,8 +59,12 @@ const TasksView: React.FC<TasksViewProps> = ({ toastRef }) => {
   const [viewMode, setViewMode] = useState<ViewMode>('card');
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [deleteTaskId, setDeleteTaskId] = useState<string | null>(null);
-  const [showCreateModal, setShowCreateModal] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  
+  // 任务表单对话框状态
+  const [showTaskDialog, setShowTaskDialog] = useState(false);
+  const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
+  const [currentTask, setCurrentTask] = useState<Task | undefined>(undefined);
   
   // 加载任务数据
   useEffect(() => {
@@ -92,6 +97,32 @@ const TasksView: React.FC<TasksViewProps> = ({ toastRef }) => {
     fetchTasks();
   }, [filterStatus, refreshTrigger]);
   
+  // 加载当前编辑的任务详情
+  useEffect(() => {
+    const fetchTask = async () => {
+      if (!currentTaskId) {
+        setCurrentTask(undefined);
+        return;
+      }
+      
+      try {
+        const result = await taskService.getTaskById(currentTaskId);
+        if (result.success) {
+          setCurrentTask(result.data as Task);
+        } else {
+          toastRef?.current?.showToast(`加载任务详情失败: ${result.error}`, 'error');
+          setCurrentTask(undefined);
+        }
+      } catch (error) {
+        console.error('获取任务详情时出错:', error);
+        toastRef?.current?.showToast('加载任务详情时发生错误', 'error');
+        setCurrentTask(undefined);
+      }
+    };
+    
+    fetchTask();
+  }, [currentTaskId, toastRef]);
+  
   // 刷新任务列表
   const refreshTasks = () => {
     setIsRefreshing(true);
@@ -110,8 +141,8 @@ const TasksView: React.FC<TasksViewProps> = ({ toastRef }) => {
   
   // 处理任务编辑
   const handleEditTask = (taskId: string) => {
-    // 暂时显示通知，实际功能将在V6.5实现
-    toastRef?.current?.showToast('任务编辑功能将在后续版本实现', 'info');
+    setCurrentTaskId(taskId);
+    setShowTaskDialog(true);
   };
   
   // 处理删除确认
@@ -145,11 +176,27 @@ const TasksView: React.FC<TasksViewProps> = ({ toastRef }) => {
     }
   };
   
-  // 处理创建任务
+  // 打开创建任务对话框
   const handleCreateTask = () => {
-    // 暂时显示通知，实际功能将在V6.5实现
-    toastRef?.current?.showToast('任务创建功能将在后续版本实现', 'info');
-    setShowCreateModal(false);
+    setCurrentTaskId(null);
+    setCurrentTask(undefined);
+    setShowTaskDialog(true);
+  };
+  
+  // 关闭任务对话框
+  const handleCloseTaskDialog = () => {
+    setShowTaskDialog(false);
+    setCurrentTaskId(null);
+    setCurrentTask(undefined);
+  };
+  
+  // 任务保存后的回调
+  const handleTaskSaved = (taskId: string, isNew: boolean) => {
+    refreshTasks();
+    toastRef?.current?.showToast(
+      isNew ? '任务已创建' : '任务已更新', 
+      'success'
+    );
   };
   
   // 切换视图模式
@@ -264,10 +311,10 @@ const TasksView: React.FC<TasksViewProps> = ({ toastRef }) => {
             </ToggleButton>
           </ToggleButtonGroup>
           
-          <FormControl size="small" sx={{ minWidth: 100 }}>
-            <InputLabel id="task-status-filter-label">状态</InputLabel>
+          <FormControl size="small" sx={{ minWidth: 120 }}>
+            <InputLabel id="status-filter-label">状态</InputLabel>
             <Select
-              labelId="task-status-filter-label"
+              labelId="status-filter-label"
               value={filterStatus}
               label="状态"
               onChange={handleFilterChange}
@@ -283,26 +330,15 @@ const TasksView: React.FC<TasksViewProps> = ({ toastRef }) => {
         </Box>
       </Box>
       
-      {/* 任务列表区域 */}
-      <Box sx={{ position: 'relative' }}>
-        {isRefreshing && !loading && (
-          <Box sx={{ position: 'absolute', top: 8, right: 8, zIndex: 1 }}>
-            <CircularProgress size={24} />
-          </Box>
-        )}
-        {renderTasks()}
-      </Box>
+      {/* 任务列表 */}
+      {renderTasks()}
       
-      {/* 悬浮添加按钮 - 固定显示，提升可发现性 */}
+      {/* 浮动添加按钮 */}
       <Fab 
         color="primary" 
-        aria-label="添加任务"
-        sx={{
-          ...fabStyles,
-          // 增加阴影效果，提高视觉层级
-          boxShadow: 3
-        }}
-        onClick={() => setShowCreateModal(true)}
+        aria-label="添加任务" 
+        sx={fabStyles}
+        onClick={handleCreateTask}
       >
         <AddIcon />
       </Fab>
@@ -319,30 +355,22 @@ const TasksView: React.FC<TasksViewProps> = ({ toastRef }) => {
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleDeleteCancel}>取消</Button>
+          <Button onClick={handleDeleteCancel} color="inherit">
+            取消
+          </Button>
           <Button onClick={handleDeleteConfirmed} color="error" autoFocus>
             删除
           </Button>
         </DialogActions>
       </Dialog>
       
-      {/* 创建任务对话框(后期版本完成) */}
-      <Dialog
-        open={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>创建新任务</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            任务创建功能将在后续版本中实现（V6.5）。
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setShowCreateModal(false)}>关闭</Button>
-        </DialogActions>
-      </Dialog>
+      {/* 任务创建/编辑对话框 */}
+      <TaskDialog
+        open={showTaskDialog}
+        onClose={handleCloseTaskDialog}
+        task={currentTask}
+        onTaskSaved={handleTaskSaved}
+      />
     </Box>
   );
 };
