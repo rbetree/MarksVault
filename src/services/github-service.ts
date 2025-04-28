@@ -240,7 +240,13 @@ export class GitHubService {
     path: string = ''
   ): Promise<Array<{name: string; path: string; sha: string; size: number; url: string; download_url: string; type: string}>> {
     const headers = this.getAuthHeaders(credentials);
-    const url = `${this.baseUrl}/repos/${owner}/${repo}/contents/${path}`;
+    // 添加缓存控制头，确保每次都获取最新数据
+    headers.append('Cache-Control', 'no-cache');
+    headers.append('Pragma', 'no-cache');
+    
+    // 添加时间戳参数到URL，避免缓存
+    const timestamp = new Date().getTime();
+    const url = `${this.baseUrl}/repos/${owner}/${repo}/contents/${path}?timestamp=${timestamp}`;
     
     try {
       const response = await fetch(url, {
@@ -261,6 +267,51 @@ export class GitHubService {
         : [];
     } catch (error) {
       console.error('Getting repository files failed:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 删除仓库中的文件
+   * @param credentials GitHub凭据
+   * @param owner 仓库所有者用户名
+   * @param repo 仓库名称
+   * @param path 文件路径
+   * @param message 提交消息
+   * @param sha 文件的SHA标识符，必需
+   * @returns 删除操作的结果
+   */
+  async deleteFile(
+    credentials: GitHubCredentials,
+    owner: string,
+    repo: string,
+    path: string,
+    message: string,
+    sha: string
+  ): Promise<any> {
+    const headers = this.getAuthHeaders(credentials);
+    const url = `${this.baseUrl}/repos/${owner}/${repo}/contents/${path}`;
+    
+    const body = {
+      message,
+      sha
+    };
+    
+    try {
+      const response = await fetch(url, {
+        method: 'DELETE',
+        headers,
+        body: JSON.stringify(body)
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`GitHub API error: ${response.status} - ${JSON.stringify(errorData)}`);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('Deleting file failed:', error);
       throw error;
     }
   }

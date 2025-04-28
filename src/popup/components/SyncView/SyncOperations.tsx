@@ -51,6 +51,9 @@ const SyncOperations: React.FC<SyncOperationsProps> = ({ user, onLogout, toastRe
   const [restoreError, setRestoreError] = useState<string | null>(null);
   const [credentials, setCredentials] = useState<GitHubCredentials | null>(null);
 
+  // 添加备份选择对话框刷新方法的引用
+  const backupSelectionRefreshRef = useRef<(() => void) | null>(null);
+
   // 组件挂载时加载备份状态和GitHub凭据
   useEffect(() => {
     const loadData = async () => {
@@ -104,6 +107,11 @@ const SyncOperations: React.FC<SyncOperationsProps> = ({ user, onLogout, toastRe
       const status = await backupService.getBackupStatus();
       setBackupStatus(status);
       
+      // 刷新备份列表（如果选择对话框是打开的）
+      if (backupSelectionRefreshRef.current) {
+        backupSelectionRefreshRef.current();
+      }
+      
       toastRef?.current?.showToast('书签成功备份到GitHub', 'success');
     } catch (error) {
       console.error('上传失败:', error);
@@ -116,6 +124,8 @@ const SyncOperations: React.FC<SyncOperationsProps> = ({ user, onLogout, toastRe
 
   // 打开备份选择对话框
   const handleBackupSelectionOpen = () => {
+    // 重置选择状态
+    setSelectedBackupPath(null);
     setShowBackupSelection(true);
   };
 
@@ -316,6 +326,7 @@ const SyncOperations: React.FC<SyncOperationsProps> = ({ user, onLogout, toastRe
           credentials={credentials}
           username={user.login}
           repoName={BACKUP_REPO_NAME}
+          onRefreshRef={backupSelectionRefreshRef}
         />
       )}
     </Card>
