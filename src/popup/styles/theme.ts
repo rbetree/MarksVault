@@ -27,21 +27,25 @@ const theme = createTheme({
   typography: {
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif',
     h4: {
-      fontSize: '20px',
+      fontSize: '18px',
       fontWeight: 500,
     },
     h5: {
-      fontSize: '16px',
+      fontSize: '15px',
+      fontWeight: 500,
+    },
+    h6: {
+      fontSize: '14px',
       fontWeight: 500,
     },
     body1: {
-      fontSize: '14px',
+      fontSize: '13px',
     },
     body2: {
-      fontSize: '12px',
+      fontSize: '11px',
     },
     button: {
-      fontSize: '14px',
+      fontSize: '12px',
       textTransform: 'none',
     },
   },

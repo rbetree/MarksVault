@@ -8,6 +8,8 @@ import CircularProgress from '@mui/material/CircularProgress';
 import Box from '@mui/material/Box';
 import Tabs from '@mui/material/Tabs';
 import Tab from '@mui/material/Tab';
+import Typography from '@mui/material/Typography';
+import Grid from '@mui/material/Grid';
 import TaskBasicForm from './TaskBasicForm';
 import TaskTriggerForm from './TaskTriggerForm';
 import TaskActionForm from './TaskActionForm';
@@ -186,90 +188,76 @@ const TaskDialog: React.FC<TaskDialogProps> = ({
       maxWidth="md"
       fullWidth
     >
-      <DialogTitle>
-        {isEditMode ? '编辑任务' : '创建新任务'}
+      <DialogTitle sx={{ textAlign: 'center', pb: 0.5, pt: 1.5 }}>
+        <Typography variant="h5" component="div" sx={{ fontWeight: 'bold' }}>
+          {isEditMode ? '编辑任务' : '创建新任务'}
+        </Typography>
       </DialogTitle>
       
-      <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-        <Tabs 
-          value={tabIndex} 
-          onChange={handleTabChange}
-          aria-label="任务配置选项卡"
-          variant="fullWidth"
-        >
-          <Tab label="基本信息" id="task-form-tab-0" />
-          <Tab label="触发条件" id="task-form-tab-1" />
-          <Tab label="操作配置" id="task-form-tab-2" />
-        </Tabs>
-      </Box>
-      
-      <DialogContent>
+      <DialogContent sx={{ px: 3, py: 2 }}>
         {error && (
-          <Box sx={{ mb: 2, color: 'error.main' }}>
+          <Box sx={{ mb: 1, color: 'error.main' }}>
             {error}
           </Box>
         )}
         
-        <TabPanel value={tabIndex} index={0}>
-          <TaskBasicForm 
-            taskData={formData}
-            onChange={handleBasicInfoChange}
-          />
-        </TabPanel>
-        
-        <TabPanel value={tabIndex} index={1}>
-          <TaskTriggerForm 
-            trigger={formData.trigger}
-            onChange={handleTriggerChange}
-          />
-        </TabPanel>
-        
-        <TabPanel value={tabIndex} index={2}>
-          <TaskActionForm 
-            action={formData.action}
-            onChange={handleActionChange}
-          />
-        </TabPanel>
+        <Grid container spacing={1.5}>
+          <Grid item xs={12}>
+            <TaskBasicForm 
+              taskData={formData}
+              onChange={handleBasicInfoChange}
+            />
+          </Grid>
+          
+          <Grid item xs={12}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 0.5 }}>
+              触发方式
+            </Typography>
+            <Box sx={{ border: '1px solid #e0e0e0', borderRadius: 1, p: 1.5 }}>
+              <TaskTriggerForm 
+                trigger={formData.trigger}
+                onChange={handleTriggerChange}
+              />
+            </Box>
+          </Grid>
+          
+          <Grid item xs={12}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 0.5 }}>
+              操作类型
+            </Typography>
+            <Box sx={{ border: '1px solid #e0e0e0', borderRadius: 1, p: 1.5 }}>
+              <TaskActionForm 
+                action={formData.action}
+                onChange={handleActionChange}
+              />
+            </Box>
+          </Grid>
+        </Grid>
       </DialogContent>
       
-      <DialogActions>
+      <DialogActions sx={{ px: 3, pb: 2, pt: 0.5 }}>
         <Button 
           onClick={onClose} 
           color="inherit"
           disabled={isSaving}
+          variant="outlined"
+          size="small"
         >
           取消
         </Button>
         
         <Box sx={{ flexGrow: 1 }} />
         
-        {tabIndex > 0 && (
-          <Button 
-            onClick={handlePrev}
-            disabled={isSaving}
-          >
-            上一步
-          </Button>
-        )}
-        
-        {tabIndex < 2 ? (
-          <Button 
-            onClick={handleNext}
-            disabled={isSaving || (tabIndex === 0 && !basicValid) || (tabIndex === 1 && !triggerValid)}
-          >
-            下一步
-          </Button>
-        ) : (
-          <Button 
-            onClick={handleSave}
-            variant="contained"
-            color="primary"
-            disabled={isSaving || !isFormValid}
-            startIcon={isSaving && <CircularProgress size={20} color="inherit" />}
-          >
-            {isSaving ? '保存中...' : '保存'}
-          </Button>
-        )}
+        <Button 
+          onClick={handleSave}
+          variant="contained"
+          color="primary"
+          disabled={isSaving || !isFormValid}
+          startIcon={isSaving && <CircularProgress size={16} color="inherit" />}
+          size="small"
+        >
+          {isSaving ? '保存中...' : '保存'}
+        </Button>
       </DialogActions>
     </Dialog>
   );

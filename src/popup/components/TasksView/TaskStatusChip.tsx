@@ -70,9 +70,15 @@ const TaskStatusChip: React.FC<TaskStatusChipProps> = ({ status, size = 'small' 
       variant="filled"
       sx={{ 
         fontWeight: 500,
+        fontSize: '10px',
+        height: size === 'small' ? '20px' : '24px',
         '& .MuiChip-icon': {
-          fontSize: size === 'small' ? 16 : 20,
-          marginLeft: '4px'
+          fontSize: size === 'small' ? 14 : 18,
+          marginLeft: '2px'
+        },
+        '& .MuiChip-label': {
+          padding: '0 6px',
+          paddingLeft: '4px'
         }
       }}
     />

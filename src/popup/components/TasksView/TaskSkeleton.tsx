@@ -4,17 +4,15 @@ import Skeleton from '@mui/material/Skeleton';
 import Card from '@mui/material/Card';
 import CardContent from '@mui/material/CardContent';
 import CardActions from '@mui/material/CardActions';
-import ListItem from '@mui/material/ListItem';
-import ListItemText from '@mui/material/ListItemText';
 
 interface TaskSkeletonProps {
-  mode: 'card' | 'list';
+  mode?: 'card';
   count?: number;
 }
 
 /**
  * 任务加载骨架屏组件
- * 提供卡片和列表两种视图模式的加载占位符
+ * 提供卡片视图模式的加载占位符
  */
 const TaskSkeleton: React.FC<TaskSkeletonProps> = ({ 
   mode = 'card',
@@ -53,41 +51,9 @@ const TaskSkeleton: React.FC<TaskSkeletonProps> = ({
     </Card>
   );
   
-  const renderListSkeleton = (key: number) => (
-    <ListItem
-      key={`skeleton-list-${key}`}
-      divider
-      sx={{ py: 1 }}
-    >
-      <ListItemText
-        primary={
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <Skeleton variant="text" width="60%" height={24} />
-            <Box sx={{ ml: 1 }}>
-              <Skeleton variant="rounded" width={60} height={24} />
-            </Box>
-          </Box>
-        }
-        secondary={
-          <Box sx={{ mt: 0.5 }}>
-            <Skeleton variant="text" width="40%" />
-          </Box>
-        }
-      />
-      
-      <Box>
-        <Skeleton variant="circular" width={30} height={30} sx={{ display: 'inline-block', mx: 0.5 }} />
-        <Skeleton variant="circular" width={30} height={30} sx={{ display: 'inline-block', mx: 0.5 }} />
-        <Skeleton variant="circular" width={30} height={30} sx={{ display: 'inline-block', mx: 0.5 }} />
-      </Box>
-    </ListItem>
-  );
-  
   return (
     <Box sx={{ width: '100%' }}>
-      {Array.from(new Array(count)).map((_, index) => (
-        mode === 'card' ? renderCardSkeleton(index) : renderListSkeleton(index)
-      ))}
+      {Array.from(new Array(count)).map((_, index) => renderCardSkeleton(index))}
     </Box>
   );
 };

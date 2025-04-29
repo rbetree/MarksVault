@@ -2,15 +2,11 @@ import React, { useState, useEffect } from 'react';
 import Box from '@mui/material/Box';
 import FormControl from '@mui/material/FormControl';
 import FormControlLabel from '@mui/material/FormControlLabel';
-import Radio from '@mui/material/Radio';
-import RadioGroup from '@mui/material/RadioGroup';
 import Select from '@mui/material/Select';
 import InputLabel from '@mui/material/InputLabel';
 import MenuItem from '@mui/material/MenuItem';
 import TextField from '@mui/material/TextField';
 import Grid from '@mui/material/Grid';
-import Typography from '@mui/material/Typography';
-import Divider from '@mui/material/Divider';
 import Checkbox from '@mui/material/Checkbox';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
@@ -78,7 +74,7 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({ action, onChange }) => 
   }, [action]);
   
   // 处理操作类型更改
-  const handleActionTypeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleActionTypeChange = (event: any) => {
     const newType = event.target.value as ActionType;
     setActionType(newType);
     
@@ -225,224 +221,214 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({ action, onChange }) => 
   // 渲染备份操作表单
   const renderBackupForm = () => {
     return (
-      <Grid container spacing={2}>
-        <Grid item xs={12}>
-          <TextField
-            label="提交消息"
-            fullWidth
-            value={commitMessage}
-            onChange={handleCommitMessageChange}
-            helperText="备份时的GitHub提交消息"
-            margin="normal"
-          />
+      <Box sx={{ mt: 1 }}>
+        <Grid container spacing={1}>
+          <Grid item xs={12}>
+            <TextField
+              label="提交消息"
+              fullWidth
+              value={commitMessage}
+              onChange={handleCommitMessageChange}
+              helperText="备份时的GitHub提交消息"
+              margin="dense"
+              size="small"
+            />
+          </Grid>
+          <Grid item xs={12}>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={includeMetadata}
+                  onChange={handleIncludeMetadataChange}
+                  color="primary"
+                  size="small"
+                />
+              }
+              label="包含元数据"
+            />
+            <FormHelperText sx={{ mt: 0 }}>
+              包含书签的创建时间、访问频率等附加信息
+            </FormHelperText>
+          </Grid>
         </Grid>
-        <Grid item xs={12}>
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={includeMetadata}
-                onChange={handleIncludeMetadataChange}
-                color="primary"
-              />
-            }
-            label="包含元数据"
-          />
-          <FormHelperText>
-            包括创建日期、最后访问时间等额外信息
-          </FormHelperText>
-        </Grid>
-      </Grid>
+      </Box>
     );
   };
   
   // 渲染整理操作表单
   const renderOrganizeForm = () => {
     return (
-      <Grid container spacing={2}>
-        <Grid item xs={12}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Typography variant="subtitle2">
-              整理操作 ({operations.length})
-            </Typography>
-            <Button
-              startIcon={<AddCircleOutlineIcon />}
-              onClick={handleAddOperation}
-              size="small"
-              variant="outlined"
-            >
-              添加操作
-            </Button>
+      <Box sx={{ mt: 1 }}>
+        {operations.length === 0 ? (
+          <Box sx={{ textAlign: 'center', mb: 1 }}>
+            <FormHelperText>尚未添加整理操作</FormHelperText>
           </Box>
-          
-          {operations.length === 0 ? (
-            <Typography variant="body2" color="text.secondary" sx={{ my: 2 }}>
-              暂无整理操作，点击"添加操作"按钮创建新操作
-            </Typography>
-          ) : (
-            operations.map((op, index) => (
-              <Box
-                key={index}
-                sx={{
-                  border: '1px solid',
-                  borderColor: 'divider',
-                  borderRadius: 1,
-                  p: 2,
-                  mb: 2
-                }}
-              >
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                  <Typography variant="subtitle2">
-                    操作 #{index + 1}
-                  </Typography>
-                  <IconButton
-                    size="small"
+        ) : (
+          operations.map((op, index) => (
+            <Box key={index} sx={{ mb: 1, p: 1, border: '1px solid #e0e0e0', borderRadius: 1 }}>
+              <Grid container spacing={1} alignItems="center">
+                <Grid item xs={9}>
+                  <FormControl size="small" fullWidth margin="dense">
+                    <InputLabel>操作类型</InputLabel>
+                    <Select
+                      value={op.operation}
+                      onChange={(e) => handleUpdateOperation(index, 'operation', e.target.value)}
+                      label="操作类型"
+                    >
+                      <MenuItem value="move">移动书签</MenuItem>
+                      <MenuItem value="delete">删除书签</MenuItem>
+                      <MenuItem value="rename">重命名书签</MenuItem>
+                      <MenuItem value="validate">验证书签</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={3} sx={{ textAlign: 'right' }}>
+                  <IconButton 
+                    size="small" 
                     onClick={() => handleDeleteOperation(index)}
                     color="error"
                   >
-                    <DeleteIcon fontSize="small" />
+                    <DeleteIcon />
                   </IconButton>
-                </Box>
-                
-                <FormControl fullWidth margin="dense">
-                  <InputLabel>操作类型</InputLabel>
-                  <Select
-                    value={op.operation}
-                    onChange={(e) => handleUpdateOperation(index, 'operation', e.target.value)}
-                    label="操作类型"
-                  >
-                    <MenuItem value="move">移动</MenuItem>
-                    <MenuItem value="delete">删除</MenuItem>
-                    <MenuItem value="rename">重命名</MenuItem>
-                    <MenuItem value="validate">验证</MenuItem>
-                  </Select>
-                </FormControl>
-                
-                <TextField
-                  label="URL或标题匹配模式"
-                  fullWidth
-                  value={op.filters?.pattern || ''}
-                  onChange={(e) => handleUpdateOperation(index, 'filters.pattern', e.target.value)}
-                  helperText="使用通配符(*)匹配书签URL或标题"
-                  margin="dense"
-                />
-                
-                <Grid container spacing={2}>
-                  <Grid item xs={6}>
-                    <TextField
-                      label="早于指定天数"
-                      type="number"
-                      fullWidth
-                      value={op.filters?.olderThan || ''}
-                      onChange={(e) => handleUpdateOperation(index, 'filters.olderThan', parseInt(e.target.value, 10))}
-                      helperText="仅处理创建超过指定天数的书签"
-                      margin="dense"
-                      inputProps={{ min: 0 }}
-                    />
-                  </Grid>
-                  <Grid item xs={6}>
-                    <TextField
-                      label="晚于指定天数"
-                      type="number"
-                      fullWidth
-                      value={op.filters?.newerThan || ''}
-                      onChange={(e) => handleUpdateOperation(index, 'filters.newerThan', parseInt(e.target.value, 10))}
-                      helperText="仅处理最近指定天数内创建的书签"
-                      margin="dense"
-                      inputProps={{ min: 0 }}
-                    />
-                  </Grid>
                 </Grid>
                 
+                {/* 根据操作类型显示相应的配置项 */}
                 {op.operation === 'move' && (
-                  <TextField
-                    label="目标文件夹ID"
-                    fullWidth
-                    value={op.target || ''}
-                    onChange={(e) => handleUpdateOperation(index, 'target', e.target.value)}
-                    helperText="移动书签到此文件夹"
-                    margin="dense"
-                  />
+                  <Grid item xs={12}>
+                    <TextField
+                      label="目标文件夹"
+                      fullWidth
+                      value={op.target || ''}
+                      onChange={(e) => handleUpdateOperation(index, 'target', e.target.value)}
+                      helperText="书签将被移动到的目标文件夹"
+                      size="small"
+                      margin="dense"
+                    />
+                  </Grid>
                 )}
                 
                 {op.operation === 'rename' && (
+                  <Grid item xs={12}>
+                    <TextField
+                      label="新名称格式"
+                      fullWidth
+                      value={op.newName || ''}
+                      onChange={(e) => handleUpdateOperation(index, 'newName', e.target.value)}
+                      helperText="新的命名格式，可包含变量如 {title}, {date}"
+                      size="small"
+                      margin="dense"
+                    />
+                  </Grid>
+                )}
+                
+                {/* 通用筛选条件 */}
+                <Grid item xs={12}>
                   <TextField
-                    label="新名称"
+                    label="匹配模式"
                     fullWidth
-                    value={op.newName || ''}
-                    onChange={(e) => handleUpdateOperation(index, 'newName', e.target.value)}
-                    helperText="可以使用{title}、{url}等作为模板变量"
+                    value={op.filters?.pattern || ''}
+                    onChange={(e) => handleUpdateOperation(index, 'filters.pattern', e.target.value)}
+                    helperText="URL或标题匹配模式，留空匹配所有"
+                    size="small"
                     margin="dense"
                   />
-                )}
-              </Box>
-            ))
-          )}
-        </Grid>
-      </Grid>
+                </Grid>
+                
+                <Grid item xs={6}>
+                  <TextField
+                    label="早于(天)"
+                    type="number"
+                    fullWidth
+                    value={op.filters?.olderThan || ''}
+                    onChange={(e) => handleUpdateOperation(index, 'filters.olderThan', e.target.value === '' ? undefined : Number(e.target.value))}
+                    helperText="早于指定天数的书签"
+                    size="small"
+                    margin="dense"
+                  />
+                </Grid>
+                
+                <Grid item xs={6}>
+                  <TextField
+                    label="晚于(天)"
+                    type="number"
+                    fullWidth
+                    value={op.filters?.newerThan || ''}
+                    onChange={(e) => handleUpdateOperation(index, 'filters.newerThan', e.target.value === '' ? undefined : Number(e.target.value))}
+                    helperText="晚于指定天数的书签"
+                    size="small"
+                    margin="dense"
+                  />
+                </Grid>
+              </Grid>
+            </Box>
+          ))
+        )}
+        
+        <Button
+          startIcon={<AddCircleOutlineIcon />}
+          onClick={handleAddOperation}
+          variant="outlined"
+          size="small"
+          fullWidth
+          sx={{ mt: 0.5 }}
+        >
+          添加整理操作
+        </Button>
+      </Box>
     );
   };
   
   // 渲染自定义操作表单
   const renderCustomForm = () => {
     return (
-      <Grid container spacing={2}>
-        <Grid item xs={12}>
-          <TextField
-            label="操作描述"
-            fullWidth
-            value={customDescription}
-            onChange={handleCustomDescriptionChange}
-            helperText="描述此自定义操作的功能"
-            margin="normal"
-          />
-        </Grid>
-        <Grid item xs={12}>
-          <Typography variant="body2" color="text.secondary">
-            自定义操作功能将在后续版本中提供更多功能。
-          </Typography>
-        </Grid>
-      </Grid>
+      <Box sx={{ mt: 1 }}>
+        <TextField
+          label="操作描述"
+          fullWidth
+          value={customDescription}
+          onChange={handleCustomDescriptionChange}
+          helperText="自定义操作的描述文本"
+          margin="dense"
+          size="small"
+        />
+        <FormHelperText sx={{ mt: 0.5 }}>
+          自定义操作功能正在开发中，暂不可用
+        </FormHelperText>
+      </Box>
     );
   };
   
+  // 根据操作类型渲染相应的表单
+  const renderActionForm = () => {
+    switch (actionType) {
+      case ActionType.BACKUP:
+        return renderBackupForm();
+      case ActionType.ORGANIZE:
+        return renderOrganizeForm();
+      case ActionType.CUSTOM:
+        return renderCustomForm();
+      default:
+        return null;
+    }
+  };
+  
   return (
-    <Box sx={{ py: 1 }}>
-      <Grid container spacing={3}>
-        <Grid item xs={12}>
-          <Typography variant="subtitle1">操作类型</Typography>
-          <RadioGroup
-            name="action-type"
-            value={actionType}
-            onChange={handleActionTypeChange}
-          >
-            <FormControlLabel 
-              value={ActionType.BACKUP} 
-              control={<Radio />} 
-              label="备份书签" 
-            />
-            <FormControlLabel 
-              value={ActionType.ORGANIZE} 
-              control={<Radio />} 
-              label="整理书签" 
-            />
-            <FormControlLabel 
-              value={ActionType.CUSTOM} 
-              control={<Radio />} 
-              label="自定义操作" 
-            />
-          </RadioGroup>
-        </Grid>
-        
-        <Grid item xs={12}>
-          <Divider />
-        </Grid>
-        
-        <Grid item xs={12}>
-          {actionType === ActionType.BACKUP && renderBackupForm()}
-          {actionType === ActionType.ORGANIZE && renderOrganizeForm()}
-          {actionType === ActionType.CUSTOM && renderCustomForm()}
-        </Grid>
-      </Grid>
+    <Box sx={{ py: 0.5 }}>
+      <FormControl fullWidth size="small" margin="dense">
+        <InputLabel id="action-type-label">操作类型</InputLabel>
+        <Select
+          labelId="action-type-label"
+          value={actionType}
+          onChange={handleActionTypeChange}
+          label="操作类型"
+        >
+          <MenuItem value={ActionType.BACKUP}>备份书签</MenuItem>
+          <MenuItem value={ActionType.ORGANIZE}>整理书签</MenuItem>
+          <MenuItem value={ActionType.CUSTOM}>自定义操作</MenuItem>
+        </Select>
+      </FormControl>
+      
+      {renderActionForm()}
     </Box>
   );
 };

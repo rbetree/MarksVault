@@ -159,7 +159,7 @@ export const createDefaultTask = (): Task => {
     id: `task_${now}`,
     name: '新建任务',
     description: '',
-    status: TaskStatus.DISABLED,
+    status: TaskStatus.ENABLED,
     createdAt: now,
     updatedAt: now,
     trigger: {

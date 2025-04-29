@@ -87,8 +87,8 @@ const TaskTriggerInfo: React.FC<TaskTriggerInfoProps> = ({ trigger, compact = fa
     if (compact) {
       return (
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
-          {icon}
-          <Typography variant="body2" sx={{ ml: 1 }}>
+          {React.cloneElement(icon, { fontSize: 'small', sx: { fontSize: '14px' } })}
+          <Typography variant="body2" sx={{ ml: 0.75, fontSize: '11px' }}>
             {title}: {description}
           </Typography>
         </Box>
@@ -98,16 +98,16 @@ const TaskTriggerInfo: React.FC<TaskTriggerInfoProps> = ({ trigger, compact = fa
     return (
       <Box>
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
-          {icon}
-          <Typography variant="subtitle2" sx={{ ml: 1 }}>
+          {React.cloneElement(icon, { fontSize: 'small', sx: { fontSize: '14px' } })}
+          <Typography variant="subtitle2" sx={{ ml: 0.75, fontSize: '12px' }}>
             {title}
           </Typography>
         </Box>
-        <Typography variant="body2" color="text.secondary" sx={{ ml: 4 }}>
+        <Typography variant="body2" color="text.secondary" sx={{ ml: 3, fontSize: '11px' }}>
           {description}
         </Typography>
         {trigger.nextTrigger && (
-          <Typography variant="body2" color="text.secondary" sx={{ ml: 4, mt: 0.5 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ ml: 3, mt: 0.5, fontSize: '11px' }}>
             下次执行: {formatTimestamp(trigger.nextTrigger)}
           </Typography>
         )}
@@ -144,8 +144,8 @@ const TaskTriggerInfo: React.FC<TaskTriggerInfoProps> = ({ trigger, compact = fa
     if (compact) {
       return (
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
-          <NotificationsIcon fontSize="small" color="action" />
-          <Typography variant="body2" sx={{ ml: 1 }}>
+          <NotificationsIcon fontSize="small" color="action" sx={{ fontSize: '14px' }} />
+          <Typography variant="body2" sx={{ ml: 0.75, fontSize: '11px' }}>
             事件: {title}
           </Typography>
         </Box>
@@ -155,16 +155,16 @@ const TaskTriggerInfo: React.FC<TaskTriggerInfoProps> = ({ trigger, compact = fa
     return (
       <Box>
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
-          <NotificationsIcon fontSize="small" color="action" />
-          <Typography variant="subtitle2" sx={{ ml: 1 }}>
+          <NotificationsIcon fontSize="small" color="action" sx={{ fontSize: '14px' }} />
+          <Typography variant="subtitle2" sx={{ ml: 0.75, fontSize: '12px' }}>
             事件触发
           </Typography>
         </Box>
-        <Typography variant="body2" color="text.secondary" sx={{ ml: 4 }}>
+        <Typography variant="body2" color="text.secondary" sx={{ ml: 3, fontSize: '11px' }}>
           {title}
         </Typography>
         {trigger.lastTriggered && (
-          <Typography variant="body2" color="text.secondary" sx={{ ml: 4, mt: 0.5 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ ml: 3, mt: 0.5, fontSize: '11px' }}>
             上次触发: {formatTimestamp(trigger.lastTriggered)}
           </Typography>
         )}

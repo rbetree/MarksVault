@@ -3,34 +3,24 @@ import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
 import Alert from '@mui/material/Alert';
-import CircularProgress from '@mui/material/CircularProgress';
 import Fab from '@mui/material/Fab';
 import AddIcon from '@mui/icons-material/Add';
-import FilterListIcon from '@mui/icons-material/FilterList';
 import MenuItem from '@mui/material/MenuItem';
 import Select, { SelectChangeEvent } from '@mui/material/Select';
 import FormControl from '@mui/material/FormControl';
 import InputLabel from '@mui/material/InputLabel';
-import Grid from '@mui/material/Grid';
-import List from '@mui/material/List';
 import Dialog from '@mui/material/Dialog';
 import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
 import DialogContentText from '@mui/material/DialogContentText';
 import DialogTitle from '@mui/material/DialogTitle';
 import Tooltip from '@mui/material/Tooltip';
-import Paper from '@mui/material/Paper';
-import ToggleButton from '@mui/material/ToggleButton';
-import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
-import ViewListIcon from '@mui/icons-material/ViewList';
-import ViewModuleIcon from '@mui/icons-material/ViewModule';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import IconButton from '@mui/material/IconButton';
 import { ToastRef } from '../shared/Toast';
 import { Task, TaskStatus } from '../../../types/task';
 import taskService from '../../../services/task-service';
 import TaskCard from './TaskCard';
-import TaskListItem from './TaskListItem';
 import EmptyTaskList from './EmptyTaskList';
 import TaskSkeleton from './TaskSkeleton';
 import TaskDialog from './TaskForm';
@@ -44,8 +34,6 @@ interface TasksViewProps {
   toastRef?: React.RefObject<ToastRef>;
 }
 
-type ViewMode = 'card' | 'list';
-
 /**
  * 任务管理主视图组件
  * 负责显示任务列表、提供过滤和任务操作功能
@@ -56,7 +44,6 @@ const TasksView: React.FC<TasksViewProps> = ({ toastRef }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<TaskStatus | 'all'>('all');
-  const [viewMode, setViewMode] = useState<ViewMode>('card');
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [deleteTaskId, setDeleteTaskId] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -199,16 +186,6 @@ const TasksView: React.FC<TasksViewProps> = ({ toastRef }) => {
     );
   };
   
-  // 切换视图模式
-  const handleViewModeChange = (
-    event: React.MouseEvent<HTMLElement>,
-    newMode: ViewMode | null,
-  ) => {
-    if (newMode !== null) {
-      setViewMode(newMode);
-    }
-  };
-  
   // 过滤器变更处理
   const handleFilterChange = (event: SelectChangeEvent<TaskStatus | 'all'>) => {
     setFilterStatus(event.target.value as TaskStatus | 'all');
@@ -217,7 +194,7 @@ const TasksView: React.FC<TasksViewProps> = ({ toastRef }) => {
   // 渲染任务列表
   const renderTasks = () => {
     if (loading) {
-      return <TaskSkeleton mode={viewMode} count={3} />;
+      return <TaskSkeleton count={3} />;
     }
     
     if (error) {
@@ -244,37 +221,19 @@ const TasksView: React.FC<TasksViewProps> = ({ toastRef }) => {
       );
     }
     
-    if (viewMode === 'card') {
-      return (
-        <Box sx={{ mt: 2 }}>
-          {tasks.map(task => (
-            <TaskCard
-              key={task.id}
-              task={task}
-              onStatusChange={handleTaskStatusChange}
-              onEdit={handleEditTask}
-              onDelete={handleDeleteConfirm}
-            />
-          ))}
-        </Box>
-      );
-    } else {
-      return (
-        <Paper variant="outlined" sx={{ mt: 2 }}>
-          <List sx={{ width: '100%' }}>
-            {tasks.map(task => (
-              <TaskListItem
-                key={task.id}
-                task={task}
-                onStatusChange={handleTaskStatusChange}
-                onEdit={handleEditTask}
-                onDelete={handleDeleteConfirm}
-              />
-            ))}
-          </List>
-        </Paper>
-      );
-    }
+    return (
+      <Box sx={{ mt: 2 }}>
+        {tasks.map(task => (
+          <TaskCard
+            key={task.id}
+            task={task}
+            onStatusChange={handleTaskStatusChange}
+            onEdit={handleEditTask}
+            onDelete={handleDeleteConfirm}
+          />
+        ))}
+      </Box>
+    );
   };
   
   return (
@@ -297,21 +256,6 @@ const TasksView: React.FC<TasksViewProps> = ({ toastRef }) => {
               </IconButton>
             </span>
           </Tooltip>
-          
-          <ToggleButtonGroup
-            value={viewMode}
-            exclusive
-            onChange={handleViewModeChange}
-            aria-label="视图模式"
-            size="small"
-          >
-            <ToggleButton value="card" aria-label="卡片视图">
-              <ViewModuleIcon fontSize="small" />
-            </ToggleButton>
-            <ToggleButton value="list" aria-label="列表视图">
-              <ViewListIcon fontSize="small" />
-            </ToggleButton>
-          </ToggleButtonGroup>
           
           <FormControl size="small" sx={{ minWidth: 120 }}>
             <InputLabel id="status-filter-label">状态</InputLabel>

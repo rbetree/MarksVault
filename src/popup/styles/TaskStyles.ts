@@ -26,7 +26,7 @@ export const getTaskStatusColor = (status: TaskStatus, theme: Theme): string => 
 
 // 任务卡片样式
 export const taskCardStyles: SxProps<Theme> = {
-  mb: 2,
+  mb: 1.5,
   transition: 'all 0.2s',
   borderLeft: '4px solid',
   '&:hover': {
@@ -45,7 +45,7 @@ export const taskListItemStyles: SxProps<Theme> = {
   '&:hover': {
     backgroundColor: 'rgba(0, 0, 0, 0.04)'
   },
-  py: 1
+  py: 0.75
 };
 
 // 任务列表头部
@@ -53,23 +53,23 @@ export const taskHeaderStyles: SxProps<Theme> = {
   display: 'flex', 
   justifyContent: 'space-between', 
   alignItems: 'center', 
-  mb: 2
+  mb: 1.5
 };
 
 // 过滤器容器样式
 export const filterContainerStyles: SxProps<Theme> = {
   display: 'flex', 
-  gap: 1, 
+  gap: 0.75,
   flexWrap: 'wrap'
 };
 
 // 悬浮按钮样式
 export const fabStyles: SxProps<Theme> = {
   position: 'fixed',
-  bottom: 80, // 考虑底部导航栏的高度
+  bottom: 80,
   right: 16,
   zIndex: 1000,
-  boxShadow: 3 // 增加阴影效果，提高视觉层级
+  boxShadow: 3
 };
 
 // 日期显示样式
@@ -77,8 +77,8 @@ export const dateDisplayStyles: SxProps<Theme> = {
   display: 'flex',
   alignItems: 'center',
   color: 'text.secondary',
-  fontSize: '0.75rem',
-  mt: 1
+  fontSize: '0.7rem',
+  mt: 0.75
 };
 
 // 表单字段容器样式

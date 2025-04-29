@@ -25,8 +25,8 @@ const TaskActionInfo: React.FC<TaskActionInfoProps> = ({ action, compact = false
     if (compact) {
       return (
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
-          <BackupIcon fontSize="small" color="action" />
-          <Typography variant="body2" sx={{ ml: 1 }}>
+          <BackupIcon fontSize="small" color="action" sx={{ fontSize: '14px' }} />
+          <Typography variant="body2" sx={{ ml: 0.75, fontSize: '11px' }}>
             备份到 {target}
           </Typography>
         </Box>
@@ -36,16 +36,16 @@ const TaskActionInfo: React.FC<TaskActionInfoProps> = ({ action, compact = false
     return (
       <Box>
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
-          <BackupIcon fontSize="small" color="action" />
-          <Typography variant="subtitle2" sx={{ ml: 1 }}>
+          <BackupIcon fontSize="small" color="action" sx={{ fontSize: '14px' }} />
+          <Typography variant="subtitle2" sx={{ ml: 0.75, fontSize: '12px' }}>
             备份操作
           </Typography>
         </Box>
-        <Typography variant="body2" color="text.secondary" sx={{ ml: 4 }}>
+        <Typography variant="body2" color="text.secondary" sx={{ ml: 3, fontSize: '11px' }}>
           目标: {target}
         </Typography>
         {options && options.commitMessage && (
-          <Typography variant="body2" color="text.secondary" sx={{ ml: 4 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ ml: 3, fontSize: '11px' }}>
             提交消息: {options.commitMessage}
           </Typography>
         )}
@@ -74,8 +74,8 @@ const TaskActionInfo: React.FC<TaskActionInfoProps> = ({ action, compact = false
     if (compact) {
       return (
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
-          <CleaningServicesIcon fontSize="small" color="action" />
-          <Typography variant="body2" sx={{ ml: 1 }}>
+          <CleaningServicesIcon fontSize="small" color="action" sx={{ fontSize: '14px' }} />
+          <Typography variant="body2" sx={{ ml: 0.75, fontSize: '11px' }}>
             整理操作 ({operations.length}项)
           </Typography>
         </Box>
@@ -85,13 +85,13 @@ const TaskActionInfo: React.FC<TaskActionInfoProps> = ({ action, compact = false
     return (
       <Box>
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
-          <CleaningServicesIcon fontSize="small" color="action" />
-          <Typography variant="subtitle2" sx={{ ml: 1 }}>
+          <CleaningServicesIcon fontSize="small" color="action" sx={{ fontSize: '14px' }} />
+          <Typography variant="subtitle2" sx={{ ml: 0.75, fontSize: '12px' }}>
             整理操作
           </Typography>
         </Box>
         {operations.map((op, index) => (
-          <Typography key={index} variant="body2" color="text.secondary" sx={{ ml: 4 }}>
+          <Typography key={index} variant="body2" color="text.secondary" sx={{ ml: 3, fontSize: '11px' }}>
             {getOperationText(op.operation)} 
             {op.filters?.pattern && ` (匹配: ${op.filters.pattern})`}
             {op.filters?.olderThan && ` (早于: ${op.filters.olderThan}天)`}
@@ -109,8 +109,8 @@ const TaskActionInfo: React.FC<TaskActionInfoProps> = ({ action, compact = false
     if (compact) {
       return (
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
-          <CodeIcon fontSize="small" color="action" />
-          <Typography variant="body2" sx={{ ml: 1 }}>
+          <CodeIcon fontSize="small" color="action" sx={{ fontSize: '14px' }} />
+          <Typography variant="body2" sx={{ ml: 0.75, fontSize: '11px' }}>
             自定义操作
           </Typography>
         </Box>
@@ -120,12 +120,12 @@ const TaskActionInfo: React.FC<TaskActionInfoProps> = ({ action, compact = false
     return (
       <Box>
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
-          <CodeIcon fontSize="small" color="action" />
-          <Typography variant="subtitle2" sx={{ ml: 1 }}>
+          <CodeIcon fontSize="small" color="action" sx={{ fontSize: '14px' }} />
+          <Typography variant="subtitle2" sx={{ ml: 0.75, fontSize: '12px' }}>
             自定义操作
           </Typography>
         </Box>
-        <Typography variant="body2" color="text.secondary" sx={{ ml: 4 }}>
+        <Typography variant="body2" color="text.secondary" sx={{ ml: 3, fontSize: '11px' }}>
           {action.description}
         </Typography>
       </Box>
