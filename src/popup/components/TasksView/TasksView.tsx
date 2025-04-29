@@ -287,13 +287,15 @@ const TasksView: React.FC<TasksViewProps> = ({ toastRef }) => {
         
         <Box sx={filterContainerStyles}>
           <Tooltip title="刷新任务列表">
-            <IconButton 
-              onClick={refreshTasks} 
-              disabled={loading || isRefreshing}
-              size="small"
-            >
-              <RefreshIcon />
-            </IconButton>
+            <span style={{ display: 'inline-block' }}>
+              <IconButton 
+                onClick={refreshTasks} 
+                disabled={loading || isRefreshing}
+                size="small"
+              >
+                <RefreshIcon />
+              </IconButton>
+            </span>
           </Tooltip>
           
           <ToggleButtonGroup

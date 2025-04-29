@@ -220,7 +220,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
       
       <CardActions disableSpacing>
         <Tooltip title={task.status === TaskStatus.ENABLED ? '禁用任务' : '启用任务'}>
-          <span>
+          <span style={{ display: 'inline-block' }}>
             <IconButton 
               onClick={handleToggleStatus} 
               disabled={!canToggleStatus || loading}

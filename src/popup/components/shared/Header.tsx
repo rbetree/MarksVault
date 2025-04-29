@@ -52,18 +52,20 @@ const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
                 </Typography>
               </Box>
               <Tooltip title="断开连接">
-                <Button
-                  color="inherit"
-                  size="small"
-                  onClick={onLogout}
-                  sx={{ 
-                    minWidth: 'auto', 
-                    p: 0.5,
-                    ml: 1
-                  }}
-                >
-                  <LogoutIcon fontSize="small" />
-                </Button>
+                <span style={{ display: 'inline-block' }}>
+                  <Button
+                    color="inherit"
+                    size="small"
+                    onClick={onLogout}
+                    sx={{ 
+                      minWidth: 'auto', 
+                      p: 0.5,
+                      ml: 1
+                    }}
+                  >
+                    <LogoutIcon fontSize="small" />
+                  </Button>
+                </span>
               </Tooltip>
             </Box>
           ) : (
