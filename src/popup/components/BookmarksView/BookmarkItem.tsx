@@ -19,11 +19,9 @@ import bookmarkService from '../../../utils/bookmark-service';
 import { styled } from '@mui/material/styles';
 
 // 添加可拖放的文件夹样式
-const DropTargetFolder = styled(ListItemButton, {
-  shouldForwardProp: (prop) => prop !== 'isOver'
-})<{ isOver?: boolean }>(({ theme, isOver }) => ({
+const DropTargetFolder = styled(ListItemButton)(({ theme }) => ({
   transition: 'all 0.15s ease-in-out',
-  ...(isOver && {
+  '&[data-isover="true"]': {
     backgroundColor: theme.palette.action.selected,
     boxShadow: `inset 0 0 0 2px ${theme.palette.primary.main}`,
     transform: 'translateY(-1px)',
@@ -32,7 +30,7 @@ const DropTargetFolder = styled(ListItemButton, {
       transform: 'scale(1.1)',
       transition: 'transform 0.15s ease-in-out',
     },
-  }),
+  },
 }));
 
 // 添加位置指示器样式
@@ -75,12 +73,12 @@ type InteractionMode = 'sort' | 'move';
 type DropPosition = 'left' | 'right' | 'center';
 
 // 包装ListItemButton以支持位置指示器
-const ItemContainer = styled(ListItemButton)<{ isOver?: boolean }>(({ theme, isOver }) => ({
+const ItemContainer = styled(ListItemButton)(({ theme }) => ({
   position: 'relative',
   transition: 'all 0.15s ease-in-out',
-  ...(isOver && {
+  '&[data-isover="true"]': {
     backgroundColor: theme.palette.action.hover,
-  }),
+  },
 }));
 
 interface BookmarkItemProps {
@@ -340,7 +338,7 @@ const BookmarkItem: React.FC<BookmarkItemProps> = ({
       {bookmark.isFolder ? (
         <DropTargetFolder 
           onClick={handleItemClick}
-          isOver={isOver && interactionMode === 'move'} // 只有在移动模式下才应用全局高亮
+          data-isover={isOver && interactionMode === 'move'} // 使用data-*属性
           draggable={true} // 允许文件夹拖拽
           onDragStart={handleDragStart}
           onDragOver={handleDragOver}
@@ -376,7 +374,7 @@ const BookmarkItem: React.FC<BookmarkItemProps> = ({
           onDragEnter={handleDragEnter}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
-          isOver={isOver && interactionMode === 'move'} // 只有在移动模式下才应用全局高亮
+          data-isover={isOver && interactionMode === 'move'} // 使用data-*属性
         >
           {/* 根据交互模式和拖拽位置显示不同的指示器 */}
           {isOver && interactionMode === 'sort' && (

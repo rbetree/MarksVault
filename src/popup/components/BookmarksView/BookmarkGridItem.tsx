@@ -21,9 +21,7 @@ import bookmarkService from '../../../utils/bookmark-service';
 const DRAG_TYPE = 'application/marksvault-bookmark';
 
 // 样式化组件
-const GridItemContainer = styled(Box, {
-  shouldForwardProp: (prop) => prop !== 'isOver' && prop !== 'isFolder'
-})<{ isOver?: boolean; isFolder?: boolean }>(({ theme, isOver, isFolder }) => ({
+const GridItemContainer = styled(Box)(({ theme }) => ({
   width: '80px',
   minHeight: '90px',
   display: 'flex',
@@ -41,7 +39,7 @@ const GridItemContainer = styled(Box, {
     backgroundColor: theme.palette.action.hover,
     transform: 'translateY(-2px)',
   },
-  ...(isOver && isFolder && {
+  '&[data-isover="true"][data-isfolder="true"]': {
     backgroundColor: theme.palette.action.selected,
     boxShadow: `inset 0 0 0 2px ${theme.palette.primary.main}`,
     transform: 'translateY(-2px) scale(1.05)',
@@ -50,7 +48,7 @@ const GridItemContainer = styled(Box, {
       transform: 'scale(1.1)',
       transition: 'transform 0.15s ease-in-out',
     },
-  }),
+  },
 }));
 
 const IconContainer = styled(Box)(({ theme }) => ({
@@ -369,8 +367,8 @@ const BookmarkGridItem: React.FC<BookmarkGridItemProps> = ({
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      isOver={isOver && interactionMode === 'move'} // 只有在移动模式下才应用全局高亮
-      isFolder={bookmark.isFolder}
+      data-isover={isOver && interactionMode === 'move'} // 使用data-*属性
+      data-isfolder={bookmark.isFolder} // 使用data-*属性
     >
       {/* 根据交互模式和拖拽位置显示不同的指示器 */}
       {isOver && interactionMode === 'sort' && (
