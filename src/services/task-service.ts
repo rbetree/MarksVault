@@ -7,6 +7,8 @@ import {
   createDefaultTaskStorage
 } from '../types/task';
 import storageService, { StorageResult } from '../utils/storage-service';
+// 导入触发器服务 - 注意避免循环依赖
+// 仅在需要使用时动态导入
 
 // 任务存储的键名
 const TASKS_STORAGE_KEY = 'tasks_data';
@@ -233,12 +235,20 @@ class TaskService {
         };
       }
       
+      // 保存任务原状态
+      const oldStatus = taskStorage.tasks[taskId].status;
+      
       // 更新任务数据和时间戳
       taskStorage.tasks[taskId] = {
         ...taskStorage.tasks[taskId],
         ...taskData,
         updatedAt: Date.now()
       };
+      
+      // 检查是否影响到触发器，如果是则更新对应的alarm
+      const shouldUpdateTrigger = 
+        taskData.trigger !== undefined || 
+        (taskData.status !== undefined && taskData.status !== oldStatus);
       
       taskStorage.lastUpdated = Date.now();
       
@@ -247,6 +257,20 @@ class TaskService {
       
       if (!saveResult.success) {
         return saveResult;
+      }
+      
+      // 如果需要，更新触发器
+      if (shouldUpdateTrigger) {
+        // 动态导入触发器服务，避免循环依赖
+        const triggerService = (await import('./trigger-service')).default;
+        
+        const currentTask = taskStorage.tasks[taskId];
+        
+        if (currentTask.status === TaskStatus.ENABLED && currentTask.trigger.type === 'time') {
+          await triggerService.createOrUpdateAlarm(currentTask);
+        } else {
+          await triggerService.removeAlarm(taskId);
+        }
       }
       
       return {
@@ -310,43 +334,52 @@ class TaskService {
   /**
    * 启用任务
    * @param taskId 任务ID
-   * @returns 操作结果
+   * @returns 启用结果
    */
   public async enableTask(taskId: string): Promise<StorageResult> {
-    return this.setTaskStatus(taskId, TaskStatus.ENABLED);
+    const result = await this.setTaskStatus(taskId, TaskStatus.ENABLED);
+    
+    if (result.success) {
+      // 动态导入触发器服务，避免循环依赖
+      const triggerService = (await import('./trigger-service')).default;
+      
+      // 获取任务并更新alarm
+      const taskResult = await this.getTaskById(taskId);
+      if (taskResult.success) {
+        await triggerService.createOrUpdateAlarm(taskResult.data as Task);
+      }
+    }
+    
+    return result;
   }
   
   /**
    * 禁用任务
    * @param taskId 任务ID
-   * @returns 操作结果
+   * @returns 禁用结果
    */
   public async disableTask(taskId: string): Promise<StorageResult> {
-    return this.setTaskStatus(taskId, TaskStatus.DISABLED);
+    const result = await this.setTaskStatus(taskId, TaskStatus.DISABLED);
+    
+    if (result.success) {
+      // 动态导入触发器服务，避免循环依赖
+      const triggerService = (await import('./trigger-service')).default;
+      
+      // 移除对应的alarm
+      await triggerService.removeAlarm(taskId);
+    }
+    
+    return result;
   }
   
   /**
    * 设置任务状态
    * @param taskId 任务ID
-   * @param status 任务状态
-   * @returns 操作结果
+   * @param status 要设置的状态
+   * @returns 设置结果
    */
   public async setTaskStatus(taskId: string, status: TaskStatus): Promise<StorageResult> {
-    try {
-      const result = await this.getTaskById(taskId);
-      
-      if (!result.success) {
-        return result;
-      }
-      
-      return this.updateTask(taskId, { status });
-    } catch (error) {
-      console.error(`设置任务 ${taskId} 状态失败:`, error);
-      return {
-        success: false,
-        error: `设置任务状态失败: ` + (error instanceof Error ? error.message : String(error))
-      };
-    }
+    return await this.updateTask(taskId, { status });
   }
   
   /**
@@ -375,18 +408,27 @@ class TaskService {
         ...task.history.executions.slice(0, MAX_HISTORY_ITEMS - 1)
       ];
       
+      // 确定任务状态
+      let newStatus = task.status;
+      
+      // 使用类型保护
+      if (executionResult.success && 
+          task.trigger && 
+          typeof task.trigger === 'object' && 
+          'type' in task.trigger && 
+          task.trigger.type === 'time' && 
+          'schedule' in task.trigger && 
+          task.trigger.schedule.type === 'once') {
+        newStatus = TaskStatus.COMPLETED;
+      }
+      
       // 更新任务历史
       return this.updateTask(taskId, {
         history: {
           executions,
           lastExecution: executionResult
         },
-        // 如果执行成功且是一次性任务，则将状态设为已完成
-        status: executionResult.success && 
-                task.trigger.type === 'time' && 
-                task.trigger.schedule.type === 'once' 
-                ? TaskStatus.COMPLETED 
-                : task.status
+        status: newStatus
       });
     } catch (error) {
       console.error(`更新任务 ${taskId} 执行历史失败:`, error);
