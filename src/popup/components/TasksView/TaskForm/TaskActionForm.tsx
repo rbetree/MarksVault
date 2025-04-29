@@ -44,6 +44,16 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({ action, onChange }) => 
   const [includeMetadata, setIncludeMetadata] = useState<boolean>(
     action.type === ActionType.BACKUP ? !!(action as BackupAction).options.includeMetadata : true
   );
+  const [backupOperation, setBackupOperation] = useState<'backup' | 'restore'>(
+    action.type === ActionType.BACKUP && 'operation' in action ? 
+      (action as BackupAction).operation : 'backup'
+  );
+  const [backupFilePath, setBackupFilePath] = useState<string>(
+    action.type === ActionType.BACKUP && 
+    'options' in action && 
+    (action as BackupAction).options.backupFilePath ? 
+      String((action as BackupAction).options.backupFilePath) : ''
+  );
   
   // 整理操作状态
   const [operations, setOperations] = useState<OrganizeAction['operations']>(
@@ -66,6 +76,8 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({ action, onChange }) => 
       const backupAction = action as BackupAction;
       setCommitMessage(backupAction.options.commitMessage || '');
       setIncludeMetadata(!!backupAction.options.includeMetadata);
+      setBackupOperation(backupAction.operation || 'backup');
+      setBackupFilePath(backupAction.options.backupFilePath ? String(backupAction.options.backupFilePath) : '');
     } else if (action.type === ActionType.ORGANIZE) {
       setOperations((action as OrganizeAction).operations);
     } else if (action.type === ActionType.CUSTOM) {
@@ -81,7 +93,7 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({ action, onChange }) => 
     let newAction: Action;
     switch (newType) {
       case ActionType.BACKUP:
-        newAction = createBackupAction();
+        newAction = createBackupAction(backupOperation);
         break;
       case ActionType.ORGANIZE:
         newAction = createOrganizeAction();
@@ -128,6 +140,45 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({ action, onChange }) => 
         options: {
           ...(action as BackupAction).options,
           includeMetadata: value
+        }
+      };
+      
+      onChange(updatedAction, true);
+    }
+  };
+  
+  // 处理备份操作类型更改
+  const handleBackupOperationChange = (event: any) => {
+    const newOperation = event.target.value as 'backup' | 'restore';
+    setBackupOperation(newOperation);
+    
+    if (action.type === ActionType.BACKUP) {
+      const updatedAction: BackupAction = {
+        ...(action as BackupAction),
+        operation: newOperation,
+        description: newOperation === 'backup' ? '备份书签到GitHub' : '从GitHub恢复书签',
+        options: {
+          ...(action as BackupAction).options,
+          commitMessage: newOperation === 'backup' ? commitMessage : '',
+          backupFilePath: newOperation === 'restore' ? backupFilePath : undefined
+        }
+      };
+      
+      onChange(updatedAction, true);
+    }
+  };
+  
+  // 处理备份文件路径更改
+  const handleBackupFilePathChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const value = event.target.value;
+    setBackupFilePath(value);
+    
+    if (action.type === ActionType.BACKUP) {
+      const updatedAction: BackupAction = {
+        ...(action as BackupAction),
+        options: {
+          ...(action as BackupAction).options,
+          backupFilePath: value
         }
       };
       
@@ -224,32 +275,67 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({ action, onChange }) => 
       <Box sx={{ mt: 1 }}>
         <Grid container spacing={1}>
           <Grid item xs={12}>
-            <TextField
-              label="提交消息"
-              fullWidth
-              value={commitMessage}
-              onChange={handleCommitMessageChange}
-              helperText="备份时的GitHub提交消息"
-              margin="dense"
-              size="small"
-            />
+            <FormControl size="small" fullWidth margin="dense">
+              <InputLabel>备份操作</InputLabel>
+              <Select
+                value={backupOperation}
+                onChange={handleBackupOperationChange}
+                label="备份操作"
+              >
+                <MenuItem value="backup">上传备份</MenuItem>
+                <MenuItem value="restore">下载恢复</MenuItem>
+              </Select>
+              <FormHelperText>
+                选择上传书签或从备份恢复
+              </FormHelperText>
+            </FormControl>
           </Grid>
-          <Grid item xs={12}>
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={includeMetadata}
-                  onChange={handleIncludeMetadataChange}
-                  color="primary"
+          
+          {backupOperation === 'backup' && (
+            <>
+              <Grid item xs={12}>
+                <TextField
+                  label="提交消息"
+                  fullWidth
+                  value={commitMessage}
+                  onChange={handleCommitMessageChange}
+                  helperText="备份时的GitHub提交消息"
+                  margin="dense"
                   size="small"
                 />
-              }
-              label="包含元数据"
-            />
-            <FormHelperText sx={{ mt: 0 }}>
-              包含书签的创建时间、访问频率等附加信息
-            </FormHelperText>
-          </Grid>
+              </Grid>
+              <Grid item xs={12}>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={includeMetadata}
+                      onChange={handleIncludeMetadataChange}
+                      color="primary"
+                      size="small"
+                    />
+                  }
+                  label="包含元数据"
+                />
+                <FormHelperText sx={{ mt: 0 }}>
+                  包含书签的创建时间、访问频率等附加信息
+                </FormHelperText>
+              </Grid>
+            </>
+          )}
+          
+          {backupOperation === 'restore' && (
+            <Grid item xs={12}>
+              <TextField
+                label="备份文件路径"
+                fullWidth
+                value={backupFilePath}
+                onChange={handleBackupFilePathChange}
+                helperText="留空使用最新备份，或填入特定备份文件路径"
+                margin="dense"
+                size="small"
+              />
+            </Grid>
+          )}
         </Grid>
       </Box>
     );

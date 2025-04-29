@@ -18,6 +18,7 @@ import backupService from './backup-service';
 import organizeService from './organize-service';
 import storageService from '../utils/storage-service';
 import bookmarkService from '../utils/bookmark-service';
+import githubService from './github-service';
 
 // 任务执行配置
 interface TaskExecutionConfig {
@@ -301,26 +302,27 @@ class TaskExecutor {
     const backupAction = task.action as BackupAction;
     
     try {
-      // 执行备份操作
-      if (backupAction.target === 'github') {
-        // 获取GitHub凭据
-        const credentialsResult = await storageService.getGitHubCredentials();
-        
-        if (!credentialsResult.success || !credentialsResult.data) {
-          throw new Error('未找到GitHub凭据，请先在同步设置中配置');
-        }
-        
-        const credentials = credentialsResult.data;
-        // 使用GitHub API需要用户名，从token中提取或使用默认值
-        // GitHub个人访问令牌通常不包含用户名信息，因此使用'user'作为占位符
-        // 实际操作中，可能需要通过单独的接口获取用户名或预先存储
-        const username = 'user'; // 此处使用placeholder
-        
-        // 获取备份选项
-        const commitMessage = backupAction.options?.commitMessage || '自动备份书签';
-        const includeMetadata = backupAction.options?.includeMetadata !== false;
-        
-        // 调用备份服务进行GitHub备份
+      // 获取GitHub凭据
+      const credentialsResult = await storageService.getGitHubCredentials();
+      
+      if (!credentialsResult.success || !credentialsResult.data) {
+        throw new Error('未找到GitHub凭据，请先在同步设置中配置');
+      }
+      
+      const credentials = credentialsResult.data;
+      
+      // 获取GitHub用户名
+      let username = 'user'; // 默认占位符
+      try {
+        const userResult = await githubService.validateCredentials(credentials);
+        username = userResult.login;
+      } catch (error) {
+        console.warn('无法获取GitHub用户名，使用默认值');
+      }
+      
+      // 根据操作类型执行不同的操作
+      if (backupAction.operation === 'backup' || !backupAction.operation) {
+        // 执行备份操作 (上传)
         const backupResult = await backupService.backupToGitHub(
           credentials,
           username
@@ -337,14 +339,37 @@ class TaskExecutor {
             backupResult.data?.bookmarksCount ? `，包含 ${backupResult.data.bookmarksCount} 个书签` : ''
           }`
         };
+      } else if (backupAction.operation === 'restore') {
+        // 执行恢复操作 (下载)
+        const useTimestampedFile = !!backupAction.options?.backupFilePath;
+        const timestampedFilePath = backupAction.options?.backupFilePath;
+        
+        const restoreResult = await backupService.restoreFromGitHub(
+          credentials,
+          username,
+          useTimestampedFile,
+          timestampedFilePath
+        );
+        
+        if (!restoreResult.success) {
+          throw new Error(`从GitHub恢复失败: ${restoreResult.error}`);
+        }
+        
+        return {
+          success: true,
+          timestamp: Date.now(),
+          details: `成功从GitHub恢复书签${
+            restoreResult.data?.bookmarksCount ? `，恢复了 ${restoreResult.data.bookmarksCount} 个书签` : ''
+          }`
+        };
       } else {
-        throw new Error(`不支持的备份目标: ${backupAction.target}`);
+        throw new Error(`不支持的备份操作: ${backupAction.operation}`);
       }
     } catch (error) {
       return {
         success: false,
         timestamp: Date.now(),
-        error: `备份失败: ${error instanceof Error ? error.message : String(error)}`
+        error: `备份/恢复失败: ${error instanceof Error ? error.message : String(error)}`
       };
     }
   }

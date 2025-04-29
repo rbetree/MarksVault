@@ -92,10 +92,12 @@ export interface BaseAction {
 // 备份操作接口
 export interface BackupAction extends BaseAction {
   type: ActionType.BACKUP;
+  operation: 'backup' | 'restore';  // 备份操作类型（上传/恢复）
   target: 'github';          // 备份目标（目前仅支持GitHub）
   options: {
     commitMessage?: string;  // 提交消息
     includeMetadata?: boolean; // 是否包含元数据
+    backupFilePath?: string;  // 用于恢复操作时指定备份文件路径
   };
 }
 
@@ -233,14 +235,16 @@ export const createEventTrigger = (eventType: EventType): EventTrigger => {
 };
 
 // 创建备份操作工厂函数
-export const createBackupAction = (): BackupAction => {
+export const createBackupAction = (operation: 'backup' | 'restore' = 'backup'): BackupAction => {
   return {
     type: ActionType.BACKUP,
-    description: '备份书签到GitHub',
+    operation,
+    description: operation === 'backup' ? '备份书签到GitHub' : '从GitHub恢复书签',
     target: 'github',
     options: {
-      commitMessage: '自动备份书签',
-      includeMetadata: true
+      commitMessage: operation === 'backup' ? '自动备份书签' : '',
+      includeMetadata: true,
+      backupFilePath: operation === 'restore' ? '' : undefined
     }
   };
 };
