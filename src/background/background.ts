@@ -5,6 +5,31 @@ import triggerService from '../services/trigger-service';
 import taskExecutor from '../services/task-executor';
 import { createDefaultTaskStorage } from '../types/task';
 
+/**
+ * 初始化所有后台服务
+ */
+async function initializeServices() {
+  try {
+    console.log('正在初始化 MarksVault 服务...');
+    
+    // 初始化任务服务
+    await taskService.init();
+    console.log('任务服务初始化完成');
+    
+    // 初始化任务执行引擎
+    await taskExecutor.init();
+    console.log('任务执行引擎初始化完成');
+    
+    // 初始化触发器服务
+    await triggerService.init();
+    console.log('触发器服务初始化完成');
+    
+    console.log('MarksVault 服务初始化完成');
+  } catch (error) {
+    console.error('服务初始化失败:', error);
+  }
+}
+
 // 监听安装事件
 chrome.runtime.onInstalled.addListener(async (details) => {
   if (details.reason === 'install') {
@@ -25,22 +50,16 @@ chrome.runtime.onInstalled.addListener(async (details) => {
     console.log('MarksVault 扩展已更新到版本 ' + chrome.runtime.getManifest().version);
   }
   
-  // 初始化任务服务
-  await taskService.init();
-  
-  // 初始化触发器服务
-  await triggerService.init();
+  // 使用统一的服务初始化函数
+  await initializeServices();
 });
 
 // 监听浏览器启动事件
 chrome.runtime.onStartup.addListener(async () => {
   console.log('浏览器启动，初始化 MarksVault 服务...');
   
-  // 初始化任务服务
-  await taskService.init();
-  
-  // 初始化触发器服务
-  await triggerService.init();
+  // 使用统一的服务初始化函数
+  await initializeServices();
 });
 
 /**

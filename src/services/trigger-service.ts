@@ -37,9 +37,22 @@ class TriggerService {
     try {
       console.log('初始化触发器服务...');
       await this.syncAllTaskAlarms();
+      console.log('触发器服务初始化完成');
     } catch (error) {
       console.error('初始化触发器服务失败:', error);
     }
+  }
+
+  /**
+   * 从alarm名称中提取任务ID
+   * @param alarmName alarm名称
+   * @returns 任务ID或null（如果不是任务alarm）
+   */
+  public getTaskIdFromAlarmName(alarmName: string): string | null {
+    if (alarmName.startsWith(TASK_ALARM_PREFIX)) {
+      return alarmName.substring(TASK_ALARM_PREFIX.length);
+    }
+    return null;
   }
 
   /**
@@ -159,18 +172,6 @@ class TriggerService {
    */
   private getAlarmNameForTask(taskId: string): string {
     return `${TASK_ALARM_PREFIX}${taskId}`;
-  }
-
-  /**
-   * 从alarm名称提取任务ID
-   * @param alarmName alarm名称
-   * @returns 任务ID
-   */
-  public getTaskIdFromAlarmName(alarmName: string): string | null {
-    if (!alarmName.startsWith(TASK_ALARM_PREFIX)) {
-      return null;
-    }
-    return alarmName.substring(TASK_ALARM_PREFIX.length);
   }
 }
 
