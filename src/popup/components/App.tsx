@@ -8,13 +8,11 @@ import ErrorBoundary from './shared/ErrorBoundary';
 import Toast, { ToastRef } from './shared/Toast';
 import SyncView from './SyncView/SyncView';
 import TasksView from './TasksView/TasksView';
+import SettingsView from './SettingsView/SettingsView';
 import { AuthStatus, GitHubUser } from '../../types/github';
 import { GitHubCredentials } from '../../utils/storage-service';
 import storageService from '../../utils/storage-service';
 import githubService from '../../services/github-service';
-
-// 设置页面暂时使用临时组件
-const SettingsView = () => <Box sx={{ p: 3 }}><h2>系统设置</h2><p>设置功能正在开发中...</p></Box>;
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<NavOption>('bookmarks');
@@ -108,7 +106,7 @@ const App: React.FC = () => {
           />
         );
       case 'settings':
-        return <SettingsView />;
+        return <SettingsView toastRef={toastRef} />;
       default:
         return <BookmarksView toastRef={toastRef} />;
     }

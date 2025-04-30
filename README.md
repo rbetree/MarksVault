@@ -215,7 +215,7 @@ MarksVault/
 ### 开发者安装
 1. 克隆MarksVault仓库到本地环境
    ```bash
-   git clone https://github.com/yourusername/MarksVault.git
+   git clone https://github.com/RZLNB/MarksVault.git
    cd MarksVault
    ```
 2. 安装项目依赖
