@@ -324,18 +324,43 @@ class StorageService {
    * @returns Promise<StorageResult>
    */
   async setStorageData(key: string, data: any): Promise<StorageResult> {
-    try {
-      await chrome.storage.local.set({ [key]: data });
-      return {
-        success: true
-      };
-    } catch (error) {
-      console.error(`保存数据到 ${key} 失败:`, error);
-      return {
-        success: false,
-        error: `保存数据失败: ` + (error instanceof Error ? error.message : String(error))
-      };
+    const maxRetries = 3; // 最大重试次数
+    let retryCount = 0;
+    let lastError: any = null;
+    
+    while (retryCount < maxRetries) {
+      try {
+        await chrome.storage.local.set({ [key]: data });
+        
+        if (retryCount > 0) {
+          console.log(`保存数据到 ${key} 成功，在第 ${retryCount + 1} 次尝试后`);
+        }
+        
+        return {
+          success: true
+        };
+      } catch (error) {
+        lastError = error;
+        retryCount++;
+        
+        console.warn(`保存数据到 ${key} 失败 (尝试 ${retryCount}/${maxRetries}):`, error);
+        
+        if (retryCount < maxRetries) {
+          // 使用指数退避策略，增加重试间隔
+          const delayMs = Math.min(100 * Math.pow(2, retryCount), 1000);
+          console.log(`将在 ${delayMs}ms 后重试...`);
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+        }
+      }
     }
+    
+    // 所有重试都失败
+    console.error(`保存数据到 ${key} 最终失败，已重试 ${maxRetries} 次:`, lastError);
+    return {
+      success: false,
+      error: `保存数据失败 (已重试 ${maxRetries} 次): ` + 
+        (lastError instanceof Error ? lastError.message : String(lastError))
+    };
   }
 
   /**

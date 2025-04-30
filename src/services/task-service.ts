@@ -261,15 +261,35 @@ class TaskService {
       
       // 如果需要，更新触发器
       if (shouldUpdateTrigger) {
-        // 动态导入触发器服务，避免循环依赖
-        const triggerService = (await import('./trigger-service')).default;
-        
-        const currentTask = taskStorage.tasks[taskId];
-        
-        if (currentTask.status === TaskStatus.ENABLED && currentTask.trigger.type === 'time') {
-          await triggerService.createOrUpdateAlarm(currentTask);
-        } else {
-          await triggerService.removeAlarm(taskId);
+        try {
+          // 设置触发器更新操作的超时
+          const triggerUpdatePromise = (async () => {
+            // 动态导入触发器服务，避免循环依赖
+            const triggerService = (await import('./trigger-service')).default;
+            
+            const currentTask = taskStorage.tasks[taskId];
+            
+            if (currentTask.status === TaskStatus.ENABLED && currentTask.trigger.type === 'time') {
+              return await triggerService.createOrUpdateAlarm(currentTask);
+            } else {
+              return await triggerService.removeAlarm(taskId);
+            }
+          })();
+          
+          // 添加超时处理，防止触发器更新卡住整个流程
+          const timeoutPromise = new Promise<boolean>((_, reject) => {
+            setTimeout(() => reject(new Error('触发器更新超时')), 5000); // 5秒超时
+          });
+          
+          // 竞争模式，哪个先完成就用哪个结果
+          await Promise.race([triggerUpdatePromise, timeoutPromise])
+            .catch(error => {
+              console.warn(`更新任务 ${taskId} 的触发器时发生超时或错误:`, error);
+              // 超时错误被捕获但不影响整体任务保存结果
+            });
+        } catch (triggerError) {
+          // 捕获触发器更新过程中的错误，但不影响整体任务保存结果
+          console.error(`更新任务 ${taskId} 的触发器时出错:`, triggerError);
         }
       }
       
@@ -500,17 +520,31 @@ class TaskService {
    */
   private async saveTasks(taskStorage: TaskStorage): Promise<StorageResult> {
     try {
+      console.log(`开始保存任务数据，任务数量: ${Object.keys(taskStorage.tasks).length}, 时间戳: ${new Date().toISOString()}`);
+      
       // 更新缓存
       this.cachedTasks = taskStorage;
       
       // 保存到持久化存储
+      const startTime = performance.now();
       await storageService.setStorageData(TASKS_STORAGE_KEY, taskStorage);
+      const duration = performance.now() - startTime;
+      
+      console.log(`完成任务数据保存，耗时: ${duration.toFixed(2)}ms`);
       
       return {
         success: true
       };
     } catch (error) {
+      // 详细记录错误信息，便于排查问题
       console.error('保存任务失败:', error);
+      console.error(`错误详情: ${error instanceof Error ? error.stack : '无堆栈信息'}`);
+      console.error(`触发错误时的任务数据概要: 任务数量=${
+        taskStorage ? Object.keys(taskStorage.tasks).length : '未知'
+      }, 最后更新=${
+        taskStorage ? new Date(taskStorage.lastUpdated).toISOString() : '未知'
+      }`);
+      
       this.cachedTasks = null; // 清除缓存，强制下次重新加载
       return {
         success: false,

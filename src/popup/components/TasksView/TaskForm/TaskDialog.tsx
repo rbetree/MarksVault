@@ -145,6 +145,15 @@ const TaskDialog: React.FC<TaskDialogProps> = ({
     setIsSaving(true);
     setError(null);
     
+    // 添加保存超时处理
+    const saveTimeout = setTimeout(() => {
+      if (isSaving) {
+        console.warn('任务保存操作超时');
+        setIsSaving(false);
+        setError('保存任务超时，请重试。如果问题持续存在，请刷新页面后再试。');
+      }
+    }, 10000); // 10秒超时
+    
     try {
       let result;
       
@@ -167,6 +176,7 @@ const TaskDialog: React.FC<TaskDialogProps> = ({
       console.error('保存任务时出错:', err);
       setError('保存任务时发生错误');
     } finally {
+      clearTimeout(saveTimeout); // 清除超时定时器
       setIsSaving(false);
     }
   };
