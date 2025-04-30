@@ -36,10 +36,77 @@ class TriggerService {
   public async init(): Promise<void> {
     try {
       console.log('初始化触发器服务...');
+      
+      // 尝试恢复失败的任务
+      await this.tryRecoverFailedTasks();
+      
+      // 同步所有启用的任务的alarms
       await this.syncAllTaskAlarms();
+      
       console.log('触发器服务初始化完成');
     } catch (error) {
       console.error('初始化触发器服务失败:', error);
+    }
+  }
+
+  /**
+   * 尝试恢复因特定原因失败的任务
+   * 主要针对因GitHub凭据问题而失败的任务
+   */
+  public async tryRecoverFailedTasks(): Promise<void> {
+    try {
+      // 获取所有失败状态的任务
+      const result = await taskService.getTasksByStatus(TaskStatus.FAILED);
+      if (!result.success) {
+        console.error('获取失败任务列表失败:', result.error);
+        return;
+      }
+
+      const failedTasks = result.data as Task[];
+      if (failedTasks.length === 0) {
+        return; // 没有失败的任务，直接返回
+      }
+
+      console.log(`找到 ${failedTasks.length} 个失败状态的任务，尝试恢复...`);
+      
+      let recoveredCount = 0;
+      
+      // 检查每个失败的任务，判断是否可以恢复
+      for (const task of failedTasks) {
+        // 查看最后执行的历史记录
+        const lastExecution = task.history.lastExecution;
+        
+        // 如果没有执行历史，或者最后执行成功，则不需要恢复
+        if (!lastExecution || lastExecution.success) {
+          continue;
+        }
+        
+        // 检查错误原因
+        const errorMessage = lastExecution.error || '';
+        
+        // 如果是凭据相关错误，不自动恢复，需要用户先更新凭据
+        const isCredentialError = errorMessage.includes('GitHub凭据') || 
+                                errorMessage.includes('未找到GitHub凭据') ||
+                                errorMessage.includes('凭据无效');
+        
+        if (isCredentialError) {
+          console.log(`任务 ${task.id} 因GitHub凭据问题失败，需要用户在同步页面重新授权后才能恢复`);
+          continue;
+        }
+        
+        // 其他类型的错误可以尝试自动恢复
+        // 例如网络错误、临时服务不可用等
+        await taskService.setTaskStatus(task.id, TaskStatus.ENABLED);
+        recoveredCount++;
+        
+        console.log(`已自动恢复任务 ${task.id} 的状态为 ENABLED`);
+      }
+      
+      if (recoveredCount > 0) {
+        console.log(`成功恢复了 ${recoveredCount} 个失败的任务`);
+      }
+    } catch (error) {
+      console.error('恢复失败任务时出错:', error);
     }
   }
 

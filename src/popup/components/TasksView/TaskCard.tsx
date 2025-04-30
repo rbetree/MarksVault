@@ -18,13 +18,18 @@ import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import EventIcon from '@mui/icons-material/Event';
 import HistoryIcon from '@mui/icons-material/History';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import Tooltip from '@mui/material/Tooltip';
 import Chip from '@mui/material/Chip';
+import CircularProgress from '@mui/material/CircularProgress';
+import Alert from '@mui/material/Alert';
 import { Task, TaskStatus, TimeScheduleType, TriggerType } from '../../../types/task';
 import TaskStatusChip from './TaskStatusChip';
 import TaskTriggerInfo from './TaskTriggerInfo';
 import TaskActionInfo from './TaskActionInfo';
 import taskService from '../../../services/task-service';
+import taskExecutor from '../../../services/task-executor';
 import { 
   taskCardStyles, 
   getTaskCardBorderStyle, 
@@ -51,6 +56,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
 }) => {
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [executing, setExecuting] = useState(false);
   
   // 切换展开/折叠状态
   const handleExpandClick = () => {
@@ -79,6 +85,24 @@ const TaskCard: React.FC<TaskCardProps> = ({
       onStatusChange?.(task.id, false);
     } finally {
       setLoading(false);
+    }
+  };
+  
+  // 手动执行任务
+  const handleExecuteTask = async () => {
+    if (executing) return;
+    
+    setExecuting(true);
+    try {
+      console.log(`手动执行任务: ${task.id}`);
+      await taskExecutor.executeTask(task.id);
+      // 刷新任务列表，显示最新状态
+      onStatusChange?.(task.id, true);
+    } catch (error) {
+      console.error('手动执行任务失败:', error);
+      onStatusChange?.(task.id, false);
+    } finally {
+      setExecuting(false);
     }
   };
   
@@ -152,9 +176,31 @@ const TaskCard: React.FC<TaskCardProps> = ({
     return `${dateStr} - ${result}${lastExecution.error ? `: ${lastExecution.error}` : ''}`;
   };
   
+  // 判断是否显示错误信息
+  const shouldShowErrorInfo = () => {
+    return task.status === TaskStatus.FAILED && 
+           task.history.lastExecution && 
+           !task.history.lastExecution.success && 
+           task.history.lastExecution.error;
+  };
+  
+  // 判断错误是否与GitHub凭据相关
+  const isCredentialError = () => {
+    if (!task.history.lastExecution || !task.history.lastExecution.error) return false;
+    
+    const errorMessage = task.history.lastExecution.error;
+    return errorMessage.includes('GitHub凭据') || 
+           errorMessage.includes('未找到GitHub凭据') || 
+           errorMessage.includes('凭据无效');
+  };
+  
   // 判断任务是否可以启用/禁用
   const canToggleStatus = task.status !== TaskStatus.COMPLETED && 
                           task.status !== TaskStatus.RUNNING;
+  
+  // 判断任务是否可以手动执行
+  const canExecuteTask = task.status !== TaskStatus.RUNNING && 
+                         task.status !== TaskStatus.DISABLED;
   
   // 获取下次执行时间显示
   const nextExecutionTime = getNextExecutionTime();
@@ -181,11 +227,53 @@ const TaskCard: React.FC<TaskCardProps> = ({
           </Typography>
         )}
         
+        {/* 错误信息提示 */}
+        {shouldShowErrorInfo() && (
+          <Alert 
+            severity="error" 
+            icon={<ErrorOutlineIcon fontSize="inherit" />}
+            sx={{ 
+              py: 0.25, 
+              px: 0.5, 
+              mb: 0.75, 
+              '& .MuiAlert-message': { 
+                fontSize: '11px', 
+                padding: 0 
+              } 
+            }}
+          >
+            {task.history.lastExecution?.error}
+            {isCredentialError() && (
+              <Box component="span" sx={{ display: 'block', mt: 0.25, fontSize: '10px' }}>
+                请到同步页面配置GitHub凭据
+              </Box>
+            )}
+          </Alert>
+        )}
+        
         <Box sx={{ mt: 0.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Box sx={{ flex: 1 }}>
             <TaskTriggerInfo trigger={task.trigger} compact />
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            {/* 手动执行按钮 */}
+            <Tooltip title="立即执行">
+              <span style={{ display: 'inline-block' }}>
+                <IconButton 
+                  onClick={handleExecuteTask} 
+                  disabled={!canExecuteTask || executing}
+                  color="primary"
+                  size="small"
+                  sx={{ padding: 0.5 }}
+                >
+                  {executing ? 
+                    <CircularProgress size={16} /> : 
+                    <RefreshIcon fontSize="small" />
+                  }
+                </IconButton>
+              </span>
+            </Tooltip>
+            
             <Tooltip title={task.status === TaskStatus.ENABLED ? '禁用任务' : '启用任务'}>
               <span style={{ display: 'inline-block' }}>
                 <IconButton 
@@ -288,6 +376,11 @@ const TaskCard: React.FC<TaskCardProps> = ({
             <Typography variant="body2" color="text.secondary" sx={{ fontSize: '11px' }}>
               上次执行: {getLastExecutionText()}
             </Typography>
+            {task.history.lastExecution && task.history.lastExecution.details && (
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25, fontSize: '11px' }}>
+                详情: {task.history.lastExecution.details}
+              </Typography>
+            )}
             {nextExecutionTime && (
               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, fontSize: '11px' }}>
                 下次执行: {formatDate(nextExecutionTime)}

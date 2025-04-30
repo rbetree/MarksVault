@@ -411,15 +411,40 @@ class TaskService {
       // 确定任务状态
       let newStatus = task.status;
       
-      // 使用类型保护
-      if (executionResult.success && 
-          task.trigger && 
-          typeof task.trigger === 'object' && 
-          'type' in task.trigger && 
-          task.trigger.type === 'time' && 
-          'schedule' in task.trigger && 
-          task.trigger.schedule.type === 'once') {
-        newStatus = TaskStatus.COMPLETED;
+      if (executionResult.success) {
+        // 成功执行的情况
+        // 使用类型保护检查是否为一次性任务
+        if (task.trigger && 
+            typeof task.trigger === 'object' && 
+            'type' in task.trigger && 
+            task.trigger.type === 'time' && 
+            'schedule' in task.trigger && 
+            task.trigger.schedule.type === 'once') {
+          // 一次性任务执行成功后标记为已完成
+          newStatus = TaskStatus.COMPLETED;
+          console.log(`一次性任务 ${taskId} 执行成功，状态更新为 COMPLETED`);
+        } else {
+          // 其他任务类型执行成功后回到启用状态
+          newStatus = TaskStatus.ENABLED;
+          console.log(`任务 ${taskId} 执行成功，状态更新为 ENABLED`);
+        }
+      } else {
+        // 失败执行的处理
+        newStatus = TaskStatus.FAILED;
+        
+        // 特殊处理：检查是否为GitHub凭据相关错误
+        const isCredentialError = executionResult.error && (
+          executionResult.error.includes('GitHub凭据') || 
+          executionResult.error.includes('未找到GitHub凭据') ||
+          executionResult.error.includes('凭据无效或已过期')
+        );
+        
+        // 确保日志中记录失败原因
+        if (isCredentialError) {
+          console.warn(`任务 ${taskId} 因GitHub凭据问题失败，需要用户在同步页面重新授权`);
+        } else {
+          console.error(`任务 ${taskId} 执行失败: ${executionResult.error}`);
+        }
       }
       
       // 更新任务历史
