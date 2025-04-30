@@ -119,7 +119,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ toastRef }) => {
               rel="noopener noreferrer"
               onClick={(e) => {
                 e.preventDefault();
-                chrome.tabs.create({ url: 'https://github.com/RZLNB/MarksVault' });
+                chrome.tabs.create({ url: 'https://github.com/rbetree/MarksVault' });
               }}
             >
               GitHub页面
