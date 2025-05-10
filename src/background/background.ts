@@ -86,4 +86,11 @@ chrome.bookmarks.onMoved.addListener(async (id, moveInfo) => {
   await triggerService.handleEventTrigger(EventType.BOOKMARK_MOVED, { id, moveInfo });
 });
 
+// 由于在manifest.json中配置了default_popup，chrome.action.onClicked事件永远不会触发
+// 监听扩展图标点击事件的代码已注释掉
+// chrome.action.onClicked.addListener(async (tab) => {
+//   console.log('扩展图标点击事件触发', tab);
+//   await triggerService.handleEventTrigger(EventType.EXTENSION_CLICKED, { tab });
+// });
+
 export {}; 

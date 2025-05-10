@@ -110,7 +110,7 @@ class TriggerService {
    */
   public async handleEventTrigger(eventType: EventType, eventData?: any): Promise<void> {
     try {
-      console.log(`处理事件触发: ${eventType}`);
+      console.log(`处理事件触发: ${eventType}`, eventData ? '，包含事件数据' : '');
       
       // 获取所有已启用的任务
       const result = await taskService.getTasksByStatus(TaskStatus.ENABLED);
@@ -124,11 +124,12 @@ class TriggerService {
       // 筛选与事件类型匹配的事件触发器任务
       const matchingTasks = enabledTasks.filter(task => 
         task.trigger.type === TriggerType.EVENT && 
-        task.trigger.event === eventType
+        task.trigger.event === eventType &&
+        this.matchesConditions(task, eventData)
       );
       
       if (matchingTasks.length === 0) {
-        console.log(`没有找到对应事件 ${eventType} 的任务`);
+        console.log(`没有找到对应事件 ${eventType} 的任务或条件不匹配`);
         return;
       }
       
@@ -140,6 +141,14 @@ class TriggerService {
       // 执行匹配的任务
       for (const task of matchingTasks) {
         console.log(`开始执行事件触发任务: ${task.name} (${task.id})`);
+        
+        // 更新上次触发时间
+        if (task.trigger.type === TriggerType.EVENT) {
+          task.trigger.lastTriggered = Date.now();
+          await taskService.updateTask(task.id, { 
+            trigger: task.trigger 
+          });
+        }
         
         try {
           const result = await taskExecutor.executeTask(task.id);
@@ -156,6 +165,92 @@ class TriggerService {
     } catch (error) {
       console.error(`处理事件触发失败: ${eventType}`, error);
     }
+  }
+
+  /**
+   * 检查任务条件是否与事件数据匹配
+   * @param task 任务对象
+   * @param eventData 事件数据
+   * @returns 是否匹配
+   */
+  private matchesConditions(task: Task, eventData?: any): boolean {
+    // 如果没有事件数据或没有条件，则视为匹配
+    if (!eventData || !task.trigger.type || task.trigger.type !== TriggerType.EVENT) {
+      return true;
+    }
+    
+    const trigger = task.trigger;
+    const conditions = trigger.conditions;
+    
+    // 如果没有设置条件，则视为匹配
+    if (!conditions || Object.keys(conditions).length === 0) {
+      return true;
+    }
+    
+    console.log(`检查任务 ${task.id} 的条件是否匹配`, conditions);
+    
+    // 根据不同事件类型检查不同条件
+    switch (trigger.event) {
+      // 书签相关事件
+      case EventType.BOOKMARK_CREATED:
+      case EventType.BOOKMARK_CHANGED:
+      case EventType.BOOKMARK_MOVED:
+      case EventType.BOOKMARK_REMOVED:
+        return this.matchBookmarkConditions(conditions, eventData);
+      
+      // 浏览器和扩展事件
+      case EventType.BROWSER_STARTUP:
+      case EventType.EXTENSION_CLICKED:
+        // 这些事件通常不需要特定条件匹配
+        return true;
+      
+      default:
+        // 未知事件类型默认匹配
+        return true;
+    }
+  }
+  
+  /**
+   * 检查书签条件是否匹配
+   * @param conditions 条件配置
+   * @param bookmarkData 书签数据
+   * @returns 是否匹配
+   */
+  private matchBookmarkConditions(conditions: Record<string, any>, bookmarkData: any): boolean {
+    // 如果没有书签数据，则视为不匹配
+    if (!bookmarkData || (!bookmarkData.bookmark && !bookmarkData.removeInfo)) {
+      return false;
+    }
+    
+    // 书签删除事件特殊处理
+    if (bookmarkData.removeInfo) {
+      // 对于删除事件，可能只能检查父文件夹ID
+      if (conditions.parentFolder && bookmarkData.removeInfo.parentId) {
+        return bookmarkData.removeInfo.parentId === conditions.parentFolder;
+      }
+      // 如果没有指定父文件夹条件，则视为匹配
+      return true;
+    }
+    
+    const bookmark = bookmarkData.bookmark;
+    let isMatch = true;
+    
+    // URL匹配
+    if (conditions.url && bookmark.url) {
+      isMatch = isMatch && bookmark.url.includes(conditions.url);
+    }
+    
+    // 标题匹配
+    if (conditions.title && bookmark.title) {
+      isMatch = isMatch && bookmark.title.includes(conditions.title);
+    }
+    
+    // 父文件夹匹配
+    if (conditions.parentFolder && bookmark.parentId) {
+      isMatch = isMatch && bookmark.parentId === conditions.parentFolder;
+    }
+    
+    return isMatch;
   }
 }
 

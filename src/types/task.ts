@@ -29,7 +29,8 @@ export enum EventType {
   BOOKMARK_CREATED = 'bookmark_created', // 书签创建
   BOOKMARK_REMOVED = 'bookmark_removed', // 书签删除
   BOOKMARK_CHANGED = 'bookmark_changed', // 书签修改
-  BOOKMARK_MOVED = 'bookmark_moved'      // 书签移动
+  BOOKMARK_MOVED = 'bookmark_moved',     // 书签移动
+  EXTENSION_CLICKED = 'extension_clicked' // 扩展图标点击 - 已废弃，由于manifest.json中配置了default_popup，此事件永远不会触发
 }
 
 // 事件触发器接口
@@ -37,7 +38,10 @@ export interface EventTrigger extends BaseTrigger {
   type: TriggerType.EVENT;
   event: EventType;             // 事件类型
   conditions?: {                // 可选的条件过滤
-    [key: string]: any;         // 条件过滤键值对
+    url?: string;               // URL匹配模式
+    title?: string;             // 标题匹配
+    parentFolder?: string;      // 父文件夹ID (适用于书签事件)
+    [key: string]: any;         // 其他条件过滤键值对
   };
   lastTriggered?: number;       // 上次触发时间戳
 }
@@ -150,11 +154,12 @@ export const createDefaultTask = (): Task => {
 };
 
 // 创建事件触发器工厂函数
-export const createEventTrigger = (eventType: EventType): EventTrigger => {
+export const createEventTrigger = (eventType: EventType, conditions?: Record<string, any>): EventTrigger => {
   return {
     type: TriggerType.EVENT,
     enabled: true,
-    event: eventType
+    event: eventType,
+    conditions
   };
 };
 

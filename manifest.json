@@ -18,8 +18,7 @@
   "permissions": [
     "bookmarks",
     "storage",
-    "favicon",
-    "alarms"
+    "favicon"
   ],
   "host_permissions": [
     "https://api.github.com/*"
