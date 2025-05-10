@@ -115,64 +115,62 @@ class TaskExecutor {
    * @returns 执行结果
    */
   public async executeTask(taskId: string, retryCount: number = 0): Promise<TaskExecutionResult> {
-    const executionStartTime = new Date();
-    console.log(`[${executionStartTime.toLocaleString()}] 开始执行任务: ${taskId}${retryCount > 0 ? ` (重试 ${retryCount}/${this.config.maxRetries})` : ''}`);
+    // 创建初始执行结果对象
+    let executionResult: TaskExecutionResult = {
+      success: false,
+      timestamp: Date.now(),
+      details: ''
+    };
     
     // 检查任务是否已在执行中
     if (this.executingTasks.has(taskId)) {
-      console.warn(`任务 ${taskId} 已在执行中，跳过本次执行`);
-      return {
-        success: false,
-        timestamp: Date.now(),
-        error: '任务已在执行中，不能重复执行',
-        details: '防止任务重复执行'
-      };
+      console.warn(`任务 ${taskId} 正在执行中，跳过...`);
+      executionResult.error = '任务正在执行中';
+      return executionResult;
     }
     
-    // 将任务标记为执行中
+    // 将任务添加到执行中集合
     this.executingTasks.add(taskId);
-    console.log(`任务 ${taskId} 标记为执行中`);
     
-    const startTime = Date.now();
-    let executionResult: TaskExecutionResult = {
-      success: false,
-      timestamp: startTime,
-      details: '',
-      error: ''
-    };
-    
-    // 创建超时处理
-    const timeoutPromise = new Promise<TaskExecutionResult>((_, reject) => {
-      setTimeout(() => {
-        reject(new Error(`任务执行超时(${this.config.timeout / 1000}秒)`));
-      }, this.config.timeout);
-    });
+    const executionStartTime = new Date();
+    console.log(`[${executionStartTime.toLocaleString()}] 开始执行任务: ${taskId}${retryCount > 0 ? ` (重试 ${retryCount}/${this.config.maxRetries})` : ''}`);
     
     try {
-      // 获取任务
-      console.log(`获取任务 ${taskId} 详细信息...`);
+      // 获取任务详情
       const taskResult = await taskService.getTaskById(taskId);
+      
+      // 如果找不到任务，返回失败
       if (!taskResult.success) {
-        throw new Error(`获取任务失败: ${taskResult.error}`);
+        executionResult.error = `获取任务失败: ${taskResult.error}`;
+        executionResult.timestamp = Date.now();
+        return executionResult;
       }
       
       const task = taskResult.data as Task;
-      console.log(`成功获取任务信息: ${task.name}(${taskId}), 状态: ${task.status}`);
       
-      // 检查任务是否启用
-      if (task.status !== TaskStatus.ENABLED && task.status !== TaskStatus.FAILED) {
-        console.warn(`任务 ${taskId} 当前状态为 ${task.status}，无法执行`);
-        throw new Error(`任务当前状态为${task.status}，无法执行`);
-      }
-      
-      // 将任务状态设置为执行中
-      console.log(`更新任务 ${taskId} 状态为 RUNNING...`);
+      // 任务执行前更新任务状态为RUNNING
       await taskService.setTaskStatus(taskId, TaskStatus.RUNNING);
       
-      // 使用Promise.race来实现超时处理
-      console.log(`任务 ${taskId} 开始执行动作: ${task.action.type}...`);
+      // 开始计时
+      const startTime = Date.now();
+      
+      // 设置初始执行结果
+      executionResult = {
+        success: false,
+        timestamp: startTime,
+        details: ''
+      };
+      
+      // 创建超时Promise
+      const timeoutPromise = new Promise<TaskExecutionResult>((_, reject) => {
+        setTimeout(() => {
+          reject(new Error(`任务执行超时(${this.config.timeout / 1000}秒)`));
+        }, this.config.timeout);
+      });
+      
+      // 创建执行Promise
       const executePromise = (async () => {
-        // 根据任务类型执行操作
+        // 根据任务类型执行不同的操作
         switch (task.action.type) {
           case ActionType.BACKUP:
             return await this.executeBackupAction(task);
@@ -181,41 +179,23 @@ class TaskExecutor {
           case ActionType.CUSTOM:
             return await this.executeCustomAction(task);
           default:
-            throw new Error(`不支持的任务类型: ${(task.action as { type: string }).type}`);
+            throw new Error(`不支持的任务类型: ${(task.action as any).type}`);
         }
       })();
       
-      // 使用Promise.race实现超时控制
-      console.log(`等待任务 ${taskId} 执行完成或超时...`);
+      // 竞争模式，哪个先完成就用哪个结果
       executionResult = await Promise.race([executePromise, timeoutPromise]);
       
-      // 记录执行时长
+      // 添加执行持续时间
       executionResult.duration = Date.now() - startTime;
-      console.log(`任务 ${taskId} 执行完成，耗时: ${executionResult.duration}ms`);
       
-      // 更新任务历史记录
-      console.log(`更新任务 ${taskId} 执行历史...`);
+      // 更新任务执行历史记录
+      console.log(`更新任务 ${taskId} 执行历史记录...`);
       await taskService.updateTaskExecutionHistory(taskId, executionResult);
       
-      // 判断任务是否为一次性任务
-      if (executionResult.success && 
-          task.trigger && 
-          typeof task.trigger === 'object' && 
-          'type' in task.trigger &&
-          task.trigger.type === TriggerType.TIME && 
-          'schedule' in task.trigger &&
-          task.trigger.schedule && 
-          typeof task.trigger.schedule === 'object' &&
-          'type' in task.trigger.schedule &&
-          task.trigger.schedule.type === 'once') {
-        // 如果是一次性任务并成功执行，则将状态设置为已完成
-        console.log(`一次性任务 ${taskId} 执行成功，状态设置为 COMPLETED`);
-        await taskService.setTaskStatus(taskId, TaskStatus.COMPLETED);
-      } else {
-        // 恢复任务状态为启用
-        console.log(`恢复任务 ${taskId} 状态为 ENABLED`);
-        await taskService.setTaskStatus(taskId, TaskStatus.ENABLED);
-      }
+      // 恢复任务状态为启用
+      console.log(`恢复任务 ${taskId} 状态为 ENABLED`);
+      await taskService.setTaskStatus(taskId, TaskStatus.ENABLED);
       
       const executionEndTime = new Date();
       const executionTimeMessage = `开始: ${executionStartTime.toLocaleString()}, 结束: ${executionEndTime.toLocaleString()}, 耗时: ${Math.round((executionEndTime.getTime() - executionStartTime.getTime()) / 1000)}秒`;
@@ -225,6 +205,9 @@ class TaskExecutor {
       // 处理错误，判断是否需要重试
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.error(`任务 ${taskId} 执行出错:`, errorMessage);
+      
+      // 确保startTime变量存在（在try块中可能未定义）
+      const startTime = executionResult.timestamp || Date.now();
       
       // 如果错误是由于超时或可重试的原因，尝试重试
       if (retryCount < this.config.maxRetries && this.isRetryableError(error)) {

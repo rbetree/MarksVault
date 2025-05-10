@@ -234,21 +234,16 @@ class TaskService {
           error: `未找到ID为 ${taskId} 的任务`
         };
       }
-      
-      // 保存任务原状态
+
+      // 记录旧状态，用于检测状态变化
       const oldStatus = taskStorage.tasks[taskId].status;
       
-      // 更新任务数据和时间戳
-      taskStorage.tasks[taskId] = {
-        ...taskStorage.tasks[taskId],
-        ...taskData,
-        updatedAt: Date.now()
-      };
+      // 更新任务数据
+      Object.assign(taskStorage.tasks[taskId], taskData);
       
-      // 检查是否影响到触发器，如果是则更新对应的alarm
-      const shouldUpdateTrigger = 
-        taskData.trigger !== undefined || 
-        (taskData.status !== undefined && taskData.status !== oldStatus);
+      // 确保ID不变，更新更新时间
+      taskStorage.tasks[taskId].id = taskId;
+      taskStorage.tasks[taskId].updatedAt = Date.now();
       
       taskStorage.lastUpdated = Date.now();
       
@@ -257,40 +252,6 @@ class TaskService {
       
       if (!saveResult.success) {
         return saveResult;
-      }
-      
-      // 如果需要，更新触发器
-      if (shouldUpdateTrigger) {
-        try {
-          // 设置触发器更新操作的超时
-          const triggerUpdatePromise = (async () => {
-            // 动态导入触发器服务，避免循环依赖
-            const triggerService = (await import('./trigger-service')).default;
-            
-            const currentTask = taskStorage.tasks[taskId];
-            
-            if (currentTask.status === TaskStatus.ENABLED && currentTask.trigger.type === 'time') {
-              return await triggerService.createOrUpdateAlarm(currentTask);
-            } else {
-              return await triggerService.removeAlarm(taskId);
-            }
-          })();
-          
-          // 添加超时处理，防止触发器更新卡住整个流程
-          const timeoutPromise = new Promise<boolean>((_, reject) => {
-            setTimeout(() => reject(new Error('触发器更新超时')), 5000); // 5秒超时
-          });
-          
-          // 竞争模式，哪个先完成就用哪个结果
-          await Promise.race([triggerUpdatePromise, timeoutPromise])
-            .catch(error => {
-              console.warn(`更新任务 ${taskId} 的触发器时发生超时或错误:`, error);
-              // 超时错误被捕获但不影响整体任务保存结果
-            });
-        } catch (triggerError) {
-          // 捕获触发器更新过程中的错误，但不影响整体任务保存结果
-          console.error(`更新任务 ${taskId} 的触发器时出错:`, triggerError);
-        }
       }
       
       return {
@@ -357,20 +318,7 @@ class TaskService {
    * @returns 启用结果
    */
   public async enableTask(taskId: string): Promise<StorageResult> {
-    const result = await this.setTaskStatus(taskId, TaskStatus.ENABLED);
-    
-    if (result.success) {
-      // 动态导入触发器服务，避免循环依赖
-      const triggerService = (await import('./trigger-service')).default;
-      
-      // 获取任务并更新alarm
-      const taskResult = await this.getTaskById(taskId);
-      if (taskResult.success) {
-        await triggerService.createOrUpdateAlarm(taskResult.data as Task);
-      }
-    }
-    
-    return result;
+    return await this.setTaskStatus(taskId, TaskStatus.ENABLED);
   }
   
   /**
@@ -379,17 +327,7 @@ class TaskService {
    * @returns 禁用结果
    */
   public async disableTask(taskId: string): Promise<StorageResult> {
-    const result = await this.setTaskStatus(taskId, TaskStatus.DISABLED);
-    
-    if (result.success) {
-      // 动态导入触发器服务，避免循环依赖
-      const triggerService = (await import('./trigger-service')).default;
-      
-      // 移除对应的alarm
-      await triggerService.removeAlarm(taskId);
-    }
-    
-    return result;
+    return await this.setTaskStatus(taskId, TaskStatus.DISABLED);
   }
   
   /**
@@ -432,22 +370,9 @@ class TaskService {
       let newStatus = task.status;
       
       if (executionResult.success) {
-        // 成功执行的情况
-        // 使用类型保护检查是否为一次性任务
-        if (task.trigger && 
-            typeof task.trigger === 'object' && 
-            'type' in task.trigger && 
-            task.trigger.type === 'time' && 
-            'schedule' in task.trigger && 
-            task.trigger.schedule.type === 'once') {
-          // 一次性任务执行成功后标记为已完成
-          newStatus = TaskStatus.COMPLETED;
-          console.log(`一次性任务 ${taskId} 执行成功，状态更新为 COMPLETED`);
-        } else {
-          // 其他任务类型执行成功后回到启用状态
-          newStatus = TaskStatus.ENABLED;
-          console.log(`任务 ${taskId} 执行成功，状态更新为 ENABLED`);
-        }
+        // 成功执行的情况，回到启用状态
+        newStatus = TaskStatus.ENABLED;
+        console.log(`任务 ${taskId} 执行成功，状态更新为 ENABLED`);
       } else {
         // 失败执行的处理
         newStatus = TaskStatus.FAILED;
@@ -459,11 +384,8 @@ class TaskService {
           executionResult.error.includes('凭据无效或已过期')
         );
         
-        // 确保日志中记录失败原因
         if (isCredentialError) {
           console.warn(`任务 ${taskId} 因GitHub凭据问题失败，需要用户在同步页面重新授权`);
-        } else {
-          console.error(`任务 ${taskId} 执行失败: ${executionResult.error}`);
         }
       }
       

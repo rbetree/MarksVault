@@ -106,14 +106,7 @@ const TaskListItem: React.FC<TaskListItemProps> = ({
   
   // 获取任务下次执行时间
   const getNextExecutionTime = () => {
-    if (task.status !== TaskStatus.ENABLED) {
-      return null;
-    }
-    
-    if (task.trigger.type === TriggerType.TIME && 'nextTrigger' in task.trigger && task.trigger.nextTrigger) {
-      return task.trigger.nextTrigger;
-    }
-    
+    // 事件触发器没有下次执行时间概念
     return null;
   };
   

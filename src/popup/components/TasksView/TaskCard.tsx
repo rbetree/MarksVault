@@ -24,7 +24,7 @@ import Tooltip from '@mui/material/Tooltip';
 import Chip from '@mui/material/Chip';
 import CircularProgress from '@mui/material/CircularProgress';
 import Alert from '@mui/material/Alert';
-import { Task, TaskStatus, TimeScheduleType, TriggerType } from '../../../types/task';
+import { Task, TaskStatus, TriggerType } from '../../../types/task';
 import TaskStatusChip from './TaskStatusChip';
 import TaskTriggerInfo from './TaskTriggerInfo';
 import TaskActionInfo from './TaskActionInfo';
@@ -154,14 +154,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
   
   // 获取任务下次执行时间
   const getNextExecutionTime = () => {
-    if (task.status !== TaskStatus.ENABLED) {
-      return null;
-    }
-    
-    if (task.trigger.type === TriggerType.TIME && 'nextTrigger' in task.trigger && task.trigger.nextTrigger) {
-      return task.trigger.nextTrigger;
-    }
-    
+    // 事件触发器没有下次执行时间概念
     return null;
   };
   
@@ -316,16 +309,6 @@ const TaskCard: React.FC<TaskCardProps> = ({
             {expanded ? '收起' : '详情'}
           </Button>
         </Box>
-        
-        {/* 下次执行时间 */}
-        {nextExecutionTime && (
-          <Box sx={compactDateDisplayStyles}>
-            <AccessTimeIcon fontSize="inherit" sx={{ mr: 0.5, fontSize: '14px' }} />
-            <Tooltip title={`下次执行: ${formatDate(nextExecutionTime)}`}>
-              <span>下次执行: {formatRelativeTime(nextExecutionTime)}</span>
-            </Tooltip>
-          </Box>
-        )}
         
         {/* 最后执行时间 */}
         {task.history.lastExecution && (

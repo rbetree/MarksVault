@@ -14,7 +14,6 @@ export enum TaskStatus {
 
 // 触发器类型枚举
 export enum TriggerType {
-  TIME = 'time',       // 基于时间的触发器（使用Alarms API）
   EVENT = 'event'      // 基于事件的触发器
 }
 
@@ -24,15 +23,6 @@ export interface BaseTrigger {
   enabled: boolean;    // 触发器是否启用
 }
 
-// 时间触发器类型枚举
-export enum TimeScheduleType {
-  ONCE = 'once',           // 一次性
-  INTERVAL = 'interval',   // 固定时间间隔
-  DAILY = 'daily',         // 每天特定时间
-  WEEKLY = 'weekly',       // 每周特定时间
-  MONTHLY = 'monthly'      // 每月特定时间
-}
-
 // 事件类型枚举
 export enum EventType {
   BROWSER_STARTUP = 'browser_startup',  // 浏览器启动
@@ -40,27 +30,6 @@ export enum EventType {
   BOOKMARK_REMOVED = 'bookmark_removed', // 书签删除
   BOOKMARK_CHANGED = 'bookmark_changed', // 书签修改
   BOOKMARK_MOVED = 'bookmark_moved'      // 书签移动
-}
-
-// 时间触发器接口
-export interface TimeTrigger extends BaseTrigger {
-  type: TriggerType.TIME;
-  schedule: {
-    type: TimeScheduleType;
-    // 对于ONCE类型
-    when?: number;              // 触发时间戳（毫秒）
-    // 对于INTERVAL类型
-    intervalMinutes?: number;   // 间隔分钟数
-    // 对于DAILY/WEEKLY/MONTHLY类型
-    hour?: number;              // 小时 (0-23)
-    minute?: number;            // 分钟 (0-59)
-    // 对于WEEKLY类型
-    dayOfWeek?: number;         // 星期几 (0-6，0为周日)
-    // 对于MONTHLY类型
-    dayOfMonth?: number;        // 月中日期 (1-31)
-  };
-  lastTriggered?: number;       // 上次触发时间戳
-  nextTrigger?: number;         // 下次预计触发时间戳
 }
 
 // 事件触发器接口
@@ -74,7 +43,7 @@ export interface EventTrigger extends BaseTrigger {
 }
 
 // 触发器联合类型
-export type Trigger = TimeTrigger | EventTrigger;
+export type Trigger = EventTrigger;
 
 // 任务操作类型枚举
 export enum ActionType {
@@ -164,15 +133,7 @@ export const createDefaultTask = (): Task => {
     status: TaskStatus.ENABLED,
     createdAt: now,
     updatedAt: now,
-    trigger: {
-      type: TriggerType.TIME,
-      enabled: true,
-      schedule: {
-        type: TimeScheduleType.DAILY,
-        hour: 9,
-        minute: 0
-      }
-    } as TimeTrigger,
+    trigger: createEventTrigger(EventType.BROWSER_STARTUP),
     action: {
       type: ActionType.BACKUP,
       description: '备份书签到GitHub',
@@ -186,43 +147,6 @@ export const createDefaultTask = (): Task => {
       executions: []
     }
   };
-};
-
-// 创建时间触发器工厂函数
-export const createTimeTrigger = (scheduleType: TimeScheduleType): TimeTrigger => {
-  const trigger: TimeTrigger = {
-    type: TriggerType.TIME,
-    enabled: true,
-    schedule: {
-      type: scheduleType
-    }
-  };
-  
-  // 根据不同的调度类型设置默认值
-  switch (scheduleType) {
-    case TimeScheduleType.ONCE:
-      trigger.schedule.when = Date.now() + 3600000; // 默认1小时后
-      break;
-    case TimeScheduleType.INTERVAL:
-      trigger.schedule.intervalMinutes = 1440; // 默认24小时
-      break;
-    case TimeScheduleType.DAILY:
-      trigger.schedule.hour = 9;
-      trigger.schedule.minute = 0;
-      break;
-    case TimeScheduleType.WEEKLY:
-      trigger.schedule.dayOfWeek = 1; // 周一
-      trigger.schedule.hour = 9;
-      trigger.schedule.minute = 0;
-      break;
-    case TimeScheduleType.MONTHLY:
-      trigger.schedule.dayOfMonth = 1; // 每月1日
-      trigger.schedule.hour = 9;
-      trigger.schedule.minute = 0;
-      break;
-  }
-  
-  return trigger;
 };
 
 // 创建事件触发器工厂函数
