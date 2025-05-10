@@ -128,27 +128,43 @@ const TaskCard: React.FC<TaskCardProps> = ({
     });
   };
   
-  // 格式化相对时间
+  /**
+   * 格式化相对时间
+   * 对于过去的时间，显示"x分钟前"，"x小时前"，"x天前"等
+   * 对于将来的时间，显示"x分钟后"，"x小时后"，"x天后"等
+   */
   const formatRelativeTime = (timestamp: number) => {
     const now = Date.now();
     const diff = timestamp - now;
+    const absDiff = Math.abs(diff);
     
-    // 如果时间已过，返回"已过期"
-    if (diff < 0) return '已过期';
-    
-    const seconds = Math.floor(diff / 1000);
+    const seconds = Math.floor(absDiff / 1000);
     const minutes = Math.floor(seconds / 60);
     const hours = Math.floor(minutes / 60);
     const days = Math.floor(hours / 24);
     
-    if (days > 0) {
-      return `${days}天后`;
-    } else if (hours > 0) {
-      return `${hours}小时后`;
-    } else if (minutes > 0) {
-      return `${minutes}分钟后`;
+    if (diff >= 0) {
+      // 将来的时间
+      if (days > 0) {
+        return `${days}天后`;
+      } else if (hours > 0) {
+        return `${hours}小时后`;
+      } else if (minutes > 0) {
+        return `${minutes}分钟后`;
+      } else {
+        return '即将执行';
+      }
     } else {
-      return '即将执行';
+      // 过去的时间
+      if (days > 0) {
+        return `${days}天前`;
+      } else if (hours > 0) {
+        return `${hours}小时前`;
+      } else if (minutes > 0) {
+        return `${minutes}分钟前`;
+      } else {
+        return '刚刚执行';
+      }
     }
   };
   
@@ -198,24 +214,38 @@ const TaskCard: React.FC<TaskCardProps> = ({
   // 获取下次执行时间显示
   const nextExecutionTime = getNextExecutionTime();
 
+  // 创建自定义样式对象，去除下边距
+  const noBottomPaddingStyles = {
+    pb: 0,
+    '&.MuiCardContent-root:last-child': {
+      pb: 0
+    }
+  };
+
   // 创建一个更紧凑的日期显示样式
-  const compactDateDisplayStyles = combineStyles(dateDisplayStyles, { mt: 0.4 });
+  const compactDateDisplayStyles = combineStyles(dateDisplayStyles, { mt: 0.2, mb: 0 });
+
+  // 创建紧凑的卡片内容样式
+  const compactCardContentStyles = { pt: 0.5, px: 1.2, ...noBottomPaddingStyles };
+  
+  // 创建紧凑的展开内容样式
+  const compactExpandedContentStyles = { pt: 0.6, px: 0.6, ...noBottomPaddingStyles };
 
   return (
     <Card 
       variant="outlined"
       sx={combineStyles(taskCardStyles, getTaskCardBorderStyle(task.status))}
     >
-      <CardContent sx={{ pb: 0.25, pt: 0.75, px: 1.5 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 0.5 }}>
-          <Typography variant="h6" component="div" sx={{ fontWeight: 500, fontSize: '14px' }}>
+      <CardContent sx={compactCardContentStyles}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 0.3 }}>
+          <Typography variant="h6" component="div" sx={{ fontWeight: 500, fontSize: '13px' }}>
             {task.name}
           </Typography>
           <TaskStatusChip status={task.status} />
         </Box>
         
         {task.description && (
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5, fontSize: '11px' }}>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 0.3, fontSize: '10px' }}>
             {task.description}
           </Typography>
         )}
@@ -226,25 +256,25 @@ const TaskCard: React.FC<TaskCardProps> = ({
             severity="error" 
             icon={<ErrorOutlineIcon fontSize="inherit" />}
             sx={{ 
-              py: 0.25, 
-              px: 0.5, 
-              mb: 0.75, 
+              py: 0.2, 
+              px: 0.4, 
+              mb: 0.5, 
               '& .MuiAlert-message': { 
-                fontSize: '11px', 
+                fontSize: '10px', 
                 padding: 0 
               } 
             }}
           >
             {task.history.lastExecution?.error}
             {isCredentialError() && (
-              <Box component="span" sx={{ display: 'block', mt: 0.25, fontSize: '10px' }}>
+              <Box component="span" sx={{ display: 'block', mt: 0.2, fontSize: '9px' }}>
                 请到同步页面配置GitHub凭据
               </Box>
             )}
           </Alert>
         )}
         
-        <Box sx={{ mt: 0.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Box sx={{ mt: 0.3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Box sx={{ flex: 1 }}>
             <TaskTriggerInfo trigger={task.trigger} compact />
           </Box>
@@ -257,11 +287,11 @@ const TaskCard: React.FC<TaskCardProps> = ({
                   disabled={!canExecuteTask || executing}
                   color="primary"
                   size="small"
-                  sx={{ padding: 0.5 }}
+                  sx={{ padding: 0.4 }}
                 >
                   {executing ? 
-                    <CircularProgress size={16} /> : 
-                    <RefreshIcon fontSize="small" />
+                    <CircularProgress size={14} /> : 
+                    <RefreshIcon sx={{ fontSize: '14px' }} />
                   }
                 </IconButton>
               </span>
@@ -274,37 +304,39 @@ const TaskCard: React.FC<TaskCardProps> = ({
                   disabled={!canToggleStatus || loading}
                   color={task.status === TaskStatus.ENABLED ? 'primary' : 'default'}
                   size="small"
-                  sx={{ padding: 0.5 }}
+                  sx={{ padding: 0.4 }}
                 >
-                  {task.status === TaskStatus.ENABLED ? <PauseIcon fontSize="small" /> : <PlayArrowIcon fontSize="small" />}
+                  {task.status === TaskStatus.ENABLED ? 
+                  <PauseIcon sx={{ fontSize: '14px' }} /> : 
+                  <PlayArrowIcon sx={{ fontSize: '14px' }} />}
                 </IconButton>
               </span>
             </Tooltip>
             
             <Tooltip title="编辑任务">
-              <IconButton onClick={handleEdit} size="small" sx={{ padding: 0.5 }}>
-                <EditIcon fontSize="small" />
+              <IconButton onClick={handleEdit} size="small" sx={{ padding: 0.4 }}>
+                <EditIcon sx={{ fontSize: '14px' }} />
               </IconButton>
             </Tooltip>
             
             <Tooltip title="删除任务">
-              <IconButton onClick={handleDelete} size="small" sx={{ padding: 0.5 }}>
-                <DeleteIcon fontSize="small" />
+              <IconButton onClick={handleDelete} size="small" sx={{ padding: 0.4 }}>
+                <DeleteIcon sx={{ fontSize: '14px' }} />
               </IconButton>
             </Tooltip>
           </Box>
         </Box>
         
-        <Box sx={{ mt: 0.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Box sx={{ mt: 0.3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Box sx={{ flex: 1 }}>
             <TaskActionInfo action={task.action} compact />
           </Box>
           <Button
             size="small"
-            endIcon={expanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+            endIcon={expanded ? <ExpandLessIcon sx={{ fontSize: '12px' }} /> : <ExpandMoreIcon sx={{ fontSize: '12px' }} />}
             onClick={handleExpandClick}
             color="primary"
-            sx={{ py: 0.25, px: 0.75, minWidth: 'auto', fontSize: '11px' }}
+            sx={{ py: 0.1, px: 0.5, minWidth: 'auto', fontSize: '10px' }}
           >
             {expanded ? '收起' : '详情'}
           </Button>
@@ -313,9 +345,9 @@ const TaskCard: React.FC<TaskCardProps> = ({
         {/* 最后执行时间 */}
         {task.history.lastExecution && (
           <Box sx={compactDateDisplayStyles}>
-            <HistoryIcon fontSize="inherit" sx={{ mr: 0.5, fontSize: '14px' }} />
+            <HistoryIcon fontSize="inherit" sx={{ mr: 0.3, fontSize: '12px' }} />
             <Tooltip title={getLastExecutionText()}>
-              <span>
+              <span style={{ fontSize: '10px' }}>
                 上次执行: {formatRelativeTime(task.history.lastExecution.timestamp)}
                 {!task.history.lastExecution.success && (
                   <Chip 
@@ -323,7 +355,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
                     color="error" 
                     size="small" 
                     variant="outlined" 
-                    sx={{ ml: 1, height: 16, fontSize: '0.6rem' }}
+                    sx={{ ml: 0.8, height: 14, fontSize: '0.55rem' }}
                   />
                 )}
               </span>
@@ -333,50 +365,61 @@ const TaskCard: React.FC<TaskCardProps> = ({
       </CardContent>
       
       <Collapse in={expanded} timeout="auto" unmountOnExit>
-        <Divider />
-        <CardContent sx={{ p: 0.75 }}>
-          <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center', fontSize: '12px' }}>
-            <EventIcon fontSize="small" sx={{ mr: 0.5, fontSize: '14px' }} />
-            触发条件
-          </Typography>
-          <Box sx={{ mb: 1, pl: 1.5 }}>
-            <TaskTriggerInfo trigger={task.trigger} />
+        <Divider sx={{ mb: 0 }} />
+        <CardContent sx={compactExpandedContentStyles}>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap' }}>
+            <Box sx={{ width: '50%', pr: 1, mb: 0.8 }}>
+              <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center', fontSize: '11px', mb: 0.3 }}>
+                <EventIcon sx={{ mr: 0.3, fontSize: '13px' }} />
+                触发条件
+              </Typography>
+              <Box sx={{ pl: 1.2 }}>
+                <TaskTriggerInfo trigger={task.trigger} />
+              </Box>
+            </Box>
+            
+            <Box sx={{ width: '50%', mb: 0.8 }}>
+              <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center', fontSize: '11px', mb: 0.3 }}>
+                <PlayArrowIcon sx={{ mr: 0.3, fontSize: '13px' }} />
+                操作
+              </Typography>
+              <Box sx={{ pl: 1.2 }}>
+                <TaskActionInfo action={task.action} />
+              </Box>
+            </Box>
           </Box>
           
-          <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center', fontSize: '12px' }}>
-            <PlayArrowIcon fontSize="small" sx={{ mr: 0.5, fontSize: '14px' }} />
-            操作
-          </Typography>
-          <Box sx={{ mb: 1, pl: 1.5 }}>
-            <TaskActionInfo action={task.action} />
-          </Box>
-          
-          <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center', fontSize: '12px' }}>
-            <HistoryIcon fontSize="small" sx={{ mr: 0.5, fontSize: '14px' }} />
+          <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center', fontSize: '11px', mb: 0.3, mt: 0.2 }}>
+            <HistoryIcon sx={{ mr: 0.3, fontSize: '13px' }} />
             执行历史
           </Typography>
-          <Box sx={{ pl: 1.5 }}>
-            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '11px' }}>
-              上次执行: {getLastExecutionText()}
-            </Typography>
+          
+          <Box sx={{ pl: 1.2, fontSize: '10px' }}>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap' }}>
+              <Typography variant="body2" color="text.secondary" sx={{ fontSize: '10px', mr: 1.5 }}>
+                上次执行: {getLastExecutionText()}
+              </Typography>
+              
+              {nextExecutionTime && (
+                <Typography variant="body2" color="text.secondary" sx={{ fontSize: '10px' }}>
+                  下次执行: {formatDate(nextExecutionTime)}
+                </Typography>
+              )}
+            </Box>
+            
             {task.history.lastExecution && task.history.lastExecution.details && (
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25, fontSize: '11px' }}>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.2, fontSize: '10px' }}>
                 详情: {task.history.lastExecution.details}
               </Typography>
             )}
-            {nextExecutionTime && (
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, fontSize: '11px' }}>
-                下次执行: {formatDate(nextExecutionTime)}
-              </Typography>
-            )}
           </Box>
           
-          <Box sx={{ mt: 1, pt: 0.5, borderTop: '1px solid', borderColor: 'divider' }}>
-            <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', fontSize: '11px' }}>
-              <InfoOutlinedIcon fontSize="small" sx={{ mr: 0.5, fontSize: '14px' }} />
+          <Box sx={{ mt: 0.5, pt: 0.3, borderTop: '1px solid', borderColor: 'divider', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', fontSize: '10px' }}>
+              <InfoOutlinedIcon sx={{ mr: 0.3, fontSize: '12px' }} />
               创建时间: {formatDate(task.createdAt)}
             </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25, opacity: 0.7, fontSize: '10px' }}>
+            <Typography variant="body2" color="text.secondary" sx={{ opacity: 0.7, fontSize: '9px' }}>
               ID: {task.id}
             </Typography>
           </Box>
