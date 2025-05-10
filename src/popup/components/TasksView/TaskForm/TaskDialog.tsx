@@ -47,6 +47,9 @@ interface TaskDialogProps {
   onClose: () => void;
   task?: Task; // 如果提供，则为编辑模式；否则为创建模式
   onTaskSaved: (taskId: string, isNew: boolean) => void;
+  disableRestoreFocus?: boolean;
+  disableEnforceFocus?: boolean;
+  disableAutoFocus?: boolean;
 }
 
 /**
@@ -57,7 +60,10 @@ const TaskDialog: React.FC<TaskDialogProps> = ({
   open,
   onClose,
   task,
-  onTaskSaved
+  onTaskSaved,
+  disableRestoreFocus,
+  disableEnforceFocus,
+  disableAutoFocus
 }) => {
   // 当前激活的标签页索引
   const [tabIndex, setTabIndex] = useState(0);
@@ -197,6 +203,9 @@ const TaskDialog: React.FC<TaskDialogProps> = ({
       onClose={() => !isSaving && onClose()}
       maxWidth="md"
       fullWidth
+      disableRestoreFocus={disableRestoreFocus}
+      disableEnforceFocus={disableEnforceFocus}
+      disableAutoFocus={disableAutoFocus}
     >
       <DialogTitle sx={{ textAlign: 'center', pb: 0.5, pt: 1.5 }}>
         <Typography variant="h5" component="div" sx={{ fontWeight: 'bold' }}>

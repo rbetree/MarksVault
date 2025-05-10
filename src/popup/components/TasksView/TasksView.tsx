@@ -285,6 +285,7 @@ const TasksView: React.FC<TasksViewProps> = ({ toastRef }) => {
         aria-label="添加任务" 
         sx={fabStyles}
         onClick={handleCreateTask}
+        disabled={deleteTaskId !== null || showTaskDialog}
       >
         <AddIcon />
       </Fab>
@@ -293,6 +294,9 @@ const TasksView: React.FC<TasksViewProps> = ({ toastRef }) => {
       <Dialog
         open={deleteTaskId !== null}
         onClose={handleDeleteCancel}
+        disableRestoreFocus={true}
+        disableEnforceFocus={true}
+        disableAutoFocus={false}
       >
         <DialogTitle>确认删除</DialogTitle>
         <DialogContent>
@@ -316,6 +320,7 @@ const TasksView: React.FC<TasksViewProps> = ({ toastRef }) => {
         onClose={handleCloseTaskDialog}
         task={currentTask}
         onTaskSaved={handleTaskSaved}
+        disableRestoreFocus={true}
       />
     </Box>
   );

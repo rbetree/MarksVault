@@ -13,6 +13,7 @@ import { AuthStatus, GitHubUser } from '../../types/github';
 import { GitHubCredentials } from '../../utils/storage-service';
 import storageService from '../../utils/storage-service';
 import githubService from '../../services/github-service';
+import { StyledEngineProvider } from '@mui/material/styles';
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<NavOption>('bookmarks');
@@ -118,43 +119,45 @@ const App: React.FC = () => {
   };
 
   return (
-    <ErrorBoundary>
-      <Box
-        sx={{
-          display: 'flex',
-          flexDirection: 'column',
-          height: '100vh',
-          width: '100%',
-          overflow: 'hidden',
-        }}
-      >
-        <Header 
-          user={user}
-          onLogout={handleLogout}
-        />
-        
-        <Container
-          disableGutters
-          maxWidth={false}
+    <StyledEngineProvider injectFirst>
+      <ErrorBoundary>
+        <Box
           sx={{
-            flexGrow: 1,
-            overflow: 'auto',
             display: 'flex',
             flexDirection: 'column',
-            pb: 7, // 留出底部导航的高度
+            height: '100vh',
+            width: '100%',
+            overflow: 'hidden',
           }}
         >
-          {renderContent()}
-        </Container>
-        
-        <AppBottomNavigation
-          value={currentView}
-          onChange={handleNavChange}
-        />
-        
-        <Toast ref={toastRef} />
-      </Box>
-    </ErrorBoundary>
+          <Header 
+            user={user}
+            onLogout={handleLogout}
+          />
+          
+          <Container
+            disableGutters
+            maxWidth={false}
+            sx={{
+              flexGrow: 1,
+              overflow: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
+              pb: 7, // 留出底部导航的高度
+            }}
+          >
+            {renderContent()}
+          </Container>
+          
+          <AppBottomNavigation
+            value={currentView}
+            onChange={handleNavChange}
+          />
+          
+          <Toast ref={toastRef} />
+        </Box>
+      </ErrorBoundary>
+    </StyledEngineProvider>
   );
 };
 
