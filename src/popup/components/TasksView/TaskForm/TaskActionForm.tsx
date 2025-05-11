@@ -20,6 +20,9 @@ import IconButton from '@mui/material/IconButton';
 import BackupIcon from '@mui/icons-material/Backup';
 import CleaningServicesIcon from '@mui/icons-material/CleaningServices';
 import CodeIcon from '@mui/icons-material/Code';
+import Autocomplete from '@mui/material/Autocomplete';
+import CircularProgress from '@mui/material/CircularProgress';
+import FolderIcon from '@mui/icons-material/Folder';
 import { 
   Action, 
   ActionType, 
@@ -32,6 +35,15 @@ import {
 import { Radio, RadioGroup } from '@mui/material';
 import { Typography } from '@mui/material';
 import { Divider } from '@mui/material';
+import bookmarkService from '../../../../utils/bookmark-service';
+
+// 文件夹选项接口
+interface FolderOption {
+  id: string;         // 文件夹ID
+  title: string;      // 文件夹名称
+  fullPath: string;   // 完整路径，如 "书签栏/工作/项目"
+  depth: number;      // 嵌套深度，用于UI缩进显示
+}
 
 interface TaskActionFormProps {
   action: Action;
@@ -76,6 +88,51 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({ action, onChange }) => 
   
   // 表单验证状态
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
+  
+  // 文件夹选择状态
+  const [folders, setFolders] = useState<FolderOption[]>([]);
+  const [foldersLoading, setFoldersLoading] = useState<boolean>(false);
+  const [selectedFolders, setSelectedFolders] = useState<{[key: number]: FolderOption | null}>({});
+  
+  // 加载所有书签文件夹
+  const loadBookmarkFolders = async () => {
+    setFoldersLoading(true);
+    try {
+      const result = await bookmarkService.getAllBookmarkFolders();
+      if (result.success && result.data) {
+        setFolders(result.data as FolderOption[]);
+      } else {
+        console.error('加载书签文件夹失败:', result.error);
+      }
+    } catch (error) {
+      console.error('加载书签文件夹异常:', error);
+    } finally {
+      setFoldersLoading(false);
+    }
+  };
+  
+  // 组件挂载时加载文件夹
+  useEffect(() => {
+    loadBookmarkFolders();
+  }, []);
+  
+  // 初始化已选择的文件夹
+  useEffect(() => {
+    if (action.type === ActionType.ORGANIZE && folders.length > 0) {
+      const newSelectedFolders: {[key: number]: FolderOption | null} = {};
+      
+      (action as OrganizeAction).operations.forEach((op, index) => {
+        if (op.operation === 'move' && op.target) {
+          const folder = folders.find(f => f.id === op.target);
+          if (folder) {
+            newSelectedFolders[index] = folder;
+          }
+        }
+      });
+      
+      setSelectedFolders(newSelectedFolders);
+    }
+  }, [action, folders]);
   
   // 初始化表单数据
   useEffect(() => {
@@ -206,13 +263,18 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({ action, onChange }) => 
     const newOperations = [...operations, newOperation];
     setOperations(newOperations);
     
+    // 添加新操作时标记目标文件夹为必填
+    const newErrors = { ...errors };
+    newErrors[`operation_${newOperations.length - 1}_target`] = '移动操作需要指定目标文件夹';
+    setErrors(newErrors);
+    
     if (action.type === ActionType.ORGANIZE) {
       const updatedAction: OrganizeAction = {
         ...(action as OrganizeAction),
         operations: newOperations
       };
       
-      onChange(updatedAction, newOperations.length > 0);
+      onChange(updatedAction, false); // 新添加的移动操作无效，直到指定目标文件夹
     }
   };
   
@@ -235,9 +297,17 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({ action, onChange }) => 
   // 更新整理操作
   const handleUpdateOperation = (index: number, field: string, value: any) => {
     const newOperations = [...operations];
+    const newErrors = { ...errors };
+    const newSelectedFolders = { ...selectedFolders };
     
     if (field === 'operation') {
       newOperations[index].operation = value;
+      // 如果操作类型变为移动，但没有目标文件夹，标记错误
+      if (value === 'move' && !newOperations[index].target) {
+        newErrors[`operation_${index}_target`] = '移动操作需要指定目标文件夹';
+      } else {
+        delete newErrors[`operation_${index}_target`];
+      }
     } else if (field.startsWith('filters.')) {
       const filterField = field.split('.')[1];
       if (!newOperations[index].filters) {
@@ -245,12 +315,42 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({ action, onChange }) => 
       }
       (newOperations[index].filters! as any)[filterField] = value;
     } else if (field === 'target') {
-      newOperations[index].target = value;
+      // 处理目标文件夹选择
+      if (value) {
+        if (typeof value === 'string') {
+          newOperations[index].target = value;
+        } else if (value && 'id' in value) {
+          // 选择了文件夹对象，更新选中状态和目标ID
+          newOperations[index].target = value.id;
+          newSelectedFolders[index] = value as FolderOption;
+        }
+      } else {
+        newOperations[index].target = undefined;
+        newSelectedFolders[index] = null;
+      }
+      
+      // 清除或设置目标文件夹错误
+      if (newOperations[index].target) {
+        delete newErrors[`operation_${index}_target`];
+      } else if (newOperations[index].operation === 'move') {
+        newErrors[`operation_${index}_target`] = '移动操作需要指定目标文件夹';
+      }
     } else if (field === 'newName') {
       newOperations[index].newName = value;
+      // 验证重命名和标签操作的新名称
+      if ((newOperations[index].operation === 'rename' || newOperations[index].operation === 'tag') && !value) {
+        newErrors[`operation_${index}_newName`] = `${newOperations[index].operation === 'rename' ? '重命名' : '标签'}操作需要指定${newOperations[index].operation === 'rename' ? '新名称' : '标签名称'}`;
+      } else {
+        delete newErrors[`operation_${index}_newName`];
+      }
     }
     
     setOperations(newOperations);
+    setErrors(newErrors);
+    setSelectedFolders(newSelectedFolders);
+    
+    // 验证所有操作是否有效
+    const isValid = validateOperations(newOperations);
     
     if (action.type === ActionType.ORGANIZE) {
       const updatedAction: OrganizeAction = {
@@ -258,8 +358,39 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({ action, onChange }) => 
         operations: newOperations
       };
       
-      onChange(updatedAction, newOperations.length > 0);
+      onChange(updatedAction, isValid && newOperations.length > 0);
     }
+  };
+  
+  // 验证所有整理操作
+  const validateOperations = (ops: OrganizeAction['operations']): boolean => {
+    const newErrors = { ...errors };
+    let isValid = true;
+    
+    // 清除旧的操作相关错误
+    Object.keys(newErrors).forEach(key => {
+      if (key.startsWith('operation_')) {
+        delete newErrors[key];
+      }
+    });
+    
+    // 验证每个操作
+    ops.forEach((op, index) => {
+      // 验证移动操作必须有目标文件夹
+      if (op.operation === 'move' && !op.target) {
+        newErrors[`operation_${index}_target`] = '移动操作需要指定目标文件夹';
+        isValid = false;
+      }
+      
+      // 验证重命名和标签操作必须有新名称
+      if ((op.operation === 'rename' || op.operation === 'tag') && !op.newName) {
+        newErrors[`operation_${index}_newName`] = `${op.operation === 'rename' ? '重命名' : '标签'}操作需要指定${op.operation === 'rename' ? '新名称' : '标签名称'}`;
+        isValid = false;
+      }
+    });
+    
+    setErrors(newErrors);
+    return isValid;
   };
   
   // 处理自定义描述更改
@@ -453,15 +584,89 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({ action, onChange }) => 
                   
                   {op.operation === 'move' && (
                     <Grid item xs={12}>
-                      <TextField
+                      <Autocomplete
+                        id={`folder-select-${index}`}
+                        options={folders}
                         fullWidth
                         size="small"
-                        margin="dense"
-                        label="目标文件夹"
-                        placeholder="例如: 工作/重要"
-                        value={op.target || ''}
-                        onChange={(e) => handleUpdateOperation(index, 'target', e.target.value)}
-                        helperText="指定移动到的目标文件夹路径"
+                        loading={foldersLoading}
+                        getOptionLabel={(option) => option.fullPath}
+                        isOptionEqualToValue={(option, value) => option.id === value.id}
+                        value={selectedFolders[index] || null}
+                        onChange={(_, newValue) => handleUpdateOperation(index, 'target', newValue)}
+                        freeSolo={false}
+                        autoHighlight
+                        openOnFocus={false}
+                        filterOptions={(options, state) => {
+                          const inputValue = state.inputValue.toLowerCase().trim();
+                          if (!inputValue) return []; // 无输入时不显示选项
+                          
+                          return options.filter(option => 
+                            option.title.toLowerCase().includes(inputValue) || 
+                            option.fullPath.toLowerCase().includes(inputValue)
+                          );
+                        }}
+                        renderInput={(params) => (
+                          <TextField
+                            {...params}
+                            label="目标文件夹"
+                            placeholder="输入文件夹名称筛选"
+                            error={!!errors[`operation_${index}_target`]}
+                            helperText={errors[`operation_${index}_target`] || "输入文件夹名称进行筛选后选择"}
+                            required
+                            InputProps={{
+                              ...params.InputProps,
+                              endAdornment: (
+                                <React.Fragment>
+                                  {foldersLoading ? <CircularProgress color="inherit" size={20} /> : null}
+                                  {params.InputProps.endAdornment}
+                                </React.Fragment>
+                              ),
+                              startAdornment: (
+                                <React.Fragment>
+                                  <FolderIcon color="action" sx={{ ml: 0.5, mr: 1 }} />
+                                </React.Fragment>
+                              )
+                            }}
+                          />
+                        )}
+                        renderOption={(props, option) => (
+                          <li {...props} style={{padding: '1px 8px', minHeight: '22px'}}>
+                            <Box component="span" sx={{ 
+                              pl: option.depth * 1, 
+                              display: 'flex',
+                              alignItems: 'center',
+                              fontSize: '0.8rem',
+                              py: 0
+                            }}>
+                              <FolderIcon fontSize="small" sx={{ mr: 0.5, color: 'action.active', fontSize: '0.9rem' }} />
+                              <Box component="span" sx={{
+                                maxWidth: '200px',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap'
+                              }}>
+                                {option.title}
+                              </Box>
+                              <Box component="span" sx={{
+                                ml: 0.5, 
+                                color: 'text.secondary',
+                                fontSize: '0.7rem',
+                                fontStyle: 'italic',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap'
+                              }}>
+                                ({option.fullPath})
+                              </Box>
+                            </Box>
+                          </li>
+                        )}
+                        ListboxProps={{
+                          style: { 
+                            maxHeight: '200px',
+                          }
+                        }}
                       />
                     </Grid>
                   )}
@@ -476,7 +681,9 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({ action, onChange }) => 
                         placeholder="例如: [前缀]书签名"
                         value={op.newName || ''}
                         onChange={(e) => handleUpdateOperation(index, 'newName', e.target.value)}
-                        helperText="可以使用{name}引用原书签名"
+                        helperText={errors[`operation_${index}_newName`] || "可以使用{name}引用原书签名"}
+                        error={!!errors[`operation_${index}_newName`]}
+                        required
                       />
                     </Grid>
                   )}
@@ -491,7 +698,9 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({ action, onChange }) => 
                         placeholder="例如: 工作"
                         value={op.newName || ''}
                         onChange={(e) => handleUpdateOperation(index, 'newName', e.target.value)}
-                        helperText="要添加的标签名称"
+                        helperText={errors[`operation_${index}_newName`] || "要添加的标签名称"}
+                        error={!!errors[`operation_${index}_newName`]}
+                        required
                       />
                     </Grid>
                   )}

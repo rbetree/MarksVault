@@ -157,9 +157,31 @@ class OrganizeService {
       
       // 按模式匹配URL或标题
       if (filters.pattern) {
-        const pattern = new RegExp(filters.pattern, 'i');
-        if (!pattern.test(bookmark.title) && !pattern.test(bookmark.url || '')) {
-          return false;
+        try {
+          // 将通配符模式转换为正则表达式
+          // 1. 转义特殊正则字符
+          let regexPattern = filters.pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          
+          // 2. 将 * 通配符替换为正则表达式的 .*
+          regexPattern = regexPattern.replace(/\\\*/g, '.*');
+          
+          // 3. 创建正则表达式对象
+          const pattern = new RegExp(regexPattern, 'i');
+          
+          // 4. 测试书签标题和URL
+          if (!pattern.test(bookmark.title) && !pattern.test(bookmark.url || '')) {
+            return false;
+          }
+        } catch (error) {
+          console.error('过滤模式正则表达式错误:', error);
+          // 如果正则表达式无效，尝试使用简单的字符串包含匹配
+          const lowerPattern = filters.pattern.toLowerCase();
+          const lowerTitle = bookmark.title.toLowerCase();
+          const lowerUrl = (bookmark.url || '').toLowerCase();
+          
+          if (!lowerTitle.includes(lowerPattern) && !lowerUrl.includes(lowerPattern)) {
+            return false;
+          }
         }
       }
       
@@ -191,8 +213,11 @@ class OrganizeService {
    * @returns 操作结果
    */
   private async moveBookmarks(bookmarks: BookmarkItem[], operation: OrganizeOperation): Promise<OrganizeResult> {
+    console.log('执行移动书签操作:', operation);
+    
     // 验证目标文件夹
     if (!operation.target) {
+      console.error('移动操作缺少目标文件夹ID');
       return {
         success: false,
         processedCount: 0,
@@ -201,10 +226,34 @@ class OrganizeService {
       };
     }
     
+    // 验证目标文件夹是否存在
+    try {
+      const folderResult = await bookmarkService.getBookmarksInFolder(operation.target);
+      if (!folderResult.success) {
+        console.error('目标文件夹不存在或无效:', operation.target, folderResult.error);
+        return {
+          success: false,
+          processedCount: 0,
+          details: `目标文件夹 "${operation.target}" 不存在或无效`,
+          error: `目标文件夹不存在或无效: ${folderResult.error}`
+        };
+      }
+    } catch (error) {
+      console.error('验证目标文件夹时出错:', operation.target, error);
+      return {
+        success: false,
+        processedCount: 0,
+        details: '验证目标文件夹时出错',
+        error: `验证目标文件夹时出错: ${error instanceof Error ? error.message : String(error)}`
+      };
+    }
+    
     // 过滤出符合条件的书签
     const filteredBookmarks = this.filterBookmarks(bookmarks, operation.filters);
+    console.log('过滤后的书签数量:', filteredBookmarks.length);
     
     if (filteredBookmarks.length === 0) {
+      console.log('没有符合条件的书签需要移动');
       return {
         success: true,
         processedCount: 0,
@@ -215,24 +264,39 @@ class OrganizeService {
     
     let successCount = 0;
     let errorCount = 0;
+    let errorDetails: string[] = [];
     
     // 执行移动操作
     for (const bookmark of filteredBookmarks) {
       try {
+        console.log(`尝试移动书签 "${bookmark.title}" (ID: ${bookmark.id}) 到文件夹 ${operation.target}`);
         // 调用Chrome API移动书签
-        await bookmarkService.moveBookmark(bookmark.id, { parentId: operation.target });
-        successCount++;
+        const result = await bookmarkService.moveBookmark(bookmark.id, { parentId: operation.target });
+        if (result.success) {
+          successCount++;
+          console.log(`成功移动书签 "${bookmark.title}"`);
+        } else {
+          errorCount++;
+          const errorMsg = `移动书签 "${bookmark.title}" 失败: ${result.error}`;
+          console.error(errorMsg);
+          errorDetails.push(errorMsg);
+        }
       } catch (error) {
-        console.error(`移动书签 ${bookmark.id} 失败:`, error);
         errorCount++;
+        const errorMsg = `移动书签 ${bookmark.id} 失败: ${error instanceof Error ? error.message : String(error)}`;
+        console.error(errorMsg);
+        errorDetails.push(errorMsg);
       }
     }
     
     // 返回结果
+    const details = `成功移动 ${successCount} 个书签${errorCount > 0 ? `，失败 ${errorCount} 个` : ''}`;
+    console.log('移动操作完成:', details);
+    
     return {
       success: errorCount === 0,
       processedCount: successCount,
-      details: `成功移动 ${successCount} 个书签${errorCount > 0 ? `，失败 ${errorCount} 个` : ''}`,
+      details: details + (errorDetails.length > 0 ? `。错误详情: ${errorDetails.join('; ')}` : ''),
       error: errorCount > 0 ? `${errorCount} 个书签移动失败` : undefined
     };
   }

@@ -364,6 +364,65 @@ class BookmarkService {
       };
     }
   }
+
+  /**
+   * 获取所有书签文件夹
+   * @returns Promise<BookmarkResult> 包含所有文件夹的列表和路径信息
+   */
+  async getAllBookmarkFolders(): Promise<BookmarkResult> {
+    try {
+      // 获取完整书签树
+      const bookmarksResult = await this.getAllBookmarks();
+      if (!bookmarksResult.success) {
+        return {
+          success: false,
+          error: `获取书签文件夹失败: ${bookmarksResult.error}`
+        };
+      }
+
+      const bookmarks = bookmarksResult.data as BookmarkItem[];
+      
+      // 收集所有文件夹及其路径
+      const folders: Array<{
+        id: string;
+        title: string;
+        fullPath: string;
+        depth: number;
+      }> = [];
+
+      // 遍历书签树，构建文件夹路径
+      const traverseBookmarks = (items: BookmarkItem[], parentPath: string = '', depth: number = 0) => {
+        for (const item of items) {
+          if (item.isFolder) {
+            const currentPath = parentPath ? `${parentPath} / ${item.title}` : item.title;
+            folders.push({
+              id: item.id,
+              title: item.title,
+              fullPath: currentPath, 
+              depth: depth
+            });
+            
+            if (item.children && item.children.length > 0) {
+              traverseBookmarks(item.children, currentPath, depth + 1);
+            }
+          }
+        }
+      };
+
+      traverseBookmarks(bookmarks);
+      
+      return {
+        success: true,
+        data: folders
+      };
+    } catch (error) {
+      console.error('获取书签文件夹失败:', error);
+      return {
+        success: false,
+        error: '获取书签文件夹失败: ' + (error instanceof Error ? error.message : String(error))
+      };
+    }
+  }
 }
 
 // 导出书签服务单例
