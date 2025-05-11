@@ -365,12 +365,232 @@ class BackupService {
   }
   
   /**
-   * 获取备份状态
+   * 获取备份统计信息
+   * @param credentials GitHub凭据
+   * @param username GitHub用户名
+   * @param forceRefresh 是否强制刷新（忽略缓存）
+   * @returns 备份统计信息
+   */
+  async getBackupStats(
+    credentials: GitHubCredentials, 
+    username: string,
+    forceRefresh: boolean = false
+  ): Promise<{
+    totalBackups: number;
+    firstBackupTime?: number;
+    totalBookmarks?: number;
+    totalFolders?: number;
+    fileSize?: number;
+    isFromCache?: boolean;
+  }> {
+    try {
+      // 1. 尝试从缓存获取
+      if (!forceRefresh) {
+        const cacheResult = await storageService.getBackupStatsCache();
+        if (cacheResult.success && cacheResult.data) {
+          const cache = cacheResult.data;
+          // 检查缓存是否有效
+          if (storageService.isBackupStatsCacheValid(cache)) {
+            console.log('使用备份统计信息缓存');
+            return { ...cache.data, isFromCache: true };
+          }
+        }
+      }
+      
+      // 2. 缓存无效或强制刷新，从GitHub获取数据
+      console.log('从GitHub获取备份统计信息');
+      
+      // 获取所有备份文件
+      const files = await githubService.getRepositoryFiles(
+        credentials,
+        username,
+        DEFAULT_BACKUP_REPO
+      );
+      
+      // 过滤并计算备份文件数量
+      const backupFiles = files.filter(
+        file => file.name.startsWith('bookmark_backup_') && file.name.endsWith('.json')
+      );
+      
+      const totalBackups = backupFiles.length;
+      
+      if (totalBackups === 0) {
+        return { totalBackups: 0 };
+      }
+      
+      // 解析文件名中的时间戳
+      const parseTimestamp = (filename: string): number => {
+        const match = filename.match(/bookmark_backup_(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})\.json/);
+        if (match) {
+          const [_, year, month, day, hour, minute, second] = match;
+          return new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}`).getTime();
+        }
+        return 0;
+      };
+      
+      // 提取时间戳并排序
+      const timestamps = backupFiles
+        .map(file => parseTimestamp(file.name))
+        .filter(ts => ts > 0)
+        .sort((a, b) => a - b);
+      
+      // 最早备份时间
+      const firstBackupTime = timestamps.length > 0 ? timestamps[0] : undefined;
+      
+      // 如果有最近的备份文件，获取其内容以提取书签和文件夹数量
+      let totalBookmarks: number | undefined;
+      let totalFolders: number | undefined;
+      let fileSize: number | undefined;
+      
+      // 获取最新备份文件(按时间戳排序)
+      const latestFile = backupFiles
+        .sort((a, b) => parseTimestamp(b.name) - parseTimestamp(a.name))[0];
+      
+      if (latestFile) {
+        // 设置文件大小
+        fileSize = latestFile.size;
+        
+        // 获取文件内容以提取详细信息
+        try {
+          const fileData = await githubService.getFileContent(
+            credentials,
+            username,
+            DEFAULT_BACKUP_REPO,
+            latestFile.path
+          );
+          
+          const backupData = JSON.parse(fileData.content) as BookmarkBackup;
+          
+          // 提取元数据
+          if (backupData.metadata) {
+            totalBookmarks = backupData.metadata.totalBookmarks;
+            totalFolders = backupData.metadata.totalFolders;
+          }
+        } catch (error) {
+          console.error('获取最新备份内容失败:', error);
+          // 如果获取内容失败，只返回基本统计信息
+        }
+      }
+      
+      // 构建结果
+      const statsData = {
+        totalBackups,
+        firstBackupTime,
+        totalBookmarks,
+        totalFolders,
+        fileSize
+      };
+      
+      // 3. 将获取的数据保存到缓存
+      await storageService.saveBackupStatsCache(statsData);
+      
+      return statsData;
+    } catch (error) {
+      console.error('获取备份统计信息失败:', error);
+      // 发生错误时返回基本信息
+      return { totalBackups: 0 };
+    }
+  }
+  
+  /**
+   * 获取备份状态，支持异步更新
+   * @param forceRefresh 是否强制刷新缓存数据
+   * @param updateCallback 异步更新完成后的回调函数
    * @returns 备份状态信息
    */
-  async getBackupStatus(): Promise<BackupStatus> {
-    const result = await storageService.getBackupStatus();
-    return result.success ? result.data : {};
+  async getBackupStatus(
+    forceRefresh: boolean = false,
+    updateCallback?: (updatedStatus: BackupStatus) => void
+  ): Promise<BackupStatus> {
+    try {
+      // 1. 先获取本地存储的基本状态信息
+      const result = await storageService.getBackupStatus();
+      const status = result.success ? result.data : {};
+      
+      // 2. 尝试从缓存获取统计信息
+      try {
+        const cacheResult = await storageService.getBackupStatsCache();
+        if (!forceRefresh && cacheResult.success && cacheResult.data && 
+            storageService.isBackupStatsCacheValid(cacheResult.data)) {
+          // 使用缓存的统计信息
+          const cachedStatus = { ...status, stats: cacheResult.data.data };
+          
+          // 3. 异步刷新数据（不阻塞UI）
+          this.refreshBackupStatsAsync(cachedStatus, updateCallback);
+          
+          return cachedStatus;
+        }
+      } catch (error) {
+        console.error('获取缓存的备份统计信息失败:', error);
+      }
+      
+      // 4. 如果没有有效缓存，同步获取完整数据
+      return await this.getFullBackupStatus(status, updateCallback);
+    } catch (error) {
+      console.error('获取备份状态失败:', error);
+      return {};
+    }
+  }
+  
+  /**
+   * 获取完整的备份状态（包括从GitHub获取的统计信息）
+   * @param baseStatus 基本状态信息
+   * @param updateCallback 更新回调
+   * @returns 完整的备份状态
+   */
+  private async getFullBackupStatus(
+    baseStatus: BackupStatus,
+    updateCallback?: (updatedStatus: BackupStatus) => void
+  ): Promise<BackupStatus> {
+    try {
+      // 尝试获取GitHub凭据
+      const credentialsResult = await storageService.getGitHubCredentials();
+      if (!credentialsResult.success || !credentialsResult.data) {
+        return baseStatus; // 无法获取凭据，返回基本状态
+      }
+      
+      // 获取GitHub用户名
+      const userResult = await githubService.validateCredentials(credentialsResult.data);
+      
+      // 获取统计信息
+      const stats = await this.getBackupStats(credentialsResult.data, userResult.login, true);
+      
+      // 更新状态
+      const updatedStatus = { ...baseStatus, stats };
+      
+      // 如果提供了回调，执行回调
+      if (updateCallback) {
+        updateCallback(updatedStatus);
+      }
+      
+      return updatedStatus;
+    } catch (error) {
+      console.error('获取完整备份状态失败:', error);
+      return baseStatus; // 出错时返回基本状态
+    }
+  }
+  
+  /**
+   * 异步刷新备份统计信息
+   * @param currentStatus 当前状态
+   * @param updateCallback 更新回调
+   */
+  private async refreshBackupStatsAsync(
+    currentStatus: BackupStatus,
+    updateCallback?: (updatedStatus: BackupStatus) => void
+  ): Promise<void> {
+    setTimeout(async () => {
+      try {
+        const updatedStatus = await this.getFullBackupStatus(currentStatus, updateCallback);
+        
+        // 如果提供了回调但在getFullBackupStatus中未调用（例如因为出错），这里调用
+        if (updateCallback && JSON.stringify(updatedStatus) !== JSON.stringify(currentStatus)) {
+          updateCallback(updatedStatus);
+        }
+      } catch (error) {
+        console.error('异步刷新备份统计信息失败:', error);
+      }
+    }, 100); // 短暂延迟，确保UI先渲染
   }
 }
 

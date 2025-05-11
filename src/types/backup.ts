@@ -53,4 +53,19 @@ export interface BackupStatus {
   lastOperationStatus?: 'success' | 'failed';
   /** 错误信息 */
   errorMessage?: string;
+  /** 备份统计信息 */
+  stats?: {
+    /** 总备份数量 */
+    totalBackups?: number;
+    /** 最早备份时间 */
+    firstBackupTime?: number;
+    /** 最新备份中的书签数量 */
+    totalBookmarks?: number;
+    /** 最新备份中的文件夹数量 */
+    totalFolders?: number;
+    /** 最新备份文件大小(字节) */
+    fileSize?: number;
+    /** 是否来自缓存数据 */
+    isFromCache?: boolean;
+  };
 } 

@@ -11,6 +11,18 @@ export interface GitHubCredentials {
   token: string;
 }
 
+// 备份统计信息缓存类型
+export interface BackupStatsCache {
+  data: {
+    totalBackups: number;
+    firstBackupTime?: number;
+    totalBookmarks?: number;
+    totalFolders?: number;
+    fileSize?: number;
+  };
+  timestamp: number; // 缓存创建时间
+}
+
 // 书签自定义数据类型
 export interface BookmarkCustomData {
   lastUpdated: number | null;
@@ -29,6 +41,9 @@ export interface StorageResult {
 import { BackupStatus } from '../types/backup';
 
 class StorageService {
+  // 备份统计信息缓存的过期时间（毫秒）
+  private readonly BACKUP_STATS_CACHE_TTL = 10 * 60 * 1000; // 10分钟
+
   /**
    * 获取用户设置
    * @returns Promise<StorageResult>
@@ -294,6 +309,67 @@ class StorageService {
         error: '获取备份状态失败: ' + (error instanceof Error ? error.message : String(error))
       };
     }
+  }
+
+  /**
+   * 获取备份统计信息缓存
+   * @returns Promise<StorageResult> 缓存的备份统计信息
+   */
+  async getBackupStatsCache(): Promise<StorageResult> {
+    try {
+      const result = await chrome.storage.local.get('backup_stats_cache');
+      return {
+        success: true,
+        data: result.backup_stats_cache || null
+      };
+    } catch (error) {
+      console.error('获取备份统计信息缓存失败:', error);
+      return {
+        success: false,
+        error: '获取备份统计信息缓存失败: ' + (error instanceof Error ? error.message : String(error))
+      };
+    }
+  }
+
+  /**
+   * 保存备份统计信息到缓存
+   * @param statsData 备份统计信息
+   * @returns Promise<StorageResult>
+   */
+  async saveBackupStatsCache(statsData: any): Promise<StorageResult> {
+    try {
+      const cacheData: BackupStatsCache = {
+        data: statsData,
+        timestamp: Date.now()
+      };
+      
+      await chrome.storage.local.set({ 'backup_stats_cache': cacheData });
+      return {
+        success: true
+      };
+    } catch (error) {
+      console.error('保存备份统计信息缓存失败:', error);
+      return {
+        success: false,
+        error: '保存备份统计信息缓存失败: ' + (error instanceof Error ? error.message : String(error))
+      };
+    }
+  }
+
+  /**
+   * 检查备份统计信息缓存是否有效（未过期）
+   * @param cacheData 缓存数据
+   * @returns boolean 缓存是否有效
+   */
+  isBackupStatsCacheValid(cacheData: BackupStatsCache | null): boolean {
+    if (!cacheData || !cacheData.timestamp) {
+      return false;
+    }
+    
+    const now = Date.now();
+    const cacheAge = now - cacheData.timestamp;
+    
+    return cacheAge < this.BACKUP_STATS_CACHE_TTL;
   }
 
   /**
