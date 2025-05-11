@@ -7,7 +7,7 @@ import { BookmarkItem } from '../utils/bookmark-service';
 import bookmarkService from '../utils/bookmark-service';
 
 // 整理操作类型
-export type OrganizeOperationType = 'move' | 'delete' | 'rename' | 'validate';
+export type OrganizeOperationType = 'move' | 'delete' | 'rename' | 'validate' | 'tag' | 'organize';
 
 // 整理操作过滤条件
 export interface OrganizeFilter {
@@ -63,32 +63,18 @@ class OrganizeService {
   public async organizeBookmarks(operations: OrganizeOperation[]): Promise<OrganizeResult[]> {
     const results: OrganizeResult[] = [];
     
-    // 验证操作数组
-    if (!operations || !Array.isArray(operations) || operations.length === 0) {
-      return [{
-        success: false,
-        processedCount: 0,
-        details: '没有提供有效的整理操作',
-        error: '整理操作数组为空或无效'
-      }];
-    }
-    
-    // 获取所有书签
-    const bookmarksResult = await bookmarkService.getAllBookmarks();
-    if (!bookmarksResult.success) {
-      return [{
-        success: false,
-        processedCount: 0,
-        details: '无法获取书签数据',
-        error: `获取书签失败: ${bookmarksResult.error}`
-      }];
-    }
-    
-    const bookmarks = bookmarksResult.data as BookmarkItem[];
-    
-    // 逐个执行整理操作
-    for (const operation of operations) {
-      try {
+    try {
+      // 获取完整的书签树
+      const bookmarksResult = await bookmarkService.getAllBookmarks();
+      
+      if (!bookmarksResult.success) {
+        throw new Error(`获取书签失败: ${bookmarksResult.error}`);
+      }
+      
+      const bookmarks = bookmarksResult.data;
+      
+      // 对每个操作执行相应的处理
+      for (const operation of operations) {
         let result: OrganizeResult;
         
         switch (operation.operation) {
@@ -104,27 +90,34 @@ class OrganizeService {
           case 'validate':
             result = await this.validateBookmarks(bookmarks, operation);
             break;
+          case 'tag':
+            result = await this.tagBookmarks(bookmarks, operation);
+            break;
+          case 'organize':
+            result = await this.organizeByDomain(bookmarks, operation);
+            break;
           default:
             result = {
               success: false,
               processedCount: 0,
               details: `不支持的操作类型: ${operation.operation}`,
-              error: `未知的整理操作类型: ${operation.operation}`
+              error: `不支持的操作类型: ${operation.operation}`
             };
         }
         
         results.push(result);
-      } catch (error) {
-        results.push({
-          success: false,
-          processedCount: 0,
-          details: `执行操作 ${operation.operation} 时发生错误`,
-          error: error instanceof Error ? error.message : String(error)
-        });
       }
+      
+      return results;
+    } catch (error) {
+      console.error('整理书签时出错:', error);
+      return [{
+        success: false,
+        processedCount: 0,
+        details: `整理书签失败: ${error instanceof Error ? error.message : String(error)}`,
+        error: `整理书签失败: ${error instanceof Error ? error.message : String(error)}`
+      }];
     }
-    
-    return results;
   }
   
   /**
@@ -398,6 +391,141 @@ class OrganizeService {
     } catch (error) {
       return '';
     }
+  }
+  
+  /**
+   * 为书签添加标签操作
+   * @param bookmarks 书签树
+   * @param operation 标签操作配置
+   * @returns 操作结果
+   */
+  private async tagBookmarks(bookmarks: BookmarkItem[], operation: OrganizeOperation): Promise<OrganizeResult> {
+    // 验证标签名称
+    if (!operation.newName) {
+      return {
+        success: false,
+        processedCount: 0,
+        details: '标签操作缺少标签名称',
+        error: '标签操作需要指定newName作为标签名称'
+      };
+    }
+    
+    // 过滤出符合条件的书签
+    const filteredBookmarks = this.filterBookmarks(bookmarks, operation.filters);
+    
+    if (filteredBookmarks.length === 0) {
+      return {
+        success: true,
+        processedCount: 0,
+        details: '没有符合条件的书签需要添加标签',
+        error: undefined
+      };
+    }
+    
+    let successCount = 0;
+    let errorCount = 0;
+    
+    // 执行添加标签操作 (通过在标题前添加标签实现)
+    for (const bookmark of filteredBookmarks) {
+      try {
+        const tagPrefix = `[${operation.newName}] `;
+        // 检查书签标题是否已经包含该标签
+        if (!bookmark.title.startsWith(tagPrefix)) {
+          // 调用Chrome API更新书签标题，添加标签前缀
+          await bookmarkService.updateBookmark(bookmark.id, {
+            title: tagPrefix + bookmark.title
+          });
+          successCount++;
+        } else {
+          // 标签已存在，算作处理成功
+          successCount++;
+        }
+      } catch (error) {
+        console.error(`为书签 ${bookmark.id} 添加标签失败:`, error);
+        errorCount++;
+      }
+    }
+    
+    // 返回结果
+    return {
+      success: errorCount === 0,
+      processedCount: successCount,
+      details: `成功为 ${successCount} 个书签添加标签${errorCount > 0 ? `，失败 ${errorCount} 个` : ''}`,
+      error: errorCount > 0 ? `${errorCount} 个书签添加标签失败` : undefined
+    };
+  }
+  
+  /**
+   * 按域名整理书签操作
+   * @param bookmarks 书签树
+   * @param operation 整理操作配置
+   * @returns 操作结果
+   */
+  private async organizeByDomain(bookmarks: BookmarkItem[], operation: OrganizeOperation): Promise<OrganizeResult> {
+    // 过滤出符合条件的书签
+    const filteredBookmarks = this.filterBookmarks(bookmarks, operation.filters);
+    
+    if (filteredBookmarks.length === 0) {
+      return {
+        success: true,
+        processedCount: 0,
+        details: '没有符合条件的书签需要整理',
+        error: undefined
+      };
+    }
+    
+    let successCount = 0;
+    let errorCount = 0;
+    // 记录已创建的域名文件夹ID映射
+    const domainFolders = new Map<string, string>();
+    
+    // 执行按域名整理操作
+    for (const bookmark of filteredBookmarks) {
+      try {
+        if (!bookmark.url) continue; // 跳过文件夹
+        
+        // 提取域名
+        const domain = this.extractDomain(bookmark.url);
+        if (!domain) continue; // 跳过无效URL
+        
+        // 创建或查找域名文件夹
+        let domainFolderId: string;
+        
+        if (domainFolders.has(domain)) {
+          // 使用已创建的文件夹
+          domainFolderId = domainFolders.get(domain)!;
+        } else {
+          // 创建域名文件夹（在"其他书签"文件夹下创建）
+          const parentFolder = operation.target || '2'; // 默认使用"其他书签"文件夹
+          const createResult = await bookmarkService.createFolder({
+            parentId: parentFolder,
+            title: domain
+          });
+          
+          if (!createResult.success) {
+            throw new Error(`创建域名文件夹失败: ${createResult.error}`);
+          }
+          
+          domainFolderId = (createResult.data as BookmarkItem).id;
+          domainFolders.set(domain, domainFolderId);
+        }
+        
+        // 将书签移动到对应的域名文件夹
+        await bookmarkService.moveBookmark(bookmark.id, { parentId: domainFolderId });
+        successCount++;
+      } catch (error) {
+        console.error(`整理书签 ${bookmark.id} 失败:`, error);
+        errorCount++;
+      }
+    }
+    
+    // 返回结果
+    return {
+      success: errorCount === 0,
+      processedCount: successCount,
+      details: `成功按域名整理 ${successCount} 个书签到 ${domainFolders.size} 个域名文件夹${errorCount > 0 ? `，失败 ${errorCount} 个` : ''}`,
+      error: errorCount > 0 ? `${errorCount} 个书签整理失败` : undefined
+    };
   }
 }
 

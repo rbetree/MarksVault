@@ -54,24 +54,18 @@ const TaskBasicForm: React.FC<TaskBasicFormProps> = ({ taskData, onChange }) => 
   };
   
   return (
-    <Box sx={{ py: 0.5 }}>
-      <Grid container>
-        <Grid item xs={12}>
-          <TextField
-            label="任务名称"
-            fullWidth
-            required
-            value={name}
-            onChange={handleNameChange}
-            error={!!nameError}
-            helperText={nameError || '给任务起个明确的名称'}
-            variant="outlined"
-            margin="dense"
-            size="small"
-          />
-        </Grid>
-      </Grid>
-    </Box>
+    <TextField
+      label="任务名称"
+      fullWidth
+      required
+      value={name}
+      onChange={handleNameChange}
+      error={!!nameError}
+      helperText={nameError || ''}
+      variant="outlined"
+      margin="dense"
+      size="small"
+    />
   );
 };
 

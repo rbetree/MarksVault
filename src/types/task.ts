@@ -78,7 +78,7 @@ export interface BackupAction extends BaseAction {
 export interface OrganizeAction extends BaseAction {
   type: ActionType.ORGANIZE;
   operations: Array<{
-    operation: 'move' | 'delete' | 'rename' | 'validate'; // 整理操作类型
+    operation: 'move' | 'delete' | 'rename' | 'validate' | 'tag' | 'organize'; // 整理操作类型
     filters?: {              // 筛选条件
       pattern?: string;      // URL或标题匹配模式
       folder?: string;       // 指定文件夹ID
@@ -86,7 +86,7 @@ export interface OrganizeAction extends BaseAction {
       newerThan?: number;    // 晚于指定天数
     };
     target?: string;         // 目标文件夹ID（用于移动操作）
-    newName?: string;        // 新名称（用于重命名操作）
+    newName?: string;        // 新名称（用于重命名或标签操作）
   }>;
 }
 
@@ -185,9 +185,9 @@ export const createOrganizeAction = (): OrganizeAction => {
     description: '整理书签',
     operations: [
       {
-        operation: 'validate',
+        operation: 'move',  // 更改为UI中常用的操作类型
         filters: {
-          olderThan: 30 // 默认检查30天以上的书签
+          pattern: ''  // 默认使用空匹配模式
         }
       }
     ]

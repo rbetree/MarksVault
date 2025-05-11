@@ -6,41 +6,14 @@ import DialogTitle from '@mui/material/DialogTitle';
 import Button from '@mui/material/Button';
 import CircularProgress from '@mui/material/CircularProgress';
 import Box from '@mui/material/Box';
-import Tabs from '@mui/material/Tabs';
-import Tab from '@mui/material/Tab';
 import Typography from '@mui/material/Typography';
 import Grid from '@mui/material/Grid';
+import Divider from '@mui/material/Divider';
 import TaskBasicForm from './TaskBasicForm';
 import TaskTriggerForm from './TaskTriggerForm';
 import TaskActionForm from './TaskActionForm';
 import { Task, createDefaultTask } from '../../../../types/task';
 import taskService from '../../../../services/task-service';
-
-interface TabPanelProps {
-  children?: React.ReactNode;
-  index: number;
-  value: number;
-}
-
-function TabPanel(props: TabPanelProps) {
-  const { children, value, index, ...other } = props;
-
-  return (
-    <div
-      role="tabpanel"
-      hidden={value !== index}
-      id={`task-form-tabpanel-${index}`}
-      aria-labelledby={`task-form-tab-${index}`}
-      {...other}
-    >
-      {value === index && (
-        <Box sx={{ p: 2 }}>
-          {children}
-        </Box>
-      )}
-    </div>
-  );
-}
 
 interface TaskDialogProps {
   open: boolean;
@@ -54,7 +27,7 @@ interface TaskDialogProps {
 
 /**
  * 任务创建/编辑对话框组件
- * 使用标签页分组展示任务的各个配置部分
+ * 使用紧凑布局展示任务的各个配置部分
  */
 const TaskDialog: React.FC<TaskDialogProps> = ({
   open,
@@ -65,9 +38,6 @@ const TaskDialog: React.FC<TaskDialogProps> = ({
   disableEnforceFocus,
   disableAutoFocus
 }) => {
-  // 当前激活的标签页索引
-  const [tabIndex, setTabIndex] = useState(0);
-  
   // 表单数据状态
   const [formData, setFormData] = useState<Task>(createDefaultTask());
   
@@ -103,7 +73,6 @@ const TaskDialog: React.FC<TaskDialogProps> = ({
   // 当对话框打开时，重置表单状态
   useEffect(() => {
     if (open) {
-      setTabIndex(0);
       setError(null);
       // 如果不是编辑模式，重置验证状态
       if (!isEditMode) {
@@ -114,11 +83,6 @@ const TaskDialog: React.FC<TaskDialogProps> = ({
       }
     }
   }, [open, isEditMode]);
-  
-  // 处理标签页切换
-  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
-    setTabIndex(newValue);
-  };
   
   // 处理基本信息更新
   const handleBasicInfoChange = (updatedBasicInfo: Partial<Task>, isValid: boolean) => {
@@ -144,7 +108,7 @@ const TaskDialog: React.FC<TaskDialogProps> = ({
   // 处理保存任务
   const handleSave = async () => {
     if (!isFormValid) {
-      setError('请检查所有选项卡，确保信息填写完整且有效');
+      setError('请检查表单信息，确保填写完整且有效');
       return;
     }
     
@@ -187,40 +151,36 @@ const TaskDialog: React.FC<TaskDialogProps> = ({
     }
   };
   
-  // 下一步按钮处理程序
-  const handleNext = () => {
-    setTabIndex(prev => Math.min(prev + 1, 2));
-  };
-  
-  // 上一步按钮处理程序
-  const handlePrev = () => {
-    setTabIndex(prev => Math.max(prev - 1, 0));
-  };
-  
   return (
     <Dialog 
       open={open}
       onClose={() => !isSaving && onClose()}
       maxWidth="md"
-      fullWidth
+      PaperProps={{
+        sx: {
+          width: '600px',
+          maxHeight: '80vh',
+          height: 'auto'
+        }
+      }}
       disableRestoreFocus={disableRestoreFocus}
       disableEnforceFocus={disableEnforceFocus}
       disableAutoFocus={disableAutoFocus}
     >
-      <DialogTitle sx={{ textAlign: 'center', pb: 0.5, pt: 1.5 }}>
-        <Typography variant="h5" component="div" sx={{ fontWeight: 'bold' }}>
+      <DialogTitle sx={{ textAlign: 'center', py: 1.5 }}>
+        <Typography variant="h5" component="div" sx={{ fontWeight: 'medium' }}>
           {isEditMode ? '编辑任务' : '创建新任务'}
         </Typography>
       </DialogTitle>
       
-      <DialogContent sx={{ px: 3, py: 2 }}>
+      <DialogContent sx={{ px: 2.5, py: 2, height: '450px', overflowY: 'auto' }}>
         {error && (
-          <Box sx={{ mb: 1, color: 'error.main' }}>
+          <Box sx={{ mb: 1.5, color: 'error.main', fontSize: '0.875rem' }}>
             {error}
           </Box>
         )}
         
-        <Grid container spacing={1.5}>
+        <Grid container spacing={1}>
           <Grid item xs={12}>
             <TaskBasicForm 
               taskData={formData}
@@ -229,43 +189,31 @@ const TaskDialog: React.FC<TaskDialogProps> = ({
           </Grid>
           
           <Grid item xs={12}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 0.5 }}>
-              触发方式
-            </Typography>
-            <Box sx={{ border: '1px solid #e0e0e0', borderRadius: 1, p: 1.5 }}>
-              <TaskTriggerForm 
-                trigger={formData.trigger}
-                onChange={handleTriggerChange}
-              />
-            </Box>
+            <TaskTriggerForm 
+              trigger={formData.trigger}
+              onChange={handleTriggerChange}
+            />
           </Grid>
           
           <Grid item xs={12}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 0.5 }}>
-              操作类型
-            </Typography>
-            <Box sx={{ border: '1px solid #e0e0e0', borderRadius: 1, p: 1.5 }}>
-              <TaskActionForm 
-                action={formData.action}
-                onChange={handleActionChange}
-              />
-            </Box>
+            <TaskActionForm 
+              action={formData.action}
+              onChange={handleActionChange}
+            />
           </Grid>
         </Grid>
       </DialogContent>
       
-      <DialogActions sx={{ px: 3, pb: 2, pt: 0.5 }}>
+      <Divider />
+      <DialogActions sx={{ px: 2.5, py: 1.5, justifyContent: 'space-between' }}>
         <Button 
           onClick={onClose} 
           color="inherit"
           disabled={isSaving}
-          variant="outlined"
           size="small"
         >
           取消
         </Button>
-        
-        <Box sx={{ flexGrow: 1 }} />
         
         <Button 
           onClick={handleSave}
