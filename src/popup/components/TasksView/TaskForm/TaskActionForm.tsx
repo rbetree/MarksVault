@@ -630,38 +630,43 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({ action, onChange }) => 
                             }}
                           />
                         )}
-                        renderOption={(props, option) => (
-                          <li {...props} style={{padding: '1px 8px', minHeight: '22px'}}>
-                            <Box component="span" sx={{ 
-                              pl: option.depth * 1, 
-                              display: 'flex',
-                              alignItems: 'center',
-                              fontSize: '0.8rem',
-                              py: 0
-                            }}>
-                              <FolderIcon fontSize="small" sx={{ mr: 0.5, color: 'action.active', fontSize: '0.9rem' }} />
-                              <Box component="span" sx={{
-                                maxWidth: '200px',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap'
+                        renderOption={(props, option) => {
+                          // 从props中提取key属性，其余属性放入rest
+                          const { key, ...rest } = props;
+                          
+                          return (
+                            <li key={key} {...rest} style={{padding: '1px 8px', minHeight: '22px'}}>
+                              <Box component="span" sx={{ 
+                                pl: option.depth * 1, 
+                                display: 'flex',
+                                alignItems: 'center',
+                                fontSize: '0.8rem',
+                                py: 0
                               }}>
-                                {option.title}
+                                <FolderIcon fontSize="small" sx={{ mr: 0.5, color: 'action.active', fontSize: '0.9rem' }} />
+                                <Box component="span" sx={{
+                                  maxWidth: '200px',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap'
+                                }}>
+                                  {option.title}
+                                </Box>
+                                <Box component="span" sx={{
+                                  ml: 0.5, 
+                                  color: 'text.secondary',
+                                  fontSize: '0.7rem',
+                                  fontStyle: 'italic',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap'
+                                }}>
+                                  ({option.fullPath})
+                                </Box>
                               </Box>
-                              <Box component="span" sx={{
-                                ml: 0.5, 
-                                color: 'text.secondary',
-                                fontSize: '0.7rem',
-                                fontStyle: 'italic',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap'
-                              }}>
-                                ({option.fullPath})
-                              </Box>
-                            </Box>
-                          </li>
-                        )}
+                            </li>
+                          );
+                        }}
                         ListboxProps={{
                           style: { 
                             maxHeight: '200px',
