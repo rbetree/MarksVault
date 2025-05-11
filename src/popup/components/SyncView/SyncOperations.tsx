@@ -30,6 +30,7 @@ import backupService from '../../../services/backup-service';
 import { BackupStatus } from '../../../types/backup';
 import BackupSelectionDialog from './BackupSelectionDialog';
 import { GitHubCredentials } from '../../../utils/storage-service';
+import { formatDate } from '../../../utils/date-utils';
 
 // 备份仓库名称常量
 const BACKUP_REPO_NAME = 'marksvault-backups';
@@ -74,12 +75,6 @@ const SyncOperations: React.FC<SyncOperationsProps> = ({ user, onLogout, toastRe
 
     loadData();
   }, []);
-
-  // 格式化时间戳为本地时间字符串
-  const formatDateTime = (timestamp?: number): string => {
-    if (!timestamp) return '从未';
-    return new Date(timestamp).toLocaleString();
-  };
 
   // 处理上传
   const handleUpload = async () => {
@@ -214,7 +209,7 @@ const SyncOperations: React.FC<SyncOperationsProps> = ({ user, onLogout, toastRe
           {backupStatus.lastBackupTime ? (
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
               <Typography variant="body2" color="text.secondary">
-                上次备份时间: {formatDateTime(backupStatus.lastBackupTime)}
+                上次备份时间: {formatDate(backupStatus.lastBackupTime)}
               </Typography>
             </Box>
           ) : (
@@ -226,7 +221,7 @@ const SyncOperations: React.FC<SyncOperationsProps> = ({ user, onLogout, toastRe
           {backupStatus.lastRestoreTime && (
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
               <Typography variant="body2" color="text.secondary">
-                上次恢复时间: {formatDateTime(backupStatus.lastRestoreTime)}
+                上次恢复时间: {formatDate(backupStatus.lastRestoreTime)}
               </Typography>
             </Box>
           )}

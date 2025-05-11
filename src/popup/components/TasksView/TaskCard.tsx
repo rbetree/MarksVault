@@ -36,6 +36,7 @@ import {
   dateDisplayStyles,
   combineStyles 
 } from '../../styles/TaskStyles';
+import { formatDate, formatRelativeTime, getExecutionResultText } from '../../../utils/date-utils';
 
 interface TaskCardProps {
   task: Task;
@@ -116,73 +117,16 @@ const TaskCard: React.FC<TaskCardProps> = ({
     onDelete?.(task.id);
   };
   
-  // 格式化日期/时间
-  const formatDate = (timestamp: number) => {
-    const date = new Date(timestamp);
-    return date.toLocaleString('zh-CN', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-  
-  /**
-   * 格式化相对时间
-   * 对于过去的时间，显示"x分钟前"，"x小时前"，"x天前"等
-   * 对于将来的时间，显示"x分钟后"，"x小时后"，"x天后"等
-   */
-  const formatRelativeTime = (timestamp: number) => {
-    const now = Date.now();
-    const diff = timestamp - now;
-    const absDiff = Math.abs(diff);
-    
-    const seconds = Math.floor(absDiff / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const hours = Math.floor(minutes / 60);
-    const days = Math.floor(hours / 24);
-    
-    if (diff >= 0) {
-      // 将来的时间
-      if (days > 0) {
-        return `${days}天后`;
-      } else if (hours > 0) {
-        return `${hours}小时后`;
-      } else if (minutes > 0) {
-        return `${minutes}分钟后`;
-      } else {
-        return '即将执行';
-      }
-    } else {
-      // 过去的时间
-      if (days > 0) {
-        return `${days}天前`;
-      } else if (hours > 0) {
-        return `${hours}小时前`;
-      } else if (minutes > 0) {
-        return `${minutes}分钟前`;
-      } else {
-        return '刚刚执行';
-      }
-    }
-  };
-  
-  // 获取任务下次执行时间
-  const getNextExecutionTime = () => {
-    // 事件触发器没有下次执行时间概念
-    return null;
-  };
-  
   // 生成上次执行结果文本
   const getLastExecutionText = () => {
     const lastExecution = task.history.lastExecution;
     if (!lastExecution) return '从未执行';
     
-    const dateStr = formatDate(lastExecution.timestamp);
-    const result = lastExecution.success ? '成功' : '失败';
-    
-    return `${dateStr} - ${result}${lastExecution.error ? `: ${lastExecution.error}` : ''}`;
+    return getExecutionResultText(
+      lastExecution.timestamp,
+      lastExecution.success,
+      lastExecution.error
+    );
   };
   
   // 判断是否显示错误信息
@@ -212,6 +156,11 @@ const TaskCard: React.FC<TaskCardProps> = ({
                          task.status !== TaskStatus.DISABLED;
   
   // 获取下次执行时间显示
+  const getNextExecutionTime = () => {
+    // 事件触发器没有下次执行时间概念
+    return null;
+  };
+  
   const nextExecutionTime = getNextExecutionTime();
 
   // 创建自定义样式对象，去除下边距

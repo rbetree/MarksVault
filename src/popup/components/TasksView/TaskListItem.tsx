@@ -21,6 +21,7 @@ import {
   dateDisplayStyles,
   combineStyles 
 } from '../../styles/TaskStyles';
+import { formatRelativeTime } from '../../../utils/date-utils';
 
 interface TaskListItemProps {
   task: Task;
@@ -78,30 +79,6 @@ const TaskListItem: React.FC<TaskListItemProps> = ({
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation(); // 防止触发选择事件
     onDelete?.(task.id);
-  };
-  
-  // 格式化相对时间
-  const formatRelativeTime = (timestamp: number) => {
-    const now = Date.now();
-    const diff = timestamp - now;
-    
-    // 如果时间已过，返回"已过期"
-    if (diff < 0) return '已过期';
-    
-    const seconds = Math.floor(diff / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const hours = Math.floor(minutes / 60);
-    const days = Math.floor(hours / 24);
-    
-    if (days > 0) {
-      return `${days}天后`;
-    } else if (hours > 0) {
-      return `${hours}小时后`;
-    } else if (minutes > 0) {
-      return `${minutes}分钟后`;
-    } else {
-      return '即将执行';
-    }
   };
   
   // 获取任务下次执行时间

@@ -8,6 +8,7 @@ import WebIcon from '@mui/icons-material/Web';
 import BookmarkIcon from '@mui/icons-material/Bookmark';
 import FilterAltIcon from '@mui/icons-material/FilterAlt';
 import { Trigger, TriggerType, EventType } from '../../../types/task';
+import { formatTimestamp } from '../../../utils/date-utils';
 
 interface TaskTriggerInfoProps {
   trigger: Trigger;
@@ -19,13 +20,6 @@ interface TaskTriggerInfoProps {
  * 显示任务的触发条件信息
  */
 const TaskTriggerInfo: React.FC<TaskTriggerInfoProps> = ({ trigger, compact = false }) => {
-  // 将时间戳转换为日期字符串
-  const formatTimestamp = (timestamp?: number) => {
-    if (!timestamp) return '未指定';
-    const date = new Date(timestamp);
-    return `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
-  };
-
   // 获取事件图标
   const getEventIcon = (eventType: EventType) => {
     switch (eventType) {
