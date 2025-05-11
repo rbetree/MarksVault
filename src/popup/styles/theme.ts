@@ -1,7 +1,7 @@
 import { createTheme, ThemeOptions } from '@mui/material/styles';
 
-// 创建主题工厂函数，根据模式返回相应主题
-export const createAppTheme = (mode: 'light' | 'dark') => {
+// 创建主题工厂函数，根据模式和颜色返回相应主题
+export const createAppTheme = (mode: 'light' | 'dark', themeColor: string = '#4285F4') => {
   // 通用的主题设置
   const baseThemeOptions: ThemeOptions = {
     typography: {
@@ -61,7 +61,7 @@ export const createAppTheme = (mode: 'light' | 'dark') => {
     palette: {
       mode: 'light',
       primary: {
-        main: '#4285F4', // Google蓝色
+        main: themeColor, // 使用自定义主题颜色
       },
       secondary: {
         main: '#34A853', // Google绿色
@@ -83,13 +83,34 @@ export const createAppTheme = (mode: 'light' | 'dark') => {
     },
   };
 
+  // 生成深色主题颜色 - 让颜色在深色模式下更亮
+  const brightenColor = (color: string): string => {
+    // 简单的颜色亮化处理，对于复杂情况可以使用颜色处理库
+    if (color.startsWith('#')) {
+      // 十六进制颜色处理
+      const hex = color.slice(1);
+      // 尝试让颜色更亮，但不超过白色
+      let r = parseInt(hex.slice(0, 2), 16);
+      let g = parseInt(hex.slice(2, 4), 16);
+      let b = parseInt(hex.slice(4, 6), 16);
+      
+      r = Math.min(255, r + 40);
+      g = Math.min(255, g + 40);
+      b = Math.min(255, b + 40);
+      
+      return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+    }
+    // 默认返回原颜色
+    return color;
+  };
+
   // 深色主题特定设置
   const darkThemeOptions: ThemeOptions = {
     ...baseThemeOptions,
     palette: {
       mode: 'dark',
       primary: {
-        main: '#5C9CFF', // 亮蓝色，比亮色模式的蓝色更亮
+        main: brightenColor(themeColor), // 使用亮化的自定义主题颜色
       },
       secondary: {
         main: '#4DB96F', // 亮绿色

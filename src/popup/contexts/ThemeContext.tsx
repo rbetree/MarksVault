@@ -8,7 +8,9 @@ import storageService from '../../utils/storage-service';
 // 创建主题上下文
 interface ThemeContextType {
   mode: 'light' | 'dark';
+  themeColor: string;
   toggleColorMode: () => void;
+  changeThemeColor: (color: string) => void;
   theme: Theme;
 }
 
@@ -21,10 +23,11 @@ interface ThemeProviderProps {
 
 // 主题提供者组件
 export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
-  // 默认使用亮色模式
+  // 默认使用亮色模式和默认蓝色
   const [mode, setMode] = useState<'light' | 'dark'>('light');
-  // 根据当前模式创建主题
-  const [theme, setTheme] = useState<Theme>(createAppTheme(mode));
+  const [themeColor, setThemeColor] = useState<string>('#4285F4');
+  // 根据当前模式和颜色创建主题
+  const [theme, setTheme] = useState<Theme>(createAppTheme(mode, themeColor));
   // 加载状态
   const [loading, setLoading] = useState(true);
 
@@ -32,11 +35,22 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
   const toggleColorMode = async () => {
     const newMode = mode === 'light' ? 'dark' : 'light';
     setMode(newMode);
-    setTheme(createAppTheme(newMode));
+    setTheme(createAppTheme(newMode, themeColor));
     
     // 保存到存储
     await storageService.updateSettings({
       isDarkMode: newMode === 'dark'
+    });
+  };
+
+  // 主题颜色变更函数
+  const changeThemeColor = async (color: string) => {
+    setThemeColor(color);
+    setTheme(createAppTheme(mode, color));
+    
+    // 保存到存储
+    await storageService.updateSettings({
+      themeColor: color
     });
   };
 
@@ -48,10 +62,15 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
         const result = await storageService.getSettings();
         
         if (result.success && result.data) {
-          const { isDarkMode } = result.data;
+          const { isDarkMode, themeColor: storedThemeColor } = result.data;
           const themeMode: 'light' | 'dark' = isDarkMode ? 'dark' : 'light';
           setMode(themeMode);
-          setTheme(createAppTheme(themeMode));
+          
+          if (storedThemeColor) {
+            setThemeColor(storedThemeColor);
+          }
+          
+          setTheme(createAppTheme(themeMode, storedThemeColor || themeColor));
         }
       } catch (error) {
         console.error('加载主题设置失败:', error);
@@ -66,14 +85,16 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
   // 构建上下文值
   const themeContextValue: ThemeContextType = {
     mode,
+    themeColor,
     toggleColorMode,
+    changeThemeColor,
     theme
   };
 
   // 在加载期间可以显示一个空白页面，或者使用默认主题
   if (loading) {
     return (
-      <MuiThemeProvider theme={createAppTheme('light')}>
+      <MuiThemeProvider theme={createAppTheme('light', '#4285F4')}>
         <CssBaseline />
         <div style={{ display: 'none' }}>{children}</div>
       </MuiThemeProvider>

@@ -3,6 +3,12 @@ export interface UserSettings {
   isDarkMode: boolean;
   syncEnabled: boolean;
   viewType: 'list' | 'grid'; // 视图类型：列表或网格
+  themeColor?: string; // 自定义主题颜色
+  notifications: {
+    bookmarkChanges: boolean; // 书签变更通知
+    syncStatus: boolean; // 同步状态通知
+    backupReminders: boolean; // 备份提醒
+  };
   // 更多设置项...
 }
 
@@ -51,11 +57,29 @@ class StorageService {
   async getSettings(): Promise<StorageResult> {
     try {
       const result = await chrome.storage.local.get('settings');
-      const settings = result.settings || {
+      const defaultSettings: UserSettings = {
         isDarkMode: false,
         syncEnabled: false,
-        viewType: 'grid' // 默认使用网格视图
+        viewType: 'grid', // 默认使用网格视图
+        notifications: {
+          bookmarkChanges: true,
+          syncStatus: true,
+          backupReminders: true
+        }
       };
+      
+      // 如果存储中有设置，与默认设置合并
+      const settings = result.settings 
+        ? {
+            ...defaultSettings,
+            ...result.settings,
+            // 确保notifications对象完整
+            notifications: {
+              ...defaultSettings.notifications,
+              ...(result.settings.notifications || {})
+            }
+          }
+        : defaultSettings;
       
       return {
         success: true,

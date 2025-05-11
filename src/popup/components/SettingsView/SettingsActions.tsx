@@ -7,6 +7,11 @@ import DialogContentText from '@mui/material/DialogContentText';
 import DialogTitle from '@mui/material/DialogTitle';
 import Grid from '@mui/material/Grid';
 import Alert from '@mui/material/Alert';
+import Typography from '@mui/material/Typography';
+import List from '@mui/material/List';
+import ListItem from '@mui/material/ListItem';
+import ListItemText from '@mui/material/ListItemText';
+import ListItemIcon from '@mui/material/ListItemIcon';
 import DeleteIcon from '@mui/icons-material/Delete';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
@@ -126,33 +131,72 @@ const SettingsActions: React.FC<SettingsActionsProps> = ({ toastRef }) => {
 
   return (
     <>
-      <Alert severity="warning" sx={{ mb: 2 }}>
+      <Alert 
+        severity="warning" 
+        sx={{ 
+          mb: 2, 
+          py: 0.5, 
+          '& .MuiAlert-message': { 
+            fontSize: '0.75rem' 
+          } 
+        }}
+      >
         以下操作将对您的数据产生永久性影响，请谨慎操作。
       </Alert>
       
-      <Grid container spacing={2}>
-        <Grid item xs={12} sm={4}>
-          <Button
-            variant="outlined"
-            color="primary"
-            startIcon={<FileDownloadIcon />}
-            onClick={handleExportSettings}
-            fullWidth
-          >
-            导出设置
-          </Button>
-        </Grid>
+      <List dense sx={{ p: 0 }}>
+        <ListItem 
+          sx={{ px: 1, py: 0.5 }}
+          secondaryAction={
+            <Button
+              variant="outlined"
+              color="primary"
+              size="small"
+              startIcon={<FileDownloadIcon />}
+              onClick={handleExportSettings}
+              sx={{ minWidth: '90px', fontSize: '0.75rem' }}
+            >
+              导出
+            </Button>
+          }
+        >
+          <ListItemText 
+            primary={
+              <Typography variant="body2">导出设置</Typography>
+            } 
+            secondary={
+              <Typography variant="caption" color="text.secondary">
+                将当前设置导出为JSON文件
+              </Typography>
+            }
+          />
+        </ListItem>
         
-        <Grid item xs={12} sm={4}>
-          <Button
-            variant="outlined"
-            color="primary"
-            startIcon={<FileUploadIcon />}
-            onClick={handleImportClick}
-            fullWidth
-          >
-            导入设置
-          </Button>
+        <ListItem 
+          sx={{ px: 1, py: 0.5 }}
+          secondaryAction={
+            <Button
+              variant="outlined"
+              color="primary"
+              size="small"
+              startIcon={<FileUploadIcon />}
+              onClick={handleImportClick}
+              sx={{ minWidth: '90px', fontSize: '0.75rem' }}
+            >
+              导入
+            </Button>
+          }
+        >
+          <ListItemText 
+            primary={
+              <Typography variant="body2">导入设置</Typography>
+            } 
+            secondary={
+              <Typography variant="caption" color="text.secondary">
+                从JSON文件导入设置
+              </Typography>
+            }
+          />
           <input
             type="file"
             ref={fileInputRef}
@@ -161,20 +205,35 @@ const SettingsActions: React.FC<SettingsActionsProps> = ({ toastRef }) => {
             onChange={handleImportSettings}
             aria-label="导入设置文件"
           />
-        </Grid>
+        </ListItem>
         
-        <Grid item xs={12} sm={4}>
-          <Button
-            variant="outlined"
-            color="error"
-            startIcon={<DeleteIcon />}
-            onClick={() => setShowClearDialog(true)}
-            fullWidth
-          >
-            清除所有数据
-          </Button>
-        </Grid>
-      </Grid>
+        <ListItem 
+          sx={{ px: 1, py: 0.5 }}
+          secondaryAction={
+            <Button
+              variant="outlined"
+              color="error"
+              size="small"
+              startIcon={<DeleteIcon />}
+              onClick={() => setShowClearDialog(true)}
+              sx={{ minWidth: '90px', fontSize: '0.75rem' }}
+            >
+              清除
+            </Button>
+          }
+        >
+          <ListItemText 
+            primary={
+              <Typography variant="body2">清除所有数据</Typography>
+            } 
+            secondary={
+              <Typography variant="caption" color="text.secondary">
+                重置并清除所有存储的数据
+              </Typography>
+            }
+          />
+        </ListItem>
+      </List>
       
       {/* 清除数据确认对话框 */}
       <Dialog

@@ -27,22 +27,39 @@ const SettingCard: React.FC<SettingCardProps> = ({
   return (
     <Card 
       sx={{ 
-        mb: 2,
-        boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-        borderRadius: 2
+        mb: 3,
+        boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+        borderRadius: 2,
+        transition: 'box-shadow 0.3s ease',
+        '&:hover': {
+          boxShadow: '0 4px 12px rgba(0,0,0,0.12)'
+        },
+        overflow: 'visible'
       }}
     >
       <CardHeader
-        avatar={icon && <Box sx={{ display: 'flex', alignItems: 'center' }}>{icon}</Box>}
+        avatar={icon && 
+          <Box 
+            sx={{ 
+              display: 'flex', 
+              alignItems: 'center',
+              bgcolor: 'background.paper',
+              p: 1,
+              borderRadius: '12px',
+            }}
+          >
+            {icon}
+          </Box>
+        }
         title={
-          <Typography variant="h6" component="h2">
+          <Typography variant="h6" component="h2" fontWeight="500">
             {title}
           </Typography>
         }
         sx={{ 
           pb: description ? 0 : 1,
           '& .MuiCardHeader-avatar': {
-            marginRight: 1
+            marginRight: 1.5
           }
         }}
       />
@@ -55,9 +72,9 @@ const SettingCard: React.FC<SettingCardProps> = ({
         </Box>
       )}
 
-      <Divider />
+      <Divider sx={{ opacity: 0.6 }} />
 
-      <CardContent>
+      <CardContent sx={{ pt: 2 }}>
         {children}
       </CardContent>
     </Card>
