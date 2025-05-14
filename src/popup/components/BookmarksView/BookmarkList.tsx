@@ -68,6 +68,10 @@ interface BookmarkListProps {
   onViewTypeChange: (viewType: 'list' | 'grid') => void;
   sortMethod: 'default' | 'name' | 'dateAdded';
   onSortChange: (method: 'default' | 'name' | 'dateAdded') => void;
+  searchText: string;
+  isSearching: boolean;
+  onSearch: (query: string) => void;
+  onClearSearch: () => void;
 }
 
 const BookmarkList: React.FC<BookmarkListProps> = ({
@@ -85,9 +89,12 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
   viewType,
   onViewTypeChange,
   sortMethod,
-  onSortChange
+  onSortChange,
+  searchText,
+  isSearching,
+  onSearch,
+  onClearSearch
 }) => {
-  const [searchText, setSearchText] = useState('');
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
@@ -98,22 +105,13 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
   const [sortMenuAnchorEl, setSortMenuAnchorEl] = useState<null | HTMLElement>(null);
   const isSortMenuOpen = Boolean(sortMenuAnchorEl);
 
-  // 过滤书签
-  const filteredBookmarks = searchText
-    ? bookmarks.filter(
-        bookmark => 
-          bookmark.title.toLowerCase().includes(searchText.toLowerCase()) ||
-          (bookmark.url && bookmark.url.toLowerCase().includes(searchText.toLowerCase()))
-      )
-    : bookmarks;
-
   // 处理搜索
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchText(e.target.value);
+    onSearch(e.target.value);
   };
 
   const clearSearch = () => {
-    setSearchText('');
+    onClearSearch();
   };
 
   // 处理排序
@@ -299,7 +297,22 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
               height: '40px',
             }}
           >
-            {parentFolder ? (
+            {isSearching ? (
+              <Typography 
+                variant="body2" 
+                noWrap 
+                sx={{ 
+                  ml: 0.5, 
+                  fontWeight: 400, 
+                  flex: 1,
+                  fontSize: '0.9rem',
+                  color: 'text.primary',
+                  pl: 0.5
+                }}
+              >
+                搜索结果
+              </Typography>
+            ) : parentFolder ? (
               <>
                 <IconButton onClick={onNavigateBack} size="small" sx={{ p: 0.5 }}>
                   <ArrowBackIcon fontSize="small" />
@@ -351,12 +364,9 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
               height: '40px',
             }}
           >
-            <IconButton sx={{ p: 0.5 }} aria-label="搜索">
-              <SearchIcon fontSize="small" />
-            </IconButton>
             <InputBase
               sx={{ 
-                ml: 0.5, 
+                pl: 1.5, 
                 flex: 1, 
                 fontSize: '0.9rem',
                 fontWeight: 400,
@@ -398,7 +408,7 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
         onDragOver={handleListDragOver}
         onDrop={handleListDrop}
       >
-        {filteredBookmarks.length === 0 ? (
+        {bookmarks.length === 0 ? (
           <Box sx={{ p: 3, textAlign: 'center' }}>
             <Typography color="text.secondary">
               {searchText ? '没有找到匹配的书签' : '没有书签'}
@@ -406,7 +416,7 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
           </Box>
         ) : (
           <List disablePadding>
-            {filteredBookmarks.map((bookmark) => (
+            {bookmarks.map((bookmark) => (
               <React.Fragment key={bookmark.id}>
                 <BookmarkItem
                   bookmark={bookmark}

@@ -422,12 +422,12 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({ action, onChange }) => 
           }}
         >
           <Typography variant="subtitle2" gutterBottom>
-            备份操作配置
+            同步操作配置
           </Typography>
           
           <FormControl component="fieldset" size="small" fullWidth sx={{ mb: 1.5 }}>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-              备份操作类型:
+              操作类型:
             </Typography>
             <RadioGroup
               row

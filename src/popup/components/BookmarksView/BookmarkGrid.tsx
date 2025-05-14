@@ -87,6 +87,10 @@ interface BookmarkGridProps {
   onViewTypeChange: (viewType: 'list' | 'grid') => void;
   sortMethod: 'default' | 'name' | 'dateAdded';
   onSortChange: (method: 'default' | 'name' | 'dateAdded') => void;
+  searchText: string;
+  isSearching: boolean;
+  onSearch: (query: string) => void;
+  onClearSearch: () => void;
 }
 
 const BookmarkGrid: React.FC<BookmarkGridProps> = ({
@@ -104,9 +108,12 @@ const BookmarkGrid: React.FC<BookmarkGridProps> = ({
   viewType,
   onViewTypeChange,
   sortMethod,
-  onSortChange
+  onSortChange,
+  searchText,
+  isSearching,
+  onSearch,
+  onClearSearch
 }) => {
-  const [searchText, setSearchText] = useState('');
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
@@ -117,22 +124,13 @@ const BookmarkGrid: React.FC<BookmarkGridProps> = ({
   const [sortMenuAnchorEl, setSortMenuAnchorEl] = useState<null | HTMLElement>(null);
   const isSortMenuOpen = Boolean(sortMenuAnchorEl);
 
-  // 过滤书签
-  const filteredBookmarks = searchText
-    ? bookmarks.filter(
-        bookmark => 
-          bookmark.title.toLowerCase().includes(searchText.toLowerCase()) ||
-          (bookmark.url && bookmark.url.toLowerCase().includes(searchText.toLowerCase()))
-      )
-    : bookmarks;
-
   // 处理搜索
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchText(e.target.value);
+    onSearch(e.target.value);
   };
 
   const clearSearch = () => {
-    setSearchText('');
+    onClearSearch();
   };
 
   // 处理排序
@@ -302,7 +300,7 @@ const BookmarkGrid: React.FC<BookmarkGridProps> = ({
 
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      {/* 搜索区域 - 左右分隔布局 */}
+      {/* 搜索区域 */}
       <SearchArea>
         {/* 左侧：导航区域（文件夹层级） */}
         <LeftColumn>
@@ -315,10 +313,25 @@ const BookmarkGrid: React.FC<BookmarkGridProps> = ({
               boxShadow: 'none',
               border: '1px solid',
               borderColor: 'divider',
-              height: '40px',
+              height: '40px'
             }}
           >
-            {parentFolder ? (
+            {isSearching ? (
+              <Typography 
+                variant="body2" 
+                noWrap 
+                sx={{ 
+                  ml: 0.5, 
+                  fontWeight: 400, 
+                  flex: 1,
+                  fontSize: '0.9rem',
+                  color: 'text.primary',
+                  pl: 0.5
+                }}
+              >
+                搜索结果
+              </Typography>
+            ) : parentFolder ? (
               <>
                 <IconButton onClick={onNavigateBack} size="small" sx={{ p: 0.5 }}>
                   <ArrowBackIcon fontSize="small" />
@@ -331,7 +344,7 @@ const BookmarkGrid: React.FC<BookmarkGridProps> = ({
                     fontWeight: 400, 
                     flex: 1,
                     fontSize: '0.9rem',
-                    color: 'text.primary' 
+                    color: 'text.primary'
                   }}
                 >
                   {parentFolder.title}
@@ -347,7 +360,7 @@ const BookmarkGrid: React.FC<BookmarkGridProps> = ({
                   flex: 1,
                   fontSize: '0.9rem',
                   color: 'text.primary',
-                  pl: 0.5 // 添加左内边距，与搜索图标对齐
+                  pl: 0.5
                 }}
               >
                 书签栏
@@ -356,7 +369,7 @@ const BookmarkGrid: React.FC<BookmarkGridProps> = ({
           </Paper>
         </LeftColumn>
         
-        {/* 右侧：搜索框 */}
+        {/* 右侧：搜索栏 */}
         <RightColumn>
           <Paper
             sx={{
@@ -367,20 +380,16 @@ const BookmarkGrid: React.FC<BookmarkGridProps> = ({
               boxShadow: 'none',
               border: '1px solid',
               borderColor: 'divider',
-              height: '40px',
+              height: '40px'
             }}
           >
-            <IconButton sx={{ p: 0.5 }} aria-label="搜索">
-              <SearchIcon fontSize="small" />
-            </IconButton>
             <InputBase
               sx={{ 
-                ml: 0.5, 
+                pl: 1.5, 
                 flex: 1, 
                 fontSize: '0.9rem',
                 fontWeight: 400,
-                fontFamily: 'inherit',
-                color: 'text.primary'
+                fontFamily: 'inherit'
               }}
               placeholder="搜索书签..."
               value={searchText}
@@ -411,40 +420,45 @@ const BookmarkGrid: React.FC<BookmarkGridProps> = ({
 
       <Divider />
 
-      {/* 书签网格 - 添加拖拽支持 */}
-      <Box sx={{ 
-        flexGrow: 1, 
-        overflow: 'auto',
-        display: 'flex',
-        flexDirection: 'column',
-        height: 'calc(100% - 50px)', // 减去搜索栏和导航栏高度
-        position: 'relative' // 为fixed定位的子元素提供定位上下文
-      }}>
-        {filteredBookmarks.length === 0 ? (
+      {/* 书签网格 */}
+      <GridContainer
+        onDragOver={handleGridDragOver}
+        onDrop={handleGridDrop}
+      >
+        {bookmarks.length === 0 ? (
           <EmptyState>
-            <Typography color="text.secondary">
+            <Typography variant="body1">
               {searchText ? '没有找到匹配的书签' : '没有书签'}
             </Typography>
           </EmptyState>
         ) : (
-          <GridContainer
-            onDragOver={handleGridDragOver}
-            onDrop={handleGridDrop}
-          >
-            {filteredBookmarks.map((bookmark) => (
-              <BookmarkGridItem
-                key={bookmark.id}
-                bookmark={bookmark}
-                onEdit={handleEdit}
-                onDelete={handleDelete}
-                onOpen={handleBookmarkOpen}
-                onOpenFolder={handleFolderOpen}
-                onMoveBookmark={onMoveBookmark}
-              />
-            ))}
-          </GridContainer>
+          bookmarks.map((bookmark) => (
+            <BookmarkGridItem
+              key={bookmark.id}
+              bookmark={bookmark}
+              onOpen={handleBookmarkOpen}
+              onOpenFolder={handleFolderOpen}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+              onMoveBookmark={onMoveBookmark}
+            />
+          ))
         )}
-      </Box>
+      </GridContainer>
+
+      {/* 浮动添加按钮 */}
+      <Fab
+        color="primary"
+        size="medium"
+        onClick={handleAddClick}
+        sx={{
+          position: 'absolute',
+          bottom: 80, // 避开底部导航栏
+          right: 16,
+        }}
+      >
+        <AddIcon />
+      </Fab>
 
       {/* 排序菜单 */}
       <Menu

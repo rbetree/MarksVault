@@ -22,6 +22,10 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
   const [bookmarkBarId, setBookmarkBarId] = useState<string | null>(null); // 添加书签栏ID状态变量
   const [sortMethod, setSortMethod] = useState<'default' | 'name' | 'dateAdded'>('default');
   const bookmarksMap = useRef<Map<string, BookmarkItem>>(new Map());
+  // 添加搜索相关状态
+  const [searchText, setSearchText] = useState('');
+  const [searchResults, setSearchResults] = useState<BookmarkItem[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
 
   // 加载所有书签树和用户设置
   useEffect(() => {
@@ -85,6 +89,42 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
       }
       return 0;
     });
+  };
+
+  // 处理搜索
+  const handleSearch = async (query: string) => {
+    setSearchText(query);
+    
+    if (!query.trim()) {
+      setIsSearching(false);
+      setSearchResults([]);
+      return;
+    }
+    
+    setIsSearching(true);
+    try {
+      const result = await bookmarkService.searchBookmarks(query);
+      if (result.success && result.data) {
+        // 对搜索结果应用同样的排序
+        setSearchResults(sortBookmarks(result.data, sortMethod));
+      } else {
+        setSearchResults([]);
+        if (result.error) {
+          toastRef.current?.showToast('搜索书签失败: ' + result.error, 'error');
+        }
+      }
+    } catch (error) {
+      console.error('搜索书签错误:', error);
+      setSearchResults([]);
+      toastRef.current?.showToast('搜索书签时发生错误', 'error');
+    }
+  };
+
+  // 清除搜索
+  const clearSearch = () => {
+    setSearchText('');
+    setIsSearching(false);
+    setSearchResults([]);
   };
 
   // 加载书签树
@@ -151,6 +191,9 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
 
   // 导航到指定文件夹
   const navigateToFolder = (folderId: string) => {
+    // 导航到新文件夹时清除搜索状态
+    clearSearch();
+    
     const folder = bookmarksMap.current.get(folderId);
     if (folder) {
       setFolderStack(prev => [...prev, folder]);
@@ -160,6 +203,9 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
 
   // 导航返回上级文件夹
   const navigateBack = () => {
+    // 导航返回时清除搜索状态
+    clearSearch();
+    
     if (folderStack.length > 0) {
       const newStack = [...folderStack];
       newStack.pop(); // 移除当前文件夹
@@ -283,7 +329,7 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
     }
 
     const commonProps = {
-      bookmarks: currentBookmarks,
+      bookmarks: isSearching ? searchResults : currentBookmarks,
       parentFolder: folderStack.length > 0 ? folderStack[folderStack.length - 1] : undefined,
       isLoading: isLoading,
       onAddBookmark: handleAddBookmark,
@@ -297,7 +343,12 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
       viewType: viewType,
       onViewTypeChange: handleViewTypeChange,
       sortMethod: sortMethod,
-      onSortChange: handleSortChange
+      onSortChange: handleSortChange,
+      // 添加搜索相关属性
+      searchText: searchText,
+      isSearching: isSearching,
+      onSearch: handleSearch,
+      onClearSearch: clearSearch
     };
 
     return viewType === 'grid' ? 
