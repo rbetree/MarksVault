@@ -18,7 +18,7 @@ interface HeaderProps {
 
 const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
   return (
-    <AppBar position="static" color="primary" sx={{ height: 64 }}>
+    <AppBar position="static" color="primary" sx={{ height: 56 }}>
       <Toolbar>
         <Box display="flex" alignItems="center">
           <img 
