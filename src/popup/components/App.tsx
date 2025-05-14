@@ -16,7 +16,16 @@ import githubService from '../../services/github-service';
 import { StyledEngineProvider } from '@mui/material/styles';
 
 const App: React.FC = () => {
-  const [currentView, setCurrentView] = useState<NavOption>('bookmarks');
+  // 从URL hash初始化当前视图
+  const initView = (): NavOption => {
+    const hash = window.location.hash.substring(1);
+    if (hash === 'settings') return 'settings';
+    if (hash === 'tasks') return 'tasks';
+    if (hash === 'sync') return 'sync';
+    return 'bookmarks';
+  };
+
+  const [currentView, setCurrentView] = useState<NavOption>(initView());
   const toastRef = useRef<ToastRef>(null);
   
   // GitHub用户状态管理
@@ -116,6 +125,8 @@ const App: React.FC = () => {
   // 处理导航变化
   const handleNavChange = (value: NavOption) => {
     setCurrentView(value);
+    // 更新URL hash以支持刷新和从选项页打开
+    window.location.hash = value;
   };
 
   return (

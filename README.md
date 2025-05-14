@@ -121,7 +121,6 @@ MarksVault/
 │   │   └── popup.tsx         # 弹出窗口脚本入口
 │   ├── services/             # 服务层
 │   ├── types/                # TypeScript类型定义
-│   ├── content/              # 内容脚本(如需要)
 │   └── utils/                # 工具函数
 ├── assets/                   # 静态资源
 │   ├── images/               # 图片资源
@@ -144,7 +143,6 @@ MarksVault/
 - **services/**: 服务层，处理与外部API的交互，如GitHub API
 - **utils/**: 提供各种工具服务，如书签管理、存储操作、任务调度等
 - **types/**: TypeScript类型定义，确保类型安全
-- **content/**: 内容脚本，在需要时可以注入到网页中
 
 该结构遵循职责分离原则，将UI组件、业务逻辑和数据操作清晰分开，同时符合Chrome扩展的架构特点。
 

@@ -7,7 +7,6 @@ module.exports = {
   devtool: 'cheap-module-source-map',
   entry: {
     popup: path.resolve('src/popup/popup.tsx'),
-    options: path.resolve('src/options/options.tsx'),
     background: path.resolve('src/background/background.ts'),
   },
   module: {
@@ -28,11 +27,6 @@ module.exports = {
       template: path.resolve('src/popup/popup.html'),
       filename: 'popup/popup.html',
       chunks: ['popup'],
-    }),
-    new HtmlWebpackPlugin({
-      template: path.resolve('src/options/options.html'),
-      filename: 'options/options.html',
-      chunks: ['options'],
     }),
     new CopyWebpackPlugin({
       patterns: [
