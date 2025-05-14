@@ -7,7 +7,7 @@ import { BookmarkItem } from '../utils/bookmark-service';
 import bookmarkService from '../utils/bookmark-service';
 
 // 整理操作类型
-export type OrganizeOperationType = 'move' | 'delete' | 'rename' | 'validate' | 'tag' | 'organize';
+export type OrganizeOperationType = 'move' | 'delete' | 'rename' | 'validate' | 'tag';
 
 // 整理操作过滤条件
 export interface OrganizeFilter {
@@ -93,9 +93,7 @@ class OrganizeService {
           case 'tag':
             result = await this.tagBookmarks(bookmarks, operation);
             break;
-          case 'organize':
-            result = await this.organizeByDomain(bookmarks, operation);
-            break;
+
           default:
             result = {
               success: false,
@@ -519,78 +517,7 @@ class OrganizeService {
     };
   }
   
-  /**
-   * 按域名整理书签操作
-   * @param bookmarks 书签树
-   * @param operation 整理操作配置
-   * @returns 操作结果
-   */
-  private async organizeByDomain(bookmarks: BookmarkItem[], operation: OrganizeOperation): Promise<OrganizeResult> {
-    // 过滤出符合条件的书签
-    const filteredBookmarks = this.filterBookmarks(bookmarks, operation.filters);
-    
-    if (filteredBookmarks.length === 0) {
-      return {
-        success: true,
-        processedCount: 0,
-        details: '没有符合条件的书签需要整理',
-        error: undefined
-      };
-    }
-    
-    let successCount = 0;
-    let errorCount = 0;
-    // 记录已创建的域名文件夹ID映射
-    const domainFolders = new Map<string, string>();
-    
-    // 执行按域名整理操作
-    for (const bookmark of filteredBookmarks) {
-      try {
-        if (!bookmark.url) continue; // 跳过文件夹
-        
-        // 提取域名
-        const domain = this.extractDomain(bookmark.url);
-        if (!domain) continue; // 跳过无效URL
-        
-        // 创建或查找域名文件夹
-        let domainFolderId: string;
-        
-        if (domainFolders.has(domain)) {
-          // 使用已创建的文件夹
-          domainFolderId = domainFolders.get(domain)!;
-        } else {
-          // 创建域名文件夹（在"其他书签"文件夹下创建）
-          const parentFolder = operation.target || '2'; // 默认使用"其他书签"文件夹
-          const createResult = await bookmarkService.createFolder({
-            parentId: parentFolder,
-            title: domain
-          });
-          
-          if (!createResult.success) {
-            throw new Error(`创建域名文件夹失败: ${createResult.error}`);
-          }
-          
-          domainFolderId = (createResult.data as BookmarkItem).id;
-          domainFolders.set(domain, domainFolderId);
-        }
-        
-        // 将书签移动到对应的域名文件夹
-        await bookmarkService.moveBookmark(bookmark.id, { parentId: domainFolderId });
-        successCount++;
-      } catch (error) {
-        console.error(`整理书签 ${bookmark.id} 失败:`, error);
-        errorCount++;
-      }
-    }
-    
-    // 返回结果
-    return {
-      success: errorCount === 0,
-      processedCount: successCount,
-      details: `成功按域名整理 ${successCount} 个书签到 ${domainFolders.size} 个域名文件夹${errorCount > 0 ? `，失败 ${errorCount} 个` : ''}`,
-      error: errorCount > 0 ? `${errorCount} 个书签整理失败` : undefined
-    };
-  }
+
 }
 
 // 导出单例实例

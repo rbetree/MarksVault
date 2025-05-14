@@ -78,7 +78,7 @@ export interface BackupAction extends BaseAction {
 export interface OrganizeAction extends BaseAction {
   type: ActionType.ORGANIZE;
   operations: Array<{
-    operation: 'move' | 'delete' | 'rename' | 'validate' | 'tag' | 'organize'; // 整理操作类型
+    operation: 'move' | 'delete' | 'rename' | 'validate' | 'tag'; // 整理操作类型
     filters?: {              // 筛选条件
       pattern?: string;      // URL或标题匹配模式
       folder?: string;       // 指定文件夹ID

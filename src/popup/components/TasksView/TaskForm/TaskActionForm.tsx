@@ -37,6 +37,19 @@ import { Typography } from '@mui/material';
 import { Divider } from '@mui/material';
 import bookmarkService from '../../../../utils/bookmark-service';
 
+// 扩展的整理操作接口，用于UI渲染
+interface ExtendedOrganizeOperation {
+  operation: 'move' | 'delete' | 'rename' | 'validate' | 'tag';
+  filters?: {
+    pattern?: string;
+    folder?: string;
+    olderThan?: number;
+    newerThan?: number;
+  };
+  target?: string;
+  newName?: string;
+}
+
 // 文件夹选项接口
 interface FolderOption {
   id: string;         // 文件夹ID
@@ -77,8 +90,13 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({ action, onChange }) => 
   );
   
   // 整理操作状态
-  const [operations, setOperations] = useState<OrganizeAction['operations']>(
-    action.type === ActionType.ORGANIZE ? (action as OrganizeAction).operations : []
+  const [operations, setOperations] = useState<ExtendedOrganizeOperation[]>(
+    action.type === ActionType.ORGANIZE ? 
+      // 转换操作
+      (action as OrganizeAction).operations.map(op => ({
+        ...op
+      })) : 
+      []
   );
   
   // 自定义操作状态
@@ -145,7 +163,12 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({ action, onChange }) => 
       setBackupOperation(backupAction.operation || 'backup');
       setBackupFilePath(backupAction.options.backupFilePath ? String(backupAction.options.backupFilePath) : '');
     } else if (action.type === ActionType.ORGANIZE) {
-      setOperations((action as OrganizeAction).operations);
+      // 转换操作
+      setOperations(
+        (action as OrganizeAction).operations.map(op => ({
+          ...op
+        }))
+      );
     } else if (action.type === ActionType.CUSTOM) {
       setCustomDescription((action as CustomAction).description);
     }
@@ -308,6 +331,9 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({ action, onChange }) => 
       } else {
         delete newErrors[`operation_${index}_target`];
       }
+      
+
+    // organizeByDomain 字段逻辑已移除
     } else if (field.startsWith('filters.')) {
       const filterField = field.split('.')[1];
       if (!newOperations[index].filters) {
@@ -353,9 +379,12 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({ action, onChange }) => 
     const isValid = validateOperations(newOperations);
     
     if (action.type === ActionType.ORGANIZE) {
+      // 创建操作副本
+      const cleanedOperations = [...newOperations];
+      
       const updatedAction: OrganizeAction = {
         ...(action as OrganizeAction),
-        operations: newOperations
+        operations: cleanedOperations
       };
       
       onChange(updatedAction, isValid && newOperations.length > 0);
@@ -556,6 +585,8 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({ action, onChange }) => 
                         <MenuItem value="move">移动书签</MenuItem>
                         <MenuItem value="rename">重命名书签</MenuItem>
                         <MenuItem value="tag">添加标签</MenuItem>
+                        <MenuItem value="delete">删除书签</MenuItem>
+                        <MenuItem value="validate">验证书签</MenuItem>
                       </Select>
                     </FormControl>
                   </Grid>
@@ -583,96 +614,115 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({ action, onChange }) => 
                   </Grid>
                   
                   {op.operation === 'move' && (
+                    <>
+
+                      <Grid item xs={12}>
+                        <Autocomplete
+                          id={`folder-select-${index}`}
+                          options={folders}
+                          fullWidth
+                          size="small"
+                          loading={foldersLoading}
+                          getOptionLabel={(option) => option.fullPath}
+                          isOptionEqualToValue={(option, value) => option.id === value.id}
+                          value={selectedFolders[index] || null}
+                          onChange={(_, newValue) => handleUpdateOperation(index, 'target', newValue)}
+                          freeSolo={false}
+                          autoHighlight
+                          openOnFocus={false}
+                          filterOptions={(options, state) => {
+                            const inputValue = state.inputValue.toLowerCase().trim();
+                            if (!inputValue) return []; // 无输入时不显示选项
+                            
+                            return options.filter(option => 
+                              option.title.toLowerCase().includes(inputValue) || 
+                              option.fullPath.toLowerCase().includes(inputValue)
+                            );
+                          }}
+                          renderInput={(params) => (
+                            <TextField
+                              {...params}
+                              label="目标文件夹"
+                              placeholder="输入文件夹名称筛选"
+                              error={!!errors[`operation_${index}_target`]}
+                              helperText={errors[`operation_${index}_target`] || "输入文件夹名称进行筛选后选择"}
+                              required
+                              InputProps={{
+                                ...params.InputProps,
+                                endAdornment: (
+                                  <React.Fragment>
+                                    {foldersLoading ? <CircularProgress color="inherit" size={20} /> : null}
+                                    {params.InputProps.endAdornment}
+                                  </React.Fragment>
+                                ),
+                                startAdornment: (
+                                  <React.Fragment>
+                                    <FolderIcon color="action" sx={{ ml: 0.5, mr: 1 }} />
+                                  </React.Fragment>
+                                )
+                              }}
+                            />
+                          )}
+                          renderOption={(props, option) => {
+                            // 从props中提取key属性，其余属性放入rest
+                            const { key, ...rest } = props;
+                            
+                            return (
+                              <li key={key} {...rest} style={{padding: '1px 8px', minHeight: '22px'}}>
+                                <Box component="span" sx={{ 
+                                  pl: option.depth * 1, 
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  fontSize: '0.8rem',
+                                  py: 0
+                                }}>
+                                  <FolderIcon fontSize="small" sx={{ mr: 0.5, color: 'action.active', fontSize: '0.9rem' }} />
+                                  <Box component="span" sx={{
+                                    maxWidth: '200px',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap'
+                                  }}>
+                                    {option.title}
+                                  </Box>
+                                  <Box component="span" sx={{
+                                    ml: 0.5, 
+                                    color: 'text.secondary',
+                                    fontSize: '0.7rem',
+                                    fontStyle: 'italic',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap'
+                                  }}>
+                                    ({option.fullPath})
+                                  </Box>
+                                </Box>
+                              </li>
+                            );
+                          }}
+                          ListboxProps={{
+                            style: { 
+                              maxHeight: '200px',
+                            }
+                          }}
+                        />
+                      </Grid>
+                    </>
+                  )}
+                  
+                  {op.operation === 'delete' && (
                     <Grid item xs={12}>
-                      <Autocomplete
-                        id={`folder-select-${index}`}
-                        options={folders}
-                        fullWidth
-                        size="small"
-                        loading={foldersLoading}
-                        getOptionLabel={(option) => option.fullPath}
-                        isOptionEqualToValue={(option, value) => option.id === value.id}
-                        value={selectedFolders[index] || null}
-                        onChange={(_, newValue) => handleUpdateOperation(index, 'target', newValue)}
-                        freeSolo={false}
-                        autoHighlight
-                        openOnFocus={false}
-                        filterOptions={(options, state) => {
-                          const inputValue = state.inputValue.toLowerCase().trim();
-                          if (!inputValue) return []; // 无输入时不显示选项
-                          
-                          return options.filter(option => 
-                            option.title.toLowerCase().includes(inputValue) || 
-                            option.fullPath.toLowerCase().includes(inputValue)
-                          );
-                        }}
-                        renderInput={(params) => (
-                          <TextField
-                            {...params}
-                            label="目标文件夹"
-                            placeholder="输入文件夹名称筛选"
-                            error={!!errors[`operation_${index}_target`]}
-                            helperText={errors[`operation_${index}_target`] || "输入文件夹名称进行筛选后选择"}
-                            required
-                            InputProps={{
-                              ...params.InputProps,
-                              endAdornment: (
-                                <React.Fragment>
-                                  {foldersLoading ? <CircularProgress color="inherit" size={20} /> : null}
-                                  {params.InputProps.endAdornment}
-                                </React.Fragment>
-                              ),
-                              startAdornment: (
-                                <React.Fragment>
-                                  <FolderIcon color="action" sx={{ ml: 0.5, mr: 1 }} />
-                                </React.Fragment>
-                              )
-                            }}
-                          />
-                        )}
-                        renderOption={(props, option) => {
-                          // 从props中提取key属性，其余属性放入rest
-                          const { key, ...rest } = props;
-                          
-                          return (
-                            <li key={key} {...rest} style={{padding: '1px 8px', minHeight: '22px'}}>
-                              <Box component="span" sx={{ 
-                                pl: option.depth * 1, 
-                                display: 'flex',
-                                alignItems: 'center',
-                                fontSize: '0.8rem',
-                                py: 0
-                              }}>
-                                <FolderIcon fontSize="small" sx={{ mr: 0.5, color: 'action.active', fontSize: '0.9rem' }} />
-                                <Box component="span" sx={{
-                                  maxWidth: '200px',
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                  whiteSpace: 'nowrap'
-                                }}>
-                                  {option.title}
-                                </Box>
-                                <Box component="span" sx={{
-                                  ml: 0.5, 
-                                  color: 'text.secondary',
-                                  fontSize: '0.7rem',
-                                  fontStyle: 'italic',
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                  whiteSpace: 'nowrap'
-                                }}>
-                                  ({option.fullPath})
-                                </Box>
-                              </Box>
-                            </li>
-                          );
-                        }}
-                        ListboxProps={{
-                          style: { 
-                            maxHeight: '200px',
-                          }
-                        }}
-                      />
+                      <Typography variant="body2" color="warning.main" sx={{ mt: 1, mb: 1 }}>
+                        此操作将删除符合上方匹配规则的所有书签，请谨慎使用。
+                      </Typography>
+                    </Grid>
+                  )}
+                  
+                  {op.operation === 'validate' && (
+                    <Grid item xs={12}>
+                      <Typography variant="body2" color="info.main" sx={{ mt: 1, mb: 1 }}>
+                        此操作将检查符合上方匹配规则的书签URL有效性。
+                      </Typography>
                     </Grid>
                   )}
                   
