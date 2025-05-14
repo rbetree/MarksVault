@@ -8,6 +8,10 @@ import Button from '@mui/material/Button';
 import Box from '@mui/material/Box';
 import Collapse from '@mui/material/Collapse';
 import Divider from '@mui/material/Divider';
+import List from '@mui/material/List';
+import ListItem from '@mui/material/ListItem';
+import ListItemText from '@mui/material/ListItemText';
+import ListItemIcon from '@mui/material/ListItemIcon';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
@@ -20,11 +24,14 @@ import HistoryIcon from '@mui/icons-material/History';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
+import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import Tooltip from '@mui/material/Tooltip';
 import Chip from '@mui/material/Chip';
 import CircularProgress from '@mui/material/CircularProgress';
 import Alert from '@mui/material/Alert';
-import { Task, TaskStatus, TriggerType } from '../../../types/task';
+import { Task, TaskStatus, TriggerType, TaskExecutionResult } from '../../../types/task';
 import TaskStatusChip from './TaskStatusChip';
 import TaskTriggerInfo from './TaskTriggerInfo';
 import TaskActionInfo from './TaskActionInfo';
@@ -34,7 +41,7 @@ import {
   taskCardStyles, 
   getTaskCardBorderStyle, 
   dateDisplayStyles,
-  combineStyles 
+  combineStyles
 } from '../../styles/TaskStyles';
 import { formatDate, formatRelativeTime, getExecutionResultText } from '../../../utils/date-utils';
 
@@ -58,6 +65,8 @@ const TaskCard: React.FC<TaskCardProps> = ({
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [executing, setExecuting] = useState(false);
+  const [expandedHistory, setExpandedHistory] = useState<string | null>(null);
+  const [historyExpanded, setHistoryExpanded] = useState(false);
   
   // 切换展开/折叠状态
   const handleExpandClick = () => {
@@ -179,6 +188,148 @@ const TaskCard: React.FC<TaskCardProps> = ({
   
   // 创建紧凑的展开内容样式
   const compactExpandedContentStyles = { pt: 0.6, px: 0.6, ...noBottomPaddingStyles };
+
+  // 执行历史展开/折叠切换
+  const handleHistoryItemClick = (timestamp: number) => {
+    // 如果已展开且点击相同项，则折叠，否则展开点击项
+    setExpandedHistory(expandedHistory === timestamp.toString() ? null : timestamp.toString());
+  };
+
+  // 切换历史记录的展开/收起状态
+  const handleToggleHistory = () => {
+    setHistoryExpanded(!historyExpanded);
+  };
+
+  // 格式化执行持续时间
+  const formatDuration = (duration?: number): string => {
+    if (duration === undefined) return '未知';
+    if (duration < 1000) return `${duration}毫秒`;
+    return `${(duration / 1000).toFixed(1)}秒`;
+  };
+
+  // 渲染任务执行历史记录
+  const renderTaskHistory = () => {
+    const { executions } = task.history;
+    
+    // 如果没有执行记录，显示空提示
+    if (!executions || executions.length === 0) {
+      return (
+        <Box sx={{ 
+          color: 'text.disabled',
+          fontSize: '9px',
+          fontStyle: 'italic',
+          textAlign: 'center',
+          py: 0.5
+        }}>
+          暂无执行记录
+        </Box>
+      );
+    }
+    
+    // 根据历史展开状态决定显示多少条记录
+    const visibleExecutions = historyExpanded ? 
+      executions.slice(0, 5) : 
+      executions.slice(0, 1);
+    
+    return (
+      <List disablePadding>
+        {visibleExecutions.map((execution, index) => {
+          const isExpanded = expandedHistory === execution.timestamp.toString();
+          const executionTime = new Date(execution.timestamp);
+          const formattedTime = executionTime.toLocaleString('zh-CN', { 
+            hour: '2-digit', 
+            minute: '2-digit',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+          });
+          
+          return (
+            <React.Fragment key={execution.timestamp}>
+              <ListItem 
+                disablePadding
+                sx={{
+                  py: 0.5,
+                  px: 0.5,
+                  borderRadius: 1,
+                  mb: 0.5,
+                  fontSize: '10px',
+                  '&:hover': {
+                    backgroundColor: 'rgba(0, 0, 0, 0.04)'
+                  },
+                  color: execution.success ? 'success.main' : 'error.main'
+                }}
+                onClick={() => handleHistoryItemClick(execution.timestamp)}
+                button
+              >
+                <ListItemIcon sx={{ minWidth: 24 }}>
+                  {execution.success ? 
+                    <CheckCircleOutlineIcon sx={{ fontSize: 14 }} /> : 
+                    <ErrorOutlineIcon sx={{ fontSize: 14 }} />
+                  }
+                </ListItemIcon>
+                <ListItemText
+                  primary={
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Typography variant="body2" sx={{ fontSize: '10px' }}>
+                        {formattedTime}
+                      </Typography>
+                      <Typography variant="body2" sx={{ fontSize: '10px' }}>
+                        {execution.success ? '成功' : '失败'} 
+                        {execution.duration && ` (${formatDuration(execution.duration)})`}
+                      </Typography>
+                    </Box>
+                  }
+                  disableTypography
+                />
+                {(execution.details || execution.error) && (
+                  <Box sx={{ display: 'flex', alignItems: 'center', ml: 0.5 }}>
+                    {isExpanded ? 
+                      <KeyboardArrowUpIcon sx={{ fontSize: 14 }} /> : 
+                      <KeyboardArrowDownIcon sx={{ fontSize: 14 }} />
+                    }
+                  </Box>
+                )}
+              </ListItem>
+              
+              {/* 展开的详情内容 */}
+              {(execution.details || execution.error) && (
+                <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+                  <Box sx={{
+                    px: 1,
+                    py: 0.5,
+                    fontSize: '9px',
+                    backgroundColor: 'rgba(0, 0, 0, 0.02)',
+                    borderRadius: 1,
+                    mt: 0.5
+                  }}>
+                    {execution.details && (
+                      <Typography variant="body2" sx={{ mb: 0.5 }}>
+                        {execution.details}
+                      </Typography>
+                    )}
+                    {execution.error && (
+                      <Typography 
+                        variant="body2" 
+                        sx={{ 
+                          color: 'error.main',
+                          fontFamily: 'monospace',
+                          whiteSpace: 'pre-wrap',
+                          wordBreak: 'break-all'
+                        }}
+                      >
+                        {execution.error}
+                      </Typography>
+                    )}
+                  </Box>
+                </Collapse>
+              )}
+            </React.Fragment>
+          );
+        })}
+      </List>
+    );
+  };
 
   return (
     <Card 
@@ -314,63 +465,60 @@ const TaskCard: React.FC<TaskCardProps> = ({
       </CardContent>
       
       <Collapse in={expanded} timeout="auto" unmountOnExit>
-        <Divider sx={{ mb: 0 }} />
+        <Divider variant="fullWidth" sx={{ mt: 0.5, opacity: 0.4 }} />
         <CardContent sx={compactExpandedContentStyles}>
-          <Box sx={{ display: 'flex', flexWrap: 'wrap' }}>
-            <Box sx={{ width: '50%', pr: 1, mb: 0.8 }}>
-              <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center', fontSize: '11px', mb: 0.3 }}>
-                <EventIcon sx={{ mr: 0.3, fontSize: '13px' }} />
-                触发条件
+          <Box>
+            {/* 显示任务触发器详情 */}
+            <Typography variant="body2" sx={{ fontSize: '10px', fontWeight: 'medium', mb: 0.3 }}>
+              触发器:
+            </Typography>
+            <Box sx={{ pl: 1 }}>
+              <TaskTriggerInfo trigger={task.trigger} compact={false} />
+            </Box>
+            
+            {/* 显示任务操作详情 */}
+            <Typography variant="body2" sx={{ fontSize: '10px', fontWeight: 'medium', mt: 1, mb: 0.3 }}>
+              操作:
+            </Typography>
+            <Box sx={{ pl: 1 }}>
+              <TaskActionInfo action={task.action} />
+            </Box>
+            
+            {/* 任务执行历史 */}
+            <Box sx={{ mt: 1 }}>
+              <Typography 
+                variant="body2" 
+                sx={{ 
+                  fontSize: '10px', 
+                  fontWeight: 'medium', 
+                  mb: 0.3,
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  cursor: 'pointer'
+                }}
+                onClick={handleToggleHistory}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  执行历史:
+                </Box>
+                {historyExpanded ? 
+                  <KeyboardArrowUpIcon sx={{ fontSize: 14 }} /> : 
+                  <KeyboardArrowDownIcon sx={{ fontSize: 14 }} />
+                }
               </Typography>
-              <Box sx={{ pl: 1.2 }}>
-                <TaskTriggerInfo trigger={task.trigger} />
+              <Box sx={{ pl: 1 }}>
+                {renderTaskHistory()}
               </Box>
             </Box>
             
-            <Box sx={{ width: '50%', mb: 0.8 }}>
-              <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center', fontSize: '11px', mb: 0.3 }}>
-                <PlayArrowIcon sx={{ mr: 0.3, fontSize: '13px' }} />
-                操作
+            {/* 任务元数据 */}
+            <Box sx={combineStyles(compactDateDisplayStyles, { mt: 1 })}>
+              <Typography variant="body2" sx={{ fontSize: '9px', color: 'text.secondary' }}>
+                创建于: {formatDate(task.createdAt)}
+                {task.createdAt !== task.updatedAt && ` • 更新于: ${formatDate(task.updatedAt)}`}
               </Typography>
-              <Box sx={{ pl: 1.2 }}>
-                <TaskActionInfo action={task.action} />
-              </Box>
             </Box>
-          </Box>
-          
-          <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center', fontSize: '11px', mb: 0.3, mt: 0.2 }}>
-            <HistoryIcon sx={{ mr: 0.3, fontSize: '13px' }} />
-            执行历史
-          </Typography>
-          
-          <Box sx={{ pl: 1.2, fontSize: '10px' }}>
-            <Box sx={{ display: 'flex', flexWrap: 'wrap' }}>
-              <Typography variant="body2" color="text.secondary" sx={{ fontSize: '10px', mr: 1.5 }}>
-                上次执行: {getLastExecutionText()}
-              </Typography>
-              
-              {nextExecutionTime && (
-                <Typography variant="body2" color="text.secondary" sx={{ fontSize: '10px' }}>
-                  下次执行: {formatDate(nextExecutionTime)}
-                </Typography>
-              )}
-            </Box>
-            
-            {task.history.lastExecution && task.history.lastExecution.details && (
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.2, fontSize: '10px' }}>
-                详情: {task.history.lastExecution.details}
-              </Typography>
-            )}
-          </Box>
-          
-          <Box sx={{ mt: 0.5, pt: 0.3, borderTop: '1px solid', borderColor: 'divider', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', fontSize: '10px' }}>
-              <InfoOutlinedIcon sx={{ mr: 0.3, fontSize: '12px' }} />
-              创建时间: {formatDate(task.createdAt)}
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ opacity: 0.7, fontSize: '9px' }}>
-              ID: {task.id}
-            </Typography>
           </Box>
         </CardContent>
       </Collapse>

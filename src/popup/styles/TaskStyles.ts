@@ -128,6 +128,63 @@ export const formErrorTextStyles: SxProps<Theme> = {
   my: 1
 };
 
+// 任务执行历史记录样式
+export const taskHistorySectionStyles: SxProps<Theme> = {
+  mt: 1,
+  pt: 0.5
+};
+
+// 任务执行历史记录标题样式
+export const taskHistoryTitleStyles: SxProps<Theme> = {
+  fontSize: '10px',
+  fontWeight: 500,
+  color: 'text.secondary',
+  display: 'flex',
+  alignItems: 'center',
+  mb: 0.5
+};
+
+// 任务执行历史记录项样式
+export const taskHistoryItemStyles: SxProps<Theme> = {
+  py: 0.5,
+  px: 0.5,
+  borderRadius: 1,
+  mb: 0.5,
+  fontSize: '10px',
+  '&:hover': {
+    backgroundColor: 'rgba(0, 0, 0, 0.04)'
+  }
+};
+
+// 执行成功的历史记录项样式
+export const taskHistorySuccessStyles: SxProps<Theme> = {
+  color: 'success.main'
+};
+
+// 执行失败的历史记录项样式
+export const taskHistoryFailedStyles: SxProps<Theme> = {
+  color: 'error.main'
+};
+
+// 任务执行历史记录详情样式
+export const taskHistoryDetailStyles: SxProps<Theme> = {
+  px: 1,
+  py: 0.5,
+  fontSize: '9px',
+  backgroundColor: 'rgba(0, 0, 0, 0.02)',
+  borderRadius: 1,
+  mt: 0.5
+};
+
+// 任务执行历史记录空提示样式
+export const taskHistoryEmptyStyles: SxProps<Theme> = {
+  color: 'text.disabled',
+  fontSize: '9px',
+  fontStyle: 'italic',
+  textAlign: 'center',
+  py: 0.5
+};
+
 /**
  * 安全合并多个SxProps样式对象
  * 解决TypeScript类型兼容性问题
