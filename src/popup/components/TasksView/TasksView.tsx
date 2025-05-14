@@ -27,7 +27,8 @@ import TaskDialog from './TaskForm';
 import { 
   taskHeaderStyles, 
   filterContainerStyles,
-  fabStyles
+  fabStyles,
+  globalFabStyles
 } from '../../styles/TaskStyles';
 
 interface TasksViewProps {
@@ -282,8 +283,9 @@ const TasksView: React.FC<TasksViewProps> = ({ toastRef }) => {
       {/* 浮动添加按钮 */}
       <Fab 
         color="primary" 
+        size="medium"
         aria-label="添加任务" 
-        sx={fabStyles}
+        sx={globalFabStyles}
         onClick={handleCreateTask}
         disabled={deleteTaskId !== null || showTaskDialog}
       >

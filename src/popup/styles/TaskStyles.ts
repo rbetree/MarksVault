@@ -72,6 +72,16 @@ export const fabStyles: SxProps<Theme> = {
   boxShadow: 3
 };
 
+// 全局通用悬浮按钮样式
+export const globalFabStyles: SxProps<Theme> = {
+  position: 'fixed',
+  bottom: 80,
+  right: 16,
+  zIndex: 1000,
+  boxShadow: 3,
+  size: 'medium'
+};
+
 // 日期显示样式
 export const dateDisplayStyles: SxProps<Theme> = {
   display: 'flex',

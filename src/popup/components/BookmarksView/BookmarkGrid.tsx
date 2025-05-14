@@ -26,6 +26,7 @@ import { BookmarkItem as BookmarkItemType } from '../../../utils/bookmark-servic
 import ViewToggleButton from './ViewToggleButton';
 import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
+import { globalFabStyles } from '../../styles/TaskStyles';
 
 // 拖拽数据类型，与BookmarkItem保持一致
 const DRAG_TYPE = 'application/marksvault-bookmark';
@@ -451,11 +452,7 @@ const BookmarkGrid: React.FC<BookmarkGridProps> = ({
         color="primary"
         size="medium"
         onClick={handleAddClick}
-        sx={{
-          position: 'absolute',
-          bottom: 80, // 避开底部导航栏
-          right: 16,
-        }}
+        sx={globalFabStyles}
       >
         <AddIcon />
       </Fab>
