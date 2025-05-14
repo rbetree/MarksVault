@@ -34,3 +34,5 @@ yarn-error.log*
 
 # 测试覆盖率
 /coverage 
+# SpecStory explanation file
+.specstory/.what-is-this.md

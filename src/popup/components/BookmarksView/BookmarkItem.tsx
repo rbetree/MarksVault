@@ -6,13 +6,13 @@ import IconButton from '@mui/material/IconButton';
 import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import ListItemButton from '@mui/material/ListItemButton';
-import InsertLinkIcon from '@mui/icons-material/InsertLink';
 import FolderIcon from '@mui/icons-material/Folder';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
+import LinkIcon from '@mui/icons-material/Link';
 import { BookmarkItem as BookmarkItemType } from '../../../utils/bookmark-service';
 import { getFaviconUrl } from '../../../utils/favicon-service';
 import bookmarkService from '../../../utils/bookmark-service';
@@ -392,7 +392,7 @@ const BookmarkItem: React.FC<BookmarkItemProps> = ({
                 onError={handleIconError}
               />
             ) : (
-              <InsertLinkIcon color="secondary" />
+              <LinkIcon color="secondary" />
             )}
           </ListItemIcon>
           <ListItemText 

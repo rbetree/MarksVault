@@ -44,18 +44,24 @@ const GridContainer = styled(Box)(({ theme }) => ({
   backgroundColor: theme.palette.background.paper,
 }));
 
-const NavigationArea = styled(Box)(({ theme }) => ({
-  padding: theme.spacing(0.75, 1),
-  display: 'flex',
-  alignItems: 'center',
-  backgroundColor: theme.palette.background.default,
-  borderRadius: theme.shape.borderRadius,
-  margin: theme.spacing(0.5, 0.5, 0),
-}));
-
 const SearchArea = styled(Box)(({ theme }) => ({
   padding: theme.spacing(0.5, 0.5, 0, 0.5),
   backgroundColor: theme.palette.background.paper,
+  display: 'flex',
+  flexDirection: 'row',
+  alignItems: 'center',
+  width: '100%',
+  justifyContent: 'space-between',
+}));
+
+const LeftColumn = styled(Box)(({ theme }) => ({
+  width: '50%',
+  paddingRight: theme.spacing(0.5),
+}));
+
+const RightColumn = styled(Box)(({ theme }) => ({
+  width: '50%',
+  paddingLeft: theme.spacing(0.5),
 }));
 
 const EmptyState = styled(Box)(({ theme }) => ({
@@ -296,69 +302,111 @@ const BookmarkGrid: React.FC<BookmarkGridProps> = ({
 
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      {/* 搜索区域 - 现在总是在顶部 */}
+      {/* 搜索区域 - 左右分隔布局 */}
       <SearchArea>
-        {/* 搜索框 */}
-        <Paper
-          sx={{
-            p: '1px 4px',
-            display: 'flex',
-            alignItems: 'center',
-            width: '100%',
-            boxShadow: 'none',
-            border: '1px solid',
-            borderColor: 'divider',
-            height: '40px',
-          }}
-        >
-          <IconButton sx={{ p: 0.5 }} aria-label="搜索">
-            <SearchIcon fontSize="small" />
-          </IconButton>
-          <InputBase
-            sx={{ ml: 0.5, flex: 1, fontSize: '0.9rem' }}
-            placeholder="搜索书签..."
-            value={searchText}
-            onChange={handleSearchChange}
-          />
-          {searchText && (
-            <IconButton sx={{ p: 0.5 }} aria-label="清除" onClick={clearSearch}>
-              <ClearIcon fontSize="small" />
-            </IconButton>
-          )}
-          <Box sx={{ display: 'flex', alignItems: 'center', ml: 0.5 }}>
-            <IconButton 
-              sx={{ p: 0.5 }} 
-              aria-label="排序" 
-              onClick={handleSortClick}
-              title={`排序: ${getSortMethodName(sortMethod)}`}
-            >
-              <SortIcon fontSize="small" color={sortMethod !== 'default' ? 'primary' : 'inherit'} />
-            </IconButton>
-            <IconButton 
-              sx={{ p: 0.5 }} 
-              aria-label="添加书签" 
-              onClick={handleAddClick}
-            >
-              <AddIcon fontSize="small" />
-            </IconButton>
-            <ViewToggleButton 
-              viewType={viewType} 
-              onChange={onViewTypeChange} 
-            />
-          </Box>
-        </Paper>
+        {/* 左侧：导航区域（文件夹层级） */}
+        <LeftColumn>
+          <Paper
+            sx={{
+              p: '1px 4px',
+              display: 'flex',
+              alignItems: 'center',
+              width: '100%',
+              boxShadow: 'none',
+              border: '1px solid',
+              borderColor: 'divider',
+              height: '40px',
+            }}
+          >
+            {parentFolder ? (
+              <>
+                <IconButton onClick={onNavigateBack} size="small" sx={{ p: 0.5 }}>
+                  <ArrowBackIcon fontSize="small" />
+                </IconButton>
+                <Typography 
+                  variant="body2" 
+                  noWrap 
+                  sx={{ 
+                    ml: 0.5, 
+                    fontWeight: 400, 
+                    flex: 1,
+                    fontSize: '0.9rem',
+                    color: 'text.primary' 
+                  }}
+                >
+                  {parentFolder.title}
+                </Typography>
+              </>
+            ) : (
+              <Typography 
+                variant="body2" 
+                noWrap 
+                sx={{ 
+                  ml: 0.5, 
+                  fontWeight: 400, 
+                  flex: 1,
+                  fontSize: '0.9rem',
+                  color: 'text.primary',
+                  pl: 0.5 // 添加左内边距，与搜索图标对齐
+                }}
+              >
+                书签栏
+              </Typography>
+            )}
+          </Paper>
+        </LeftColumn>
         
-        {/* 导航区域 - 移到搜索框下方 */}
-        {parentFolder && (
-          <NavigationArea>
-            <IconButton onClick={onNavigateBack} size="small" sx={{ p: 0.5 }}>
-              <ArrowBackIcon fontSize="small" />
+        {/* 右侧：搜索框 */}
+        <RightColumn>
+          <Paper
+            sx={{
+              p: '1px 4px',
+              display: 'flex',
+              alignItems: 'center',
+              width: '100%',
+              boxShadow: 'none',
+              border: '1px solid',
+              borderColor: 'divider',
+              height: '40px',
+            }}
+          >
+            <IconButton sx={{ p: 0.5 }} aria-label="搜索">
+              <SearchIcon fontSize="small" />
             </IconButton>
-            <Typography variant="body2" noWrap sx={{ ml: 0.5, fontWeight: 500 }}>
-              {parentFolder.title}
-            </Typography>
-          </NavigationArea>
-        )}
+            <InputBase
+              sx={{ 
+                ml: 0.5, 
+                flex: 1, 
+                fontSize: '0.9rem',
+                fontWeight: 400,
+                fontFamily: 'inherit',
+                color: 'text.primary'
+              }}
+              placeholder="搜索书签..."
+              value={searchText}
+              onChange={handleSearchChange}
+            />
+            {searchText && (
+              <IconButton sx={{ p: 0.5 }} aria-label="清除" onClick={clearSearch}>
+                <ClearIcon fontSize="small" />
+              </IconButton>
+            )}
+            <Box sx={{ display: 'flex', alignItems: 'center', ml: 0.5 }}>
+              <IconButton 
+                sx={{ p: 0.5 }} 
+                aria-label="排序" 
+                onClick={handleSortClick}
+                title={`排序: ${getSortMethodName(sortMethod)}`}
+              >
+                <SortIcon fontSize="small" color={sortMethod !== 'default' ? 'primary' : 'inherit'} />
+              </IconButton>
+              <ViewToggleButton 
+                viewType={viewType} 
+                onChange={onViewTypeChange} 
+              />
+            </Box>
+          </Paper>
+        </RightColumn>
       </SearchArea>
 
       <Divider />

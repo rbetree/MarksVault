@@ -12,6 +12,7 @@ import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
+import LinkIcon from '@mui/icons-material/Link';
 import { styled } from '@mui/material/styles';
 import { BookmarkItem as BookmarkItemType } from '../../../utils/bookmark-service';
 import { getFaviconUrl } from '../../../utils/favicon-service';
@@ -145,6 +146,7 @@ const BookmarkGridItem: React.FC<BookmarkGridItemProps> = ({
 }) => {
   const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
   const [iconUrl, setIconUrl] = useState<string>('');
+  const [iconError, setIconError] = useState<boolean>(false);
   const [itemCount, setItemCount] = useState<number | null>(null);
   const [isOver, setIsOver] = useState<boolean>(false); // 拖拽悬停状态
   const [dropPosition, setDropPosition] = useState<DropPosition>('center'); // 拖拽位置
@@ -158,6 +160,7 @@ const BookmarkGridItem: React.FC<BookmarkGridItemProps> = ({
   useEffect(() => {
     if (!bookmark.isFolder && bookmark.url) {
       setIconUrl(getFaviconUrl(bookmark.url));
+      setIconError(false);
     }
   }, [bookmark.url, bookmark.isFolder]);
 
@@ -358,6 +361,11 @@ const BookmarkGridItem: React.FC<BookmarkGridItemProps> = ({
     }
   };
 
+  // 处理图标加载失败
+  const handleIconError = () => {
+    setIconError(true);
+  };
+
   return (
     <GridItemContainer 
       onClick={handleItemClick}
@@ -382,22 +390,15 @@ const BookmarkGridItem: React.FC<BookmarkGridItemProps> = ({
         {bookmark.isFolder ? (
           <FolderIcon sx={{ fontSize: 48, color: isOver && interactionMode === 'move' ? 'primary.main' : 'primary.main' }} />
         ) : (
-          iconUrl ? (
+          iconUrl && !iconError ? (
             <img 
               src={iconUrl} 
               alt={bookmark.title} 
               style={{ maxWidth: '100%', maxHeight: '100%' }} 
+              onError={handleIconError}
             />
           ) : (
-            <img 
-              src={chrome.runtime.getURL('assets/icons/default-favicon.png')} 
-              alt={bookmark.title} 
-              style={{ maxWidth: '100%', maxHeight: '100%' }} 
-              onError={(e) => {
-                // 如果默认图标加载失败，使用占位符
-                (e.target as HTMLImageElement).style.display = 'none';
-              }}
-            />
+            <LinkIcon sx={{ fontSize: 48, color: 'secondary.main' }} />
           )
         )}
       </IconContainer>

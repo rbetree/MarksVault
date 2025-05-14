@@ -1,30 +1,16 @@
 import React from 'react';
-import ToggleButton from '@mui/material/ToggleButton';
-import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
+import IconButton from '@mui/material/IconButton';
 import Tooltip from '@mui/material/Tooltip';
 import ViewListIcon from '@mui/icons-material/ViewList';
 import GridViewIcon from '@mui/icons-material/GridView';
 import { styled } from '@mui/material/styles';
 
-// 样式化的ToggleButtonGroup
-const StyledToggleButtonGroup = styled(ToggleButtonGroup)(({ theme }) => ({
-  marginLeft: 'auto',
-  height: 36,
-  '& .MuiToggleButtonGroup-grouped': {
-    border: 0,
-    '&:not(:first-of-type)': {
-      borderRadius: theme.shape.borderRadius,
-    },
-    '&:first-of-type': {
-      borderRadius: theme.shape.borderRadius,
-    },
-  },
-}));
-
-// 样式化的ToggleButton
-const StyledToggleButton = styled(ToggleButton)(({ theme }) => ({
+// 样式化的IconButton
+const StyledIconButton = styled(IconButton)(({ theme }) => ({
   padding: '5px 8px',
   borderRadius: theme.shape.borderRadius,
+  marginLeft: 'auto',
+  height: 36,
   '&.Mui-selected': {
     backgroundColor: theme.palette.primary.main,
     color: theme.palette.primary.contrastText,
@@ -40,35 +26,31 @@ interface ViewToggleButtonProps {
 }
 
 const ViewToggleButton: React.FC<ViewToggleButtonProps> = ({ viewType, onChange }) => {
-  // 处理视图类型更改
-  const handleViewChange = (
-    event: React.MouseEvent<HTMLElement>,
-    newViewType: 'list' | 'grid' | null
-  ) => {
-    if (newViewType !== null) {
-      onChange(newViewType);
-    }
+  // 处理视图类型切换
+  const handleViewChange = () => {
+    // 切换到另一种视图类型
+    const newViewType = viewType === 'list' ? 'grid' : 'list';
+    onChange(newViewType);
   };
 
+  // 根据当前视图类型显示不同的图标（显示对应的"另一个"视图的图标）
+  const icon = viewType === 'list' 
+    ? <GridViewIcon fontSize="small" /> // 当前是列表视图，显示网格图标表示可以切换到网格视图
+    : <ViewListIcon fontSize="small" />; // 当前是网格视图，显示列表图标表示可以切换到列表视图
+
+  const tooltipTitle = viewType === 'list' ? '切换到网格视图' : '切换到列表视图';
+
   return (
-    <StyledToggleButtonGroup
-      value={viewType}
-      exclusive
-      onChange={handleViewChange}
-      aria-label="视图类型"
-      size="small"
-    >
-      <Tooltip title="列表视图">
-        <StyledToggleButton value="list" aria-label="列表视图">
-          <ViewListIcon fontSize="small" />
-        </StyledToggleButton>
-      </Tooltip>
-      <Tooltip title="网格视图">
-        <StyledToggleButton value="grid" aria-label="网格视图">
-          <GridViewIcon fontSize="small" />
-        </StyledToggleButton>
-      </Tooltip>
-    </StyledToggleButtonGroup>
+    <Tooltip title={tooltipTitle}>
+      <StyledIconButton 
+        onClick={handleViewChange} 
+        aria-label={tooltipTitle}
+        size="small"
+        color="primary"
+      >
+        {icon}
+      </StyledIconButton>
+    </Tooltip>
   );
 };
 
