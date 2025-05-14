@@ -1,24 +1,4 @@
-import React, { useState, useEffect } from 'react';
-import Box from '@mui/material/Box';
-import Typography from '@mui/material/Typography';
-import Switch from '@mui/material/Switch';
-import FormControlLabel from '@mui/material/FormControlLabel';
-import FormGroup from '@mui/material/FormGroup';
-import Tabs from '@mui/material/Tabs';
-import Tab from '@mui/material/Tab';
-import Card from '@mui/material/Card';
-import CardContent from '@mui/material/CardContent';
-import Divider from '@mui/material/Divider';
-import SettingsIcon from '@mui/icons-material/Settings';
-import BuildIcon from '@mui/icons-material/Build';
-import InfoIcon from '@mui/icons-material/Info';
-import NotificationsIcon from '@mui/icons-material/Notifications';
-import VisibilityIcon from '@mui/icons-material/Visibility';
-import Link from '@mui/material/Link';
-import { ToastRef } from '../shared/Toast';
-import storageService, { UserSettings } from '../../../utils/storage-service';
-import SettingsActions from './SettingsActions';
-import { useThemeContext } from '../../contexts/ThemeContext';
+import React, { useState, useEffect } from 'react';import Box from '@mui/material/Box';import Typography from '@mui/material/Typography';import Switch from '@mui/material/Switch';import FormControlLabel from '@mui/material/FormControlLabel';import FormGroup from '@mui/material/FormGroup';import Tabs from '@mui/material/Tabs';import Tab from '@mui/material/Tab';import Card from '@mui/material/Card';import CardContent from '@mui/material/CardContent';import CardHeader from '@mui/material/CardHeader';import Divider from '@mui/material/Divider';import SettingsIcon from '@mui/icons-material/Settings';import BuildIcon from '@mui/icons-material/Build';import InfoIcon from '@mui/icons-material/Info';import NotificationsIcon from '@mui/icons-material/Notifications';import VisibilityIcon from '@mui/icons-material/Visibility';import GitHubIcon from '@mui/icons-material/GitHub';import BugReportIcon from '@mui/icons-material/BugReport';import CodeIcon from '@mui/icons-material/Code';import FeaturedPlayListIcon from '@mui/icons-material/FeaturedPlayList';import PeopleIcon from '@mui/icons-material/People';import Link from '@mui/material/Link';import Avatar from '@mui/material/Avatar';import Grid from '@mui/material/Grid';import Chip from '@mui/material/Chip';import Paper from '@mui/material/Paper';import { ToastRef } from '../shared/Toast';import storageService, { UserSettings } from '../../../utils/storage-service';import SettingsActions from './SettingsActions';import { useThemeContext } from '../../contexts/ThemeContext';
 
 interface SettingsViewProps {
   toastRef?: React.RefObject<ToastRef>;
@@ -43,7 +23,7 @@ const TabPanel = (props: TabPanelProps) => {
       {...other}
     >
       {value === index && (
-        <Box sx={{ pt: 2 }}>
+        <Box sx={{ pt: 1 }}>
           {children}
         </Box>
       )}
@@ -195,7 +175,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ toastRef }) => {
   };
 
   return (
-    <Box sx={{ p: 2, pb: 7 }}>
+    <Box sx={{ p: 2, pb: 0 }}>
       <Card sx={{ boxShadow: '0 2px 8px rgba(0,0,0,0.08)', borderRadius: 2 }}>
         <Tabs 
           value={tabValue} 
@@ -354,27 +334,131 @@ const SettingsView: React.FC<SettingsViewProps> = ({ toastRef }) => {
           
           {/* 关于信息标签页 */}
           <TabPanel value={tabValue} index={2}>
-            <Box sx={{ px: 1 }}>
-              <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
-                <strong>MarksVault</strong>&nbsp;版本:&nbsp;1.0.0
-              </Typography>
-              <Typography variant="body2" sx={{ fontSize: '0.8rem', color: 'text.secondary', mb: 1 }}>
-                一个强大的书签管理扩展，助您高效整理和安全备份书签。
-              </Typography>
-              <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>
-                了解更多信息，请访问{' '}
-                <Link 
-                  href="#" 
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    chrome.tabs.create({ url: 'https://github.com/rbetree/MarksVault' });
-                  }}
-                >
-                  GitHub页面
-                </Link>
-              </Typography>
+            <Box sx={{ px: 0.5 }}>
+              {/* 项目基本信息部分 */}
+              <Paper 
+                elevation={0} 
+                sx={{ 
+                  p: 1, 
+                  mb: 1, 
+                  borderRadius: 2,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  textAlign: 'center',
+                  border: '1px solid',
+                  borderColor: 'divider'
+                }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', mb: 1 }}>
+                  <Avatar 
+                    src="/assets/icons/logo/icon128.png"
+                    alt="MarksVault Logo"
+                    sx={{ 
+                      width: 48, 
+                      height: 48,
+                      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+                      bgcolor: 'background.paper',
+                      p: 0.5
+                    }}
+                  >
+                    M
+                  </Avatar>
+                  <Box sx={{ ml: 2, textAlign: 'left', flex: 1 }}>
+                    <Typography variant="h6" fontWeight="bold" sx={{ lineHeight: 1.2 }}>
+                      MarksVault
+                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.5 }}>
+                      <Chip 
+                        label="v0.1.0" 
+                        size="small" 
+                        color="primary" 
+                        sx={{ fontSize: '0.7rem', height: 20 }}
+                      />
+                      <Box sx={{ display: 'flex', ml: 1.5 }}>
+                        <Link
+                          href="#"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            chrome.tabs.create({ url: 'https://github.com/rbetree/MarksVault' });
+                          }}
+                          sx={{ 
+                            color: 'primary.main',
+                            display: 'flex'
+                          }}
+                          aria-label="GitHub"
+                        >
+                          <GitHubIcon sx={{ fontSize: 18 }} />
+                        </Link>
+                        <Link
+                          href="#"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            chrome.tabs.create({ url: 'https://github.com/rbetree/MarksVault/issues' });
+                          }}
+                          sx={{ 
+                            color: 'primary.main',
+                            ml: 1,
+                            display: 'flex'
+                          }}
+                          aria-label="问题反馈"
+                        >
+                          <BugReportIcon sx={{ fontSize: 18 }} />
+                        </Link>
+                      </Box>
+                    </Box>
+                  </Box>
+                </Box>
+                <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8rem' }}>
+                  一个强大的书签管理扩展，助您高效整理和安全备份书签
+                </Typography>
+              </Paper>
+
+              {/* 技术栈信息部分 */}
+              <Box sx={{ mb: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+                  <CodeIcon fontSize="small" sx={{ mr: 1, color: 'primary.main' }} />
+                  <Typography variant="subtitle1" fontWeight={500} sx={{ fontSize: '0.95rem' }}>技术栈</Typography>
+                </Box>
+                <Divider sx={{ mb: 0.75 }} />
+                <Grid container spacing={1} sx={{ pl: 0.5 }}>
+                  <Grid item xs={6}>
+                    <Typography variant="body2" fontWeight={500} gutterBottom sx={{ fontSize: '0.75rem' }}>前端框架</Typography>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                      <Chip size="small" label="React 18.2" sx={{ fontSize: '0.65rem', height: 20 }} />
+                      <Chip size="small" label="TypeScript 5.0" sx={{ fontSize: '0.65rem', height: 20 }} />
+                      <Chip size="small" label="Material-UI 5.13" sx={{ fontSize: '0.65rem', height: 20 }} />
+                    </Box>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="body2" fontWeight={500} gutterBottom sx={{ fontSize: '0.75rem' }}>扩展API</Typography>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                      <Chip size="small" label="Chrome Manifest V3" sx={{ fontSize: '0.65rem', height: 20 }} />
+                      <Chip size="small" label="Bookmarks API" sx={{ fontSize: '0.65rem', height: 20 }} />
+                      <Chip size="small" label="Storage API" sx={{ fontSize: '0.65rem', height: 20 }} />
+                    </Box>
+                  </Grid>
+                </Grid>
+              </Box>
+
+              {/* 核心功能介绍部分 */}
+              <Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+                  <FeaturedPlayListIcon fontSize="small" sx={{ mr: 1, color: 'primary.main' }} />
+                  <Typography variant="subtitle1" fontWeight={500} sx={{ fontSize: '0.95rem' }}>核心功能</Typography>
+                </Box>
+                <Divider sx={{ mb: 0.75 }} />
+                <Grid container spacing={1} sx={{ pl: 0.5 }}>
+                  <Grid item xs={6}>
+                    <Typography variant="body2" sx={{ fontSize: '0.75rem' }}>• 智能书签管理与分类</Typography>
+                    <Typography variant="body2" sx={{ fontSize: '0.75rem' }}>• GitHub云端同步与备份</Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="body2" sx={{ fontSize: '0.75rem' }}>• 高级搜索与过滤功能</Typography>
+                    <Typography variant="body2" sx={{ fontSize: '0.75rem' }}>• 自动化任务管理系统</Typography>
+                  </Grid>
+                </Grid>
+              </Box>
             </Box>
           </TabPanel>
         </CardContent>

@@ -151,10 +151,10 @@ const App: React.FC = () => {
             maxWidth={false}
             sx={{
               flexGrow: 1,
-              overflow: 'auto',
+              overflow: currentView === 'settings' ? 'hidden' : 'auto',
               display: 'flex',
               flexDirection: 'column',
-              pb: 7, // 留出底部导航的高度
+              pb: currentView === 'settings' ? 0 : 7, // 仅在非设置页面留出底部导航的高度
             }}
           >
             {renderContent()}
