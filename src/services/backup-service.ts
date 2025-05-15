@@ -8,7 +8,7 @@ import storageService from '../utils/storage-service';
 // 备份存储库名称
 const DEFAULT_BACKUP_REPO = 'marksvault-backups';
 // 备份文件路径：最新文件和带时间戳的历史文件
-const LATEST_BACKUP_PATH = 'bookmark_backup_latest.json';
+const LATEST_BACKUP_PATH = 'bookmarks_backup_latest.json';
 // 设置文件备份文件夹路径
 const SETTINGS_FOLDER_PATH = 'settings';
 // 备份类型常量
@@ -190,6 +190,22 @@ class BackupService {
           await storageService.setStorageData('settings_backup_status', backupStatus);
         } else {
           await storageService.saveBackupStatus(backupStatus);
+        }
+        
+        // 清理超出限制的旧备份文件
+        try {
+          const cleanupResult = await this.cleanupOldBackups(
+            credentials,
+            username,
+            type
+          );
+          
+          if (cleanupResult.deletedCount > 0) {
+            console.log(`已清理 ${cleanupResult.deletedCount} 个旧的 ${type} 备份文件`);
+          }
+        } catch (cleanupError) {
+          // 清理失败不应影响备份结果，只记录日志
+          console.error('清理旧备份文件失败:', cleanupError);
         }
         
         // 7. 返回成功结果
@@ -656,7 +672,7 @@ class BackupService {
       
       // 过滤并计算备份文件数量
       const backupFiles = files.filter(
-        file => file.name.startsWith('bookmark_backup_') && file.name.endsWith('.json')
+        file => file.name.startsWith('bookmarks_backup_') && file.name.endsWith('.json')
       );
       
       const totalBackups = backupFiles.length;
@@ -667,7 +683,8 @@ class BackupService {
       
       // 解析文件名中的时间戳
       const parseTimestamp = (filename: string): number => {
-        const match = filename.match(/bookmark_backup_(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})\.json/);
+        // 使用新格式的正则表达式
+        const match = filename.match(/bookmarks_backup_(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})\.json/);
         if (match) {
           const [_, year, month, day, hour, minute, second] = match;
           return new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}`).getTime();
@@ -1015,6 +1032,111 @@ class BackupService {
       return {
         success: false,
         error: `推送失败: ${error instanceof Error ? error.message : String(error)}`
+      };
+    }
+  }
+  
+  /**
+   * 清理超出限制的旧备份文件
+   * @param credentials GitHub凭据
+   * @param username GitHub用户名
+   * @param type 备份类型 (书签或设置)
+   * @returns 清理结果
+   */
+  async cleanupOldBackups(
+    credentials: GitHubCredentials,
+    username: string,
+    type: BackupType = BackupType.BOOKMARKS
+  ): Promise<{success: boolean; deletedCount: number; error?: string}> {
+    try {
+      // 1. 获取用户设置，检查最大备份数量限制
+      const settingsResult = await storageService.getSettings();
+      if (!settingsResult.success) {
+        return { success: true, deletedCount: 0 }; // 无法获取设置，不执行清理
+      }
+
+      const maxBackups = settingsResult.data?.backup?.maxBackupsPerType || 0;
+      if (maxBackups <= 0) {
+        return { success: true, deletedCount: 0 }; // 没有设置限制或限制为0，不执行清理
+      }
+
+      // 2. 确定要检查的文件夹路径
+      const folderPath = type === BackupType.SETTINGS ? SETTINGS_FOLDER_PATH : 'bookmarks';
+      
+      // 3. 获取该类型的所有备份文件
+      const files = await githubService.getRepositoryFiles(
+        credentials,
+        username,
+        DEFAULT_BACKUP_REPO,
+        folderPath
+      );
+      
+      // 4. 根据备份类型过滤文件
+      const filePrefix = type === BackupType.SETTINGS ? 'settings_backup_' : 'bookmarks_backup_';
+      let backupFiles = files.filter(
+        file => file.name.startsWith(filePrefix) && file.name.endsWith('.json')
+      );
+      
+      // 如果文件数量没有超过限制，不需要清理
+      if (backupFiles.length <= maxBackups) {
+        console.log(`${type} 备份文件数量 (${backupFiles.length}) 未超过限制 (${maxBackups})`);
+        return { success: true, deletedCount: 0 };
+      }
+      
+      // 5. 解析文件名中的时间戳
+      const parseTimestamp = (filename: string): number => {
+        // 匹配文件名中的时间戳部分 (例如: xxx_backup_20230415123045.json)
+        const match = filename.match(/_backup_(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})\.json/);
+        if (match) {
+          const [_, year, month, day, hour, minute, second] = match;
+          return new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}`).getTime();
+        }
+        return 0;
+      };
+      
+      // 6. 按时间戳排序（从新到旧）
+      backupFiles = backupFiles.sort(
+        (a, b) => parseTimestamp(b.name) - parseTimestamp(a.name)
+      );
+      
+      // 7. 保留最新的 maxBackups 个文件，删除其余文件
+      const filesToDelete = backupFiles.slice(maxBackups);
+      console.log(`需要删除 ${filesToDelete.length} 个旧的 ${type} 备份文件`);
+      
+      let deletedCount = 0;
+      for (const file of filesToDelete) {
+        try {
+          await githubService.deleteFile(
+            credentials,
+            username,
+            DEFAULT_BACKUP_REPO,
+            file.path,
+            `自动清理旧的${type === BackupType.SETTINGS ? '设置' : '书签'}备份文件`,
+            file.sha
+          );
+          deletedCount++;
+          console.log(`已删除旧备份文件: ${file.path}`);
+        } catch (deleteError) {
+          console.error(`删除文件 ${file.path} 失败:`, deleteError);
+          // 继续删除其他文件
+        }
+      }
+      
+      // 8. 更新备份统计信息（如果有删除操作）
+      if (deletedCount > 0) {
+        if (type === BackupType.BOOKMARKS) {
+          // 强制刷新书签备份统计信息
+          await this.getBackupStats(credentials, username, true);
+        }
+      }
+      
+      return { success: true, deletedCount };
+    } catch (error) {
+      console.error('清理旧备份文件失败:', error);
+      return { 
+        success: false, 
+        deletedCount: 0,
+        error: `清理失败: ${error instanceof Error ? error.message : String(error)}`
       };
     }
   }

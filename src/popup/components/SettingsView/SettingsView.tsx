@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';import Box from '@mui/material/Box';import Typography from '@mui/material/Typography';import Switch from '@mui/material/Switch';import FormControlLabel from '@mui/material/FormControlLabel';import FormGroup from '@mui/material/FormGroup';import Tabs from '@mui/material/Tabs';import Tab from '@mui/material/Tab';import Card from '@mui/material/Card';import CardContent from '@mui/material/CardContent';import CardHeader from '@mui/material/CardHeader';import Divider from '@mui/material/Divider';import SettingsIcon from '@mui/icons-material/Settings';import BuildIcon from '@mui/icons-material/Build';import InfoIcon from '@mui/icons-material/Info';import NotificationsIcon from '@mui/icons-material/Notifications';import VisibilityIcon from '@mui/icons-material/Visibility';import GitHubIcon from '@mui/icons-material/GitHub';import BugReportIcon from '@mui/icons-material/BugReport';import CodeIcon from '@mui/icons-material/Code';import FeaturedPlayListIcon from '@mui/icons-material/FeaturedPlayList';import PeopleIcon from '@mui/icons-material/People';import Link from '@mui/material/Link';import Avatar from '@mui/material/Avatar';import Grid from '@mui/material/Grid';import Chip from '@mui/material/Chip';import Paper from '@mui/material/Paper';import { ToastRef } from '../shared/Toast';import storageService, { UserSettings } from '../../../utils/storage-service';import SettingsActions from './SettingsActions';import { useThemeContext } from '../../contexts/ThemeContext';
+import React, { useState, useEffect } from 'react';import Box from '@mui/material/Box';import Typography from '@mui/material/Typography';import Switch from '@mui/material/Switch';import FormControlLabel from '@mui/material/FormControlLabel';import FormGroup from '@mui/material/FormGroup';import Tabs from '@mui/material/Tabs';import Tab from '@mui/material/Tab';import Card from '@mui/material/Card';import CardContent from '@mui/material/CardContent';import CardHeader from '@mui/material/CardHeader';import Divider from '@mui/material/Divider';import SettingsIcon from '@mui/icons-material/Settings';import BuildIcon from '@mui/icons-material/Build';import InfoIcon from '@mui/icons-material/Info';import NotificationsIcon from '@mui/icons-material/Notifications';import VisibilityIcon from '@mui/icons-material/Visibility';import GitHubIcon from '@mui/icons-material/GitHub';import BugReportIcon from '@mui/icons-material/BugReport';import CodeIcon from '@mui/icons-material/Code';import FeaturedPlayListIcon from '@mui/icons-material/FeaturedPlayList';import PeopleIcon from '@mui/icons-material/People';import Link from '@mui/material/Link';import Avatar from '@mui/material/Avatar';import Grid from '@mui/material/Grid';import Chip from '@mui/material/Chip';import Paper from '@mui/material/Paper';import { ToastRef } from '../shared/Toast';import storageService, { UserSettings } from '../../../utils/storage-service';import SettingsActions from './SettingsActions';import { useThemeContext } from '../../contexts/ThemeContext';import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 
 interface SettingsViewProps {
   toastRef?: React.RefObject<ToastRef>;
@@ -325,6 +325,48 @@ const SettingsView: React.FC<SettingsViewProps> = ({ toastRef }) => {
                   }
                 />
               </FormGroup>
+            </SettingGroup>
+            
+            {/* 备份设置分组 */}
+            <SettingGroup title="备份设置" icon={<CloudUploadIcon fontSize="small" />}>
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="body2" sx={{ mb: 1 }}>备份文件数量限制</Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={settings.backup?.maxBackupsPerType || 10}
+                    onChange={(e) => {
+                      const value = Math.max(0, Math.min(100, parseInt(e.target.value) || 0));
+                      const newSettings = {
+                        ...settings,
+                        backup: {
+                          ...(settings.backup || {}),
+                          maxBackupsPerType: value
+                        }
+                      };
+                      setSettings(newSettings);
+                      storageService.updateSettings({ 
+                        backup: { maxBackupsPerType: value }
+                      });
+                    }}
+                    style={{ 
+                      width: '60px',
+                      padding: '4px 8px',
+                      border: '1px solid #ccc',
+                      borderRadius: '4px'
+                    }}
+                    aria-label="最大备份数量"
+                  />
+                  <Typography variant="caption" sx={{ ml: 1, color: 'text.secondary' }}>
+                    每种类型的最大备份数量 (0 = 不限制)
+                  </Typography>
+                </Box>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                  超过限制的旧备份文件将被自动删除
+                </Typography>
+              </Box>
             </SettingGroup>
           </TabPanel>
           

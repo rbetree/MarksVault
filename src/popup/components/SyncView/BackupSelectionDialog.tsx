@@ -58,8 +58,8 @@ const BackupSelectionDialog: React.FC<BackupSelectionDialogProps> = ({
 
   // 从文件名中提取并格式化时间戳
   const parseTimestampFromFilename = (filename: string): { formatted: string; raw: string } => {
-    // 格式: bookmark_backup_YYYYMMDDHHMMSS.json
-    const match = filename.match(/bookmark_backup_(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})\.json/);
+    // 格式: bookmarks_backup_YYYYMMDDHHMMSS.json
+    const match = filename.match(/bookmarks_backup_(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})\.json/);
     
     if (match) {
       const [_, year, month, day, hour, minute, second] = match;
@@ -84,9 +84,9 @@ const BackupSelectionDialog: React.FC<BackupSelectionDialogProps> = ({
         'bookmarks' // 指定从bookmarks文件夹获取文件
       );
       
-      // 只过滤书签备份文件
+      // 只过滤书签备份文件，仅支持新格式
       const backupFiles = files
-        .filter(file => file.name.startsWith('bookmark_backup_') && file.name.endsWith('.json'))
+        .filter(file => file.name.startsWith('bookmarks_backup_') && file.name.endsWith('.json'))
         .map(file => {
           const { formatted, raw } = parseTimestampFromFilename(file.name);
           return {

@@ -9,6 +9,9 @@ export interface UserSettings {
     syncStatus: boolean; // 同步状态通知
     backupReminders: boolean; // 备份提醒
   };
+  backup?: {
+    maxBackupsPerType: number; // 每种类型备份的最大保留数量，0表示不限制
+  };
   // 更多设置项...
 }
 
@@ -65,6 +68,9 @@ class StorageService {
           bookmarkChanges: true,
           syncStatus: true,
           backupReminders: true
+        },
+        backup: {
+          maxBackupsPerType: 10 // 默认每种类型最多保留10个备份
         }
       };
       
@@ -77,6 +83,11 @@ class StorageService {
             notifications: {
               ...defaultSettings.notifications,
               ...(result.settings.notifications || {})
+            },
+            // 确保backup对象完整
+            backup: {
+              ...defaultSettings.backup,
+              ...(result.settings.backup || {})
             }
           }
         : defaultSettings;
