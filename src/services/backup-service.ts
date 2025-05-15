@@ -103,7 +103,9 @@ class BackupService {
       const seconds = String(now.getSeconds()).padStart(2, '0');
       
       const timestamp = `${year}${month}${day}${hours}${minutes}${seconds}`;
-      const backupFilePath = `bookmark_backup_${timestamp}.json`;
+      const fileName = `bookmark_backup_${timestamp}.json`;
+      // 将文件保存到bookmarks文件夹
+      const backupFilePath = `bookmarks/${fileName}`;
       
       // 5. 上传新备份文件（不再更新最新文件，只创建新文件）
       const uploadResult = await githubService.createOrUpdateFile(
@@ -177,8 +179,8 @@ class BackupService {
       
       // 2. 获取备份文件内容
       const filePath = useTimestampedFile && timestampedFilePath 
-        ? timestampedFilePath 
-        : LATEST_BACKUP_PATH;
+        ? (timestampedFilePath.startsWith('bookmarks/') ? timestampedFilePath : `bookmarks/${timestampedFilePath}`)
+        : `bookmarks/${LATEST_BACKUP_PATH}`;
       
       const fileData = await githubService.getFileContent(
         credentials,
@@ -400,11 +402,12 @@ class BackupService {
       // 2. 缓存无效或强制刷新，从GitHub获取数据
       console.log('从GitHub获取备份统计信息');
       
-      // 获取所有备份文件
+      // 获取所有备份文件 (从bookmarks文件夹)
       const files = await githubService.getRepositoryFiles(
         credentials,
         username,
-        DEFAULT_BACKUP_REPO
+        DEFAULT_BACKUP_REPO,
+        'bookmarks'
       );
       
       // 过滤并计算备份文件数量
@@ -456,7 +459,7 @@ class BackupService {
             credentials,
             username,
             DEFAULT_BACKUP_REPO,
-            latestFile.path
+            latestFile.path // 已经包含了bookmarks/前缀
           );
           
           const backupData = JSON.parse(fileData.content) as BookmarkBackup;

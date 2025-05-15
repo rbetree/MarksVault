@@ -80,7 +80,8 @@ const BackupSelectionDialog: React.FC<BackupSelectionDialogProps> = ({
       const files = await githubService.getRepositoryFiles(
         credentials,
         username,
-        repoName
+        repoName,
+        'bookmarks' // 指定从bookmarks文件夹获取文件
       );
       
       // 只过滤书签备份文件
