@@ -9,6 +9,13 @@ import storageService from '../utils/storage-service';
 const DEFAULT_BACKUP_REPO = 'marksvault-backups';
 // 备份文件路径：最新文件和带时间戳的历史文件
 const LATEST_BACKUP_PATH = 'bookmark_backup_latest.json';
+// 设置文件备份文件夹路径
+const SETTINGS_FOLDER_PATH = 'settings';
+// 备份类型常量
+export enum BackupType {
+  BOOKMARKS = 'bookmarks',
+  SETTINGS = 'settings'
+}
 
 class BackupService {
   private static instance: BackupService;
@@ -73,27 +80,75 @@ class BackupService {
   }
   
   /**
-   * 备份书签到GitHub
+   * 创建设置备份数据
+   * @returns 设置备份数据对象
+   */
+  private async createSettingsBackupData(): Promise<any> {
+    // 获取用户设置
+    const settingsResult = await storageService.getSettings();
+    if (!settingsResult.success) {
+      throw new Error(`获取设置失败: ${settingsResult.error}`);
+    }
+    
+    // 创建源信息
+    const source = `MarksVault Extension (${navigator.platform})`;
+    
+    // 创建备份对象
+    const backup = {
+      version: '1.0',
+      timestamp: Date.now(),
+      source,
+      settings: settingsResult.data,
+      metadata: {
+        type: 'settings'
+      }
+    };
+    
+    return backup;
+  }
+  
+  /**
+   * 备份到GitHub
    * @param credentials GitHub认证凭据
    * @param username GitHub用户名
+   * @param type 备份类型 (bookmarks 或 settings)
    * @returns 备份结果
    */
-  async backupToGitHub(credentials: GitHubCredentials, username: string): Promise<BackupResult> {
+  async backupToGitHub(
+    credentials: GitHubCredentials, 
+    username: string,
+    type: BackupType = BackupType.BOOKMARKS
+  ): Promise<BackupResult> {
     try {
-      // 1. 创建备份数据
-      const backupData = await this.createBackupData();
+      // 1. 创建备份数据 (根据类型)
+      let backupData: any;
+      let backupFolder: string;
+      let backupDescription: string;
+      
+      if (type === BackupType.SETTINGS) {
+        backupData = await this.createSettingsBackupData();
+        backupFolder = SETTINGS_FOLDER_PATH;
+        backupDescription = '设置';
+      } else {
+        backupData = await this.createBackupData();
+        backupFolder = 'bookmarks';
+        backupDescription = '书签';
+      }
       
       // 2. 确保存储库存在
       const repoExists = await githubService.repoExists(credentials, username, DEFAULT_BACKUP_REPO);
       if (!repoExists) {
         // 创建新存储库
         await githubService.createRepo(credentials, DEFAULT_BACKUP_REPO, true);
+        
+        // 给存储库一些时间初始化
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
       
       // 3. 序列化数据
       const backupContent = JSON.stringify(backupData, null, 2);
       
-      // 4. 生成带详细时间戳的文件路径 (格式: bookmark_backup_YYYYMMDDHHMMSS.json)
+      // 4. 生成带详细时间戳的文件路径
       const now = new Date();
       const year = now.getFullYear();
       const month = String(now.getMonth() + 1).padStart(2, '0');
@@ -103,43 +158,72 @@ class BackupService {
       const seconds = String(now.getSeconds()).padStart(2, '0');
       
       const timestamp = `${year}${month}${day}${hours}${minutes}${seconds}`;
-      const fileName = `bookmark_backup_${timestamp}.json`;
-      // 将文件保存到bookmarks文件夹
-      const backupFilePath = `bookmarks/${fileName}`;
+      const fileName = `${type}_backup_${timestamp}.json`;
+      // 将文件保存到对应文件夹
+      const backupFilePath = `${backupFolder}/${fileName}`;
       
-      // 5. 上传新备份文件（不再更新最新文件，只创建新文件）
-      const uploadResult = await githubService.createOrUpdateFile(
-        credentials,
-        username,
-        DEFAULT_BACKUP_REPO,
-        backupFilePath,
-        backupContent,
-        `添加书签备份 - ${now.toLocaleString()}`
-      );
-      
-      // 6. 保存备份状态
-      const backupStatus: BackupStatus = {
-        lastBackupTime: now.getTime(),
-        backupFileUrl: uploadResult.content.html_url,
-        lastBackupFilePath: backupFilePath,
-        lastOperationStatus: 'success'
-      };
-      
-      await storageService.saveBackupStatus(backupStatus);
-      
-      // 7. 返回成功结果
-      return {
-        success: true,
-        data: {
-          fileUrl: uploadResult.content.html_url,
-          timestamp: backupData.timestamp,
-          bookmarksCount: backupData.metadata?.totalBookmarks,
-          filePath: backupFilePath
-        },
-        timestamp: backupData.timestamp
-      };
+      // GitHub API对于不存在的目录会自动创建
+      // 但我们可以先检查目录是否存在于仓库中
+      // 5. 上传新备份文件
+      console.log(`开始上传备份文件: ${backupFilePath}`);
+      try {
+        const uploadResult = await githubService.createOrUpdateFile(
+          credentials,
+          username,
+          DEFAULT_BACKUP_REPO,
+          backupFilePath,
+          backupContent,
+          `添加${backupDescription}备份 - ${now.toLocaleString()}`
+        );
+        console.log('备份文件上传成功');
+        
+        // 6. 保存备份状态
+        const backupStatus: BackupStatus = {
+          lastBackupTime: now.getTime(),
+          backupFileUrl: uploadResult.content.html_url,
+          lastBackupFilePath: backupFilePath,
+          lastOperationStatus: 'success'
+        };
+        
+        if (type === BackupType.SETTINGS) {
+          // 设置备份状态存储在另一个键中，避免与书签备份状态混淆
+          await storageService.setStorageData('settings_backup_status', backupStatus);
+        } else {
+          await storageService.saveBackupStatus(backupStatus);
+        }
+        
+        // 7. 返回成功结果
+        return {
+          success: true,
+          data: {
+            fileUrl: uploadResult.content.html_url,
+            timestamp: backupData.timestamp,
+            filePath: backupFilePath
+          },
+          timestamp: backupData.timestamp
+        };
+      } catch (uploadError) {
+        console.error(`上传备份文件失败:`, uploadError);
+        
+        // 保存失败状态
+        const backupStatus: BackupStatus = {
+          lastOperationStatus: 'failed',
+          errorMessage: uploadError instanceof Error ? uploadError.message : String(uploadError)
+        };
+        
+        if (type === BackupType.SETTINGS) {
+          await storageService.setStorageData('settings_backup_status', backupStatus);
+        } else {
+          await storageService.saveBackupStatus(backupStatus);
+        }
+        
+        return {
+          success: false,
+          error: `备份失败: ${uploadError instanceof Error ? uploadError.message : String(uploadError)}`
+        };
+      }
     } catch (error) {
-      console.error('书签备份失败:', error);
+      console.error(`${type}备份失败:`, error);
       
       // 保存失败状态
       const backupStatus: BackupStatus = {
@@ -147,11 +231,171 @@ class BackupService {
         errorMessage: error instanceof Error ? error.message : String(error)
       };
       
-      await storageService.saveBackupStatus(backupStatus);
+      if (type === BackupType.SETTINGS) {
+        await storageService.setStorageData('settings_backup_status', backupStatus);
+      } else {
+        await storageService.saveBackupStatus(backupStatus);
+      }
       
       return {
         success: false,
         error: `备份失败: ${error instanceof Error ? error.message : String(error)}`
+      };
+    }
+  }
+  
+  /**
+   * 从GitHub恢复
+   * @param credentials GitHub认证凭据
+   * @param username GitHub用户名
+   * @param type 恢复类型 (bookmarks 或 settings)
+   * @param useTimestampedFile 是否使用带时间戳的文件而不是最新文件
+   * @param timestampedFilePath 带时间戳的文件路径(如果useTimestampedFile为true)
+   * @returns 恢复结果
+   */
+  async restoreFromGitHub(
+    credentials: GitHubCredentials, 
+    username: string,
+    useTimestampedFile: boolean = false,
+    timestampedFilePath?: string,
+    type: BackupType = BackupType.BOOKMARKS
+  ): Promise<BackupResult> {
+    if (type === BackupType.SETTINGS) {
+      return this.restoreSettingsFromGitHub(credentials, username, useTimestampedFile, timestampedFilePath);
+    } else {
+      return this.restoreBookmarksFromGitHub(credentials, username, useTimestampedFile, timestampedFilePath);
+    }
+  }
+  
+  /**
+   * 从GitHub恢复设置
+   * @param credentials GitHub认证凭据
+   * @param username GitHub用户名
+   * @param useTimestampedFile 是否使用带时间戳的文件
+   * @param timestampedFilePath 带时间戳的文件路径
+   * @returns 恢复结果
+   */
+  private async restoreSettingsFromGitHub(
+    credentials: GitHubCredentials, 
+    username: string,
+    useTimestampedFile: boolean = false,
+    timestampedFilePath?: string
+  ): Promise<BackupResult> {
+    try {
+      // 1. 确保存储库存在
+      const repoExists = await githubService.repoExists(credentials, username, DEFAULT_BACKUP_REPO);
+      if (!repoExists) {
+        throw new Error('备份存储库不存在，请先进行备份');
+      }
+      
+      let filePath: string;
+      
+      if (useTimestampedFile && timestampedFilePath) {
+        // 如果指定了时间戳文件，使用指定的文件
+        filePath = timestampedFilePath.startsWith(SETTINGS_FOLDER_PATH) ? 
+          timestampedFilePath : `${SETTINGS_FOLDER_PATH}/${timestampedFilePath}`;
+      } else {
+        // 否则，获取设置文件夹中的所有文件，找到最新的设置备份文件
+        console.log(`尝试获取目录内容: ${SETTINGS_FOLDER_PATH}`);
+        try {
+          const files = await githubService.getRepositoryFiles(
+            credentials,
+            username,
+            DEFAULT_BACKUP_REPO,
+            SETTINGS_FOLDER_PATH
+          );
+          
+          console.log(`获取到${files.length}个文件:`, files.map(f => f.name).join(', '));
+          
+          // 过滤获取所有设置备份文件
+          const settingsBackupFiles = files.filter(
+            file => file.name.startsWith('settings_backup_') && file.name.endsWith('.json')
+          );
+          
+          console.log(`找到${settingsBackupFiles.length}个设置备份文件`);
+          
+          if (settingsBackupFiles.length === 0) {
+            throw new Error('未找到设置备份文件，请先进行备份');
+          }
+          
+          // 解析文件名中的时间戳，以便找到最新文件
+          const parseTimestamp = (filename: string): number => {
+            const match = filename.match(/settings_backup_(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})\.json/);
+            if (match) {
+              const [_, year, month, day, hour, minute, second] = match;
+              return new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}`).getTime();
+            }
+            return 0;
+          };
+          
+          // 按时间戳降序排序文件，取第一个（最新的）
+          const latestFile = settingsBackupFiles
+            .sort((a, b) => parseTimestamp(b.name) - parseTimestamp(a.name))[0];
+          
+          filePath = latestFile.path;
+          console.log(`选择最新的设置备份文件: ${filePath}`);
+        } catch (error) {
+          console.error('获取仓库文件列表失败:', error);
+          throw new Error(`获取仓库文件列表失败: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+      
+      // 2. 获取备份文件内容
+      console.log('尝试获取设置备份文件:', filePath);
+      const fileData = await githubService.getFileContent(
+        credentials,
+        username,
+        DEFAULT_BACKUP_REPO,
+        filePath
+      );
+      
+      // 3. 解析备份数据
+      const backupData = JSON.parse(fileData.content);
+      
+      // 4. 验证数据格式
+      if (!backupData.settings || typeof backupData.settings !== 'object') {
+        throw new Error('备份文件格式不正确');
+      }
+      
+      // 5. 保存设置
+      const result = await storageService.saveSettings(backupData.settings);
+      
+      if (!result.success) {
+        throw new Error(`保存设置失败: ${result.error}`);
+      }
+      
+      // 6. 保存恢复状态
+      const now = new Date();
+      const restoreStatus: BackupStatus = {
+        lastRestoreTime: now.getTime(),
+        lastOperationStatus: 'success'
+      };
+      
+      await storageService.setStorageData('settings_backup_status', restoreStatus);
+      
+      // 7. 返回成功结果
+      return {
+        success: true,
+        data: {
+          timestamp: backupData.timestamp,
+          filePath
+        },
+        timestamp: backupData.timestamp
+      };
+    } catch (error) {
+      console.error('设置恢复失败:', error);
+      
+      // 保存失败状态
+      const restoreStatus: BackupStatus = {
+        lastOperationStatus: 'failed',
+        errorMessage: error instanceof Error ? error.message : String(error)
+      };
+      
+      await storageService.setStorageData('settings_backup_status', restoreStatus);
+      
+      return {
+        success: false,
+        error: `恢复失败: ${error instanceof Error ? error.message : String(error)}`
       };
     }
   }
@@ -164,7 +408,7 @@ class BackupService {
    * @param timestampedFilePath 带时间戳的文件路径(如果useTimestampedFile为true)
    * @returns 恢复结果
    */
-  async restoreFromGitHub(
+  private async restoreBookmarksFromGitHub(
     credentials: GitHubCredentials, 
     username: string,
     useTimestampedFile: boolean = false,
@@ -496,9 +740,9 @@ class BackupService {
   }
   
   /**
-   * 获取备份状态，支持异步更新
-   * @param forceRefresh 是否强制刷新缓存数据
-   * @param updateCallback 异步更新完成后的回调函数
+   * 获取备份状态
+   * @param forceRefresh 是否强制刷新统计数据
+   * @param updateCallback 状态更新回调函数
    * @returns 备份状态信息
    */
   async getBackupStatus(
@@ -506,31 +750,50 @@ class BackupService {
     updateCallback?: (updatedStatus: BackupStatus) => void
   ): Promise<BackupStatus> {
     try {
-      // 1. 先获取本地存储的基本状态信息
+      // 获取基本状态信息
       const result = await storageService.getBackupStatus();
-      const status = result.success ? result.data : {};
+      const baseStatus = result.success ? result.data : {};
       
-      // 2. 尝试从缓存获取统计信息
-      try {
-        const cacheResult = await storageService.getBackupStatsCache();
-        if (!forceRefresh && cacheResult.success && cacheResult.data && 
-            storageService.isBackupStatsCacheValid(cacheResult.data)) {
-          // 使用缓存的统计信息
-          const cachedStatus = { ...status, stats: cacheResult.data.data };
-          
-          // 3. 异步刷新数据（不阻塞UI）
-          this.refreshBackupStatsAsync(cachedStatus, updateCallback);
-          
-          return cachedStatus;
-        }
-      } catch (error) {
-        console.error('获取缓存的备份统计信息失败:', error);
+      // 如果需要强制刷新或者状态中没有统计数据，则获取完整状态
+      if (forceRefresh || !baseStatus.stats) {
+        const fullStatus = await this.getFullBackupStatus(baseStatus, updateCallback);
+        return fullStatus;
       }
       
-      // 4. 如果没有有效缓存，同步获取完整数据
-      return await this.getFullBackupStatus(status, updateCallback);
+      // 如果有回调但状态已经包含统计数据，则异步刷新并通过回调返回更新后的状态
+      if (updateCallback && baseStatus.stats) {
+        // 异步刷新统计数据
+        this.refreshBackupStatsAsync(baseStatus, updateCallback);
+      }
+      
+      return baseStatus;
     } catch (error) {
       console.error('获取备份状态失败:', error);
+      return {};
+    }
+  }
+  
+  /**
+   * 获取设置备份状态
+   * @param forceRefresh 是否强制刷新统计数据
+   * @returns 设置备份状态信息
+   */
+  async getSettingsBackupStatus(
+    forceRefresh: boolean = false
+  ): Promise<BackupStatus> {
+    try {
+      // 获取基本状态信息
+      const result = await storageService.getStorageData('settings_backup_status');
+      const status = result.success ? result.data : {};
+      
+      if (forceRefresh) {
+        // 在这里可以添加获取更多设置备份统计信息的逻辑，类似于书签备份的getFullBackupStatus方法
+        // 例如获取设置备份的总数量、最新备份的大小等
+      }
+      
+      return status;
+    } catch (error) {
+      console.error('获取设置备份状态失败:', error);
       return {};
     }
   }

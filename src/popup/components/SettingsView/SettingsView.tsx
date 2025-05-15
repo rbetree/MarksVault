@@ -20,10 +20,11 @@ const TabPanel = (props: TabPanelProps) => {
       hidden={value !== index}
       id={`settings-tabpanel-${index}`}
       aria-labelledby={`settings-tab-${index}`}
+      style={{ height: '100%' }}
       {...other}
     >
       {value === index && (
-        <Box sx={{ pt: 1 }}>
+        <Box sx={{ pt: 1, height: '100%', display: 'flex', flexDirection: 'column' }}>
           {children}
         </Box>
       )}
@@ -175,8 +176,8 @@ const SettingsView: React.FC<SettingsViewProps> = ({ toastRef }) => {
   };
 
   return (
-    <Box sx={{ p: 2, pb: 0 }}>
-      <Card sx={{ boxShadow: '0 2px 8px rgba(0,0,0,0.08)', borderRadius: 2 }}>
+    <Box sx={{ p: 2, pb: 0, height: 'calc(100vh - 48px)', display: 'flex', flexDirection: 'column' }}>
+      <Card sx={{ boxShadow: '0 2px 8px rgba(0,0,0,0.08)', borderRadius: 2, flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <Tabs 
           value={tabValue} 
           onChange={handleTabChange} 
@@ -225,7 +226,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ toastRef }) => {
           />
         </Tabs>
         
-        <CardContent sx={{ p: 2 }}>
+        <CardContent sx={{ p: 2, flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           {/* 一般设置标签页 */}
           <TabPanel value={tabValue} index={0}>
             {/* 界面设置分组 */}
