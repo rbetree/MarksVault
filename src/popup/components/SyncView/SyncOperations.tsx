@@ -243,42 +243,90 @@ const SyncOperations: React.FC<SyncOperationsProps> = ({ user, onLogout, toastRe
     }
   };
 
-  // 统计信息卡片的骨架屏组件
+  // 统计信息卡片的骨架屏组件 - 与实际内容布局完全一致
   const StatsSkeletonCard = () => (
-    <Box sx={{ mb: 2, p: 1.5, bgcolor: 'background.paper', borderRadius: 1 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-        <Skeleton variant="circular" width={24} height={24} sx={{ mr: 1 }} />
-        <Skeleton variant="text" width={120} height={24} />
-      </Box>
-      <Divider sx={{ mb: 1.5 }} />
+    <Card 
+      variant="outlined" 
+      sx={{ 
+        mb: 2, 
+        bgcolor: 'background.paper', 
+        borderRadius: 1,
+        position: 'relative'
+      }}
+    >
+      {/* 骨架屏卡片标题 - 使用真实标题，只有图标和刷新按钮用骨架屏 */}
+      <CardHeader
+        avatar={<AssessmentIcon color="primary" />}
+        title="备份统计信息"
+        titleTypographyProps={{ variant: 'subtitle1' }}
+        action={
+          <Tooltip title="正在加载数据">
+            <Box sx={{ display: 'inline-flex' }}>
+              <CircularProgress size={18} />
+            </Box>
+          </Tooltip>
+        }
+        sx={{ pb: 0 }}
+      />
       
-      <Grid container spacing={2}>
-        <Grid item xs={6}>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <Skeleton variant="circular" width={16} height={16} sx={{ mr: 0.5 }} />
-            <Skeleton variant="text" width={100} />
-          </Box>
+      <CardContent sx={{ pt: 1 }}>
+        {/* 骨架屏统计数字区域 - 与实际内容布局一致 */}
+        <Grid container spacing={2}>
+          {/* 备份数量区域 */}
+          <Grid item xs={4}>
+            <Box sx={{ 
+              display: 'flex', 
+              flexDirection: 'column', 
+              alignItems: 'center', 
+              p: 1
+            }}>
+              <Skeleton variant="circular" width={24} height={24} sx={{ mb: 0.5 }} />
+              <Skeleton variant="text" width={40} height={32} sx={{ mb: 0.5 }} />
+              <Skeleton variant="text" width={80} height={16} />
+            </Box>
+          </Grid>
+          
+          {/* 书签数量区域 */}
+          <Grid item xs={4}>
+            <Box sx={{ 
+              display: 'flex', 
+              flexDirection: 'column', 
+              alignItems: 'center', 
+              p: 1
+            }}>
+              <Skeleton variant="circular" width={24} height={24} sx={{ mb: 0.5 }} />
+              <Skeleton variant="text" width={40} height={32} sx={{ mb: 0.5 }} />
+              <Skeleton variant="text" width={80} height={16} />
+            </Box>
+          </Grid>
+          
+          {/* 文件夹数量区域 */}
+          <Grid item xs={4}>
+            <Box sx={{ 
+              display: 'flex', 
+              flexDirection: 'column', 
+              alignItems: 'center', 
+              p: 1
+            }}>
+              <Skeleton variant="circular" width={24} height={24} sx={{ mb: 0.5 }} />
+              <Skeleton variant="text" width={40} height={32} sx={{ mb: 0.5 }} />
+              <Skeleton variant="text" width={80} height={16} />
+            </Box>
+          </Grid>
+          
+          <Grid item xs={12}>
+            <Divider sx={{ my: 0.5 }} />
+          </Grid>
+          
+          <Grid item xs={12}>
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <Skeleton variant="text" width={100} height={16} sx={{ mr: 1 }} />
+              <Skeleton variant="text" width={50} height={16} />
+            </Box>
+          </Grid>
         </Grid>
-        <Grid item xs={6}>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <Skeleton variant="circular" width={16} height={16} sx={{ mr: 0.5 }} />
-            <Skeleton variant="text" width={100} />
-          </Box>
-        </Grid>
-        <Grid item xs={6}>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <Skeleton variant="circular" width={16} height={16} sx={{ mr: 0.5 }} />
-            <Skeleton variant="text" width={100} />
-          </Box>
-        </Grid>
-        <Grid item xs={6}>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <Skeleton variant="circular" width={16} height={16} sx={{ mr: 0.5 }} />
-            <Skeleton variant="text" width={100} />
-          </Box>
-        </Grid>
-      </Grid>
-    </Box>
+      </CardContent>
+    </Card>
   );
 
   return (
@@ -290,16 +338,12 @@ const SyncOperations: React.FC<SyncOperationsProps> = ({ user, onLogout, toastRe
         
         {/* 同步状态信息 */}
         <Box sx={{ mb: 2 }}>
-          {backupStatus.lastBackupTime ? (
+          {backupStatus.lastBackupTime && (
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
               <Typography variant="body2" color="text.secondary">
                 上次备份时间: {formatDate(backupStatus.lastBackupTime)}
               </Typography>
             </Box>
-          ) : (
-            <Alert severity="info" sx={{ mb: 1 }}>
-              尚未进行备份操作
-            </Alert>
           )}
           
           {backupStatus.lastRestoreTime && (
@@ -312,20 +356,20 @@ const SyncOperations: React.FC<SyncOperationsProps> = ({ user, onLogout, toastRe
         </Box>
         
         {/* 备份统计信息卡片 - 使用Fade包装实现平滑过渡 */}
-        <Fade in={!isStatsLoading} timeout={500}>
-          <Box>
-            {isStatsLoading ? (
-              <StatsSkeletonCard />
-            ) : backupStatus.stats && (backupStatus.stats.totalBackups ?? 0) > 0 ? (
-              <Card 
-                variant="outlined" 
-                sx={{ 
-                  mb: 2, 
-                  bgcolor: 'background.paper', 
-                  borderRadius: 1,
-                  position: 'relative'
-                }}
-              >
+        {/* 统一显示备份统计信息卡片结构，无论是否有备份数据 */}
+        {isStatsLoading ? (
+          <StatsSkeletonCard />
+        ) : (
+          <Fade in={true} timeout={500}>
+            <Card 
+              variant="outlined" 
+              sx={{ 
+                mb: 2, 
+                bgcolor: 'background.paper', 
+                borderRadius: 1,
+                position: 'relative'
+              }}
+            >
                 {/* 卡片标题 */}
                 <CardHeader
                   avatar={<AssessmentIcon color="primary" />}
@@ -351,6 +395,7 @@ const SyncOperations: React.FC<SyncOperationsProps> = ({ user, onLogout, toastRe
                   sx={{ pb: 0 }}
                 />
                 
+                {/* 统一有数据和无数据状态的卡片内容结构 */}
                 <CardContent sx={{ pt: 1 }}>
                   <Grid container spacing={2}>
                     {/* 备份数量区域 */}
@@ -363,7 +408,9 @@ const SyncOperations: React.FC<SyncOperationsProps> = ({ user, onLogout, toastRe
                       }}>
                         <StorageIcon color="primary" sx={{ mb: 0.5 }} />
                         <Typography variant="h5" sx={{ fontWeight: 'medium' }}>
-                          {backupStatus.stats.totalBackups ?? 0}
+                          {backupStatus.stats && (backupStatus.stats.totalBackups ?? 0) > 0 
+                            ? backupStatus.stats.totalBackups ?? 0 
+                            : '0'}
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
                           总备份数量
@@ -381,7 +428,9 @@ const SyncOperations: React.FC<SyncOperationsProps> = ({ user, onLogout, toastRe
                       }}>
                         <BookmarkIcon color="primary" sx={{ mb: 0.5 }} />
                         <Typography variant="h5" sx={{ fontWeight: 'medium' }}>
-                          {backupStatus.stats.totalBookmarks ?? 0}
+                          {backupStatus.stats && (backupStatus.stats.totalBackups ?? 0) > 0 
+                            ? backupStatus.stats.totalBookmarks ?? 0 
+                            : '0'}
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
                           书签数量
@@ -399,7 +448,9 @@ const SyncOperations: React.FC<SyncOperationsProps> = ({ user, onLogout, toastRe
                       }}>
                         <FolderIcon color="primary" sx={{ mb: 0.5 }} />
                         <Typography variant="h5" sx={{ fontWeight: 'medium' }}>
-                          {backupStatus.stats.totalFolders ?? 0}
+                          {backupStatus.stats && (backupStatus.stats.totalBackups ?? 0) > 0 
+                            ? backupStatus.stats.totalFolders ?? 0 
+                            : '0'}
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
                           文件夹数量
@@ -411,8 +462,9 @@ const SyncOperations: React.FC<SyncOperationsProps> = ({ user, onLogout, toastRe
                       <Divider sx={{ my: 0.5 }} />
                     </Grid>
                     
-                    {backupStatus.stats.fileSize !== undefined && (
-                      <Grid item xs={12}>
+                    {/* 文件大小或无数据提示 */}
+                    <Grid item xs={12}>
+                      {backupStatus.stats && backupStatus.stats.fileSize !== undefined && (backupStatus.stats.totalBackups ?? 0) > 0 ? (
                         <Box sx={{ display: 'flex', alignItems: 'center' }}>
                           <Typography variant="body2" color="text.secondary">
                             最新备份大小:
@@ -421,14 +473,22 @@ const SyncOperations: React.FC<SyncOperationsProps> = ({ user, onLogout, toastRe
                             {formatFileSize(backupStatus.stats.fileSize)}
                           </Typography>
                         </Box>
-                      </Grid>
-                    )}
+                      ) : (
+                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                          <Typography variant="body2" color="text.secondary">
+                            备份状态:
+                          </Typography>
+                          <Typography variant="body2" sx={{ ml: 0.5, fontWeight: 'medium' }}>
+                            尚未创建备份
+                          </Typography>
+                        </Box>
+                      )}
+                    </Grid>
                   </Grid>
                 </CardContent>
               </Card>
-            ) : null}
-          </Box>
-        </Fade>
+           </Fade>
+         )}
         
         {/* 错误信息显示 */}
         {backupError && (

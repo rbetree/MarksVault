@@ -24,7 +24,7 @@ const TabPanel = (props: TabPanelProps) => {
       {...other}
     >
       {value === index && (
-        <Box sx={{ pt: 1, height: '100%', display: 'flex', flexDirection: 'column' }}>
+        <Box sx={{ pt: 1, height: '100%', display: 'flex', flexDirection: 'column', overflow: 'auto' }}>
           {children}
         </Box>
       )}
@@ -176,8 +176,8 @@ const SettingsView: React.FC<SettingsViewProps> = ({ toastRef }) => {
   };
 
   return (
-    <Box sx={{ p: 2, pb: 0, height: 'calc(100vh - 48px)', display: 'flex', flexDirection: 'column' }}>
-      <Card sx={{ boxShadow: '0 2px 8px rgba(0,0,0,0.08)', borderRadius: 2, flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <Box sx={{ p: 2, pb: 2, display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <Card sx={{ boxShadow: '0 2px 8px rgba(0,0,0,0.08)', borderRadius: 2, flex: 1, display: 'flex', flexDirection: 'column', overflow: 'auto' }}>
         <Tabs 
           value={tabValue} 
           onChange={handleTabChange} 
@@ -226,7 +226,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ toastRef }) => {
           />
         </Tabs>
         
-        <CardContent sx={{ p: 2, flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        <CardContent sx={{ p: 2, flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
           {/* 一般设置标签页 */}
           <TabPanel value={tabValue} index={0}>
             {/* 界面设置分组 */}
@@ -453,7 +453,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ toastRef }) => {
                   </Box>
                 </Box>
                 <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8rem' }}>
-                  一个强大的书签管理扩展，助您高效整理和安全备份书签
+                  一个强大的书签管理扩展，助您高效整理和备份书签
                 </Typography>
               </Paper>
 

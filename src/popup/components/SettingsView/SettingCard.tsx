@@ -72,7 +72,7 @@ const SettingCard: React.FC<SettingCardProps> = ({
         </Box>
       )}
 
-      <Divider sx={{ opacity: 0.6 }} />
+      <Divider sx={{ opacity: 0.3 }} />
 
       <CardContent sx={{ pt: 2 }}>
         {children}
