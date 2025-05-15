@@ -19,7 +19,7 @@ import FormHelperText from '@mui/material/FormHelperText';
 import IconButton from '@mui/material/IconButton';
 import BackupIcon from '@mui/icons-material/Backup';
 import CleaningServicesIcon from '@mui/icons-material/CleaningServices';
-import CodeIcon from '@mui/icons-material/Code';
+import UploadIcon from '@mui/icons-material/Upload';
 import Autocomplete from '@mui/material/Autocomplete';
 import CircularProgress from '@mui/material/CircularProgress';
 import FolderIcon from '@mui/icons-material/Folder';
@@ -28,9 +28,10 @@ import {
   ActionType, 
   BackupAction, 
   OrganizeAction, 
-  CustomAction,
+  PushAction,
   createBackupAction,
-  createOrganizeAction
+  createOrganizeAction,
+  createPushAction
 } from '../../../../types/task';
 import { Radio, RadioGroup } from '@mui/material';
 import { Typography } from '@mui/material';
@@ -89,6 +90,17 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({ action, onChange }) => 
       String((action as BackupAction).options.backupFilePath) : ''
   );
   
+  // 推送操作状态
+  const [pushRepoName, setPushRepoName] = useState<string>(
+    action.type === ActionType.PUSH ? (action as PushAction).options.repoName || 'menav' : 'menav'
+  );
+  const [pushFolderPath, setPushFolderPath] = useState<string>(
+    action.type === ActionType.PUSH ? (action as PushAction).options.folderPath || 'bookmarks' : 'bookmarks'
+  );
+  const [pushCommitMessage, setPushCommitMessage] = useState<string>(
+    action.type === ActionType.PUSH ? (action as PushAction).options.commitMessage || '自动推送书签' : '自动推送书签'
+  );
+  
   // 整理操作状态
   const [operations, setOperations] = useState<ExtendedOrganizeOperation[]>(
     action.type === ActionType.ORGANIZE ? 
@@ -97,11 +109,6 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({ action, onChange }) => 
         ...op
       })) : 
       []
-  );
-  
-  // 自定义操作状态
-  const [customDescription, setCustomDescription] = useState<string>(
-    action.type === ActionType.CUSTOM ? (action as CustomAction).description : ''
   );
   
   // 表单验证状态
@@ -162,6 +169,11 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({ action, onChange }) => 
       setIncludeMetadata(!!backupAction.options.includeMetadata);
       setBackupOperation(backupAction.operation || 'backup');
       setBackupFilePath(backupAction.options.backupFilePath ? String(backupAction.options.backupFilePath) : '');
+    } else if (action.type === ActionType.PUSH) {
+      const pushAction = action as PushAction;
+      setPushRepoName(pushAction.options.repoName || 'menav');
+      setPushFolderPath(pushAction.options.folderPath || 'bookmarks');
+      setPushCommitMessage(pushAction.options.commitMessage || '自动推送书签');
     } else if (action.type === ActionType.ORGANIZE) {
       // 转换操作
       setOperations(
@@ -169,8 +181,6 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({ action, onChange }) => 
           ...op
         }))
       );
-    } else if (action.type === ActionType.CUSTOM) {
-      setCustomDescription((action as CustomAction).description);
     }
   }, [action]);
 
@@ -183,16 +193,12 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({ action, onChange }) => 
       case ActionType.BACKUP:
         newAction = createBackupAction(backupOperation);
         break;
-      case ActionType.ORGANIZE:
-        newAction = createOrganizeAction();
+      case ActionType.PUSH:
+        newAction = createPushAction();
         break;
-      case ActionType.CUSTOM:
+      case ActionType.ORGANIZE:
       default:
-        newAction = {
-          type: ActionType.CUSTOM,
-          description: customDescription || '自定义操作',
-          config: {}
-        };
+        newAction = createOrganizeAction();
         break;
     }
     
@@ -267,6 +273,60 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({ action, onChange }) => 
         options: {
           ...(action as BackupAction).options,
           backupFilePath: value
+        }
+      };
+      
+      onChange(updatedAction, true);
+    }
+  };
+  
+  // 处理推送仓库名称更改
+  const handlePushRepoNameChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const value = event.target.value;
+    setPushRepoName(value);
+    
+    if (action.type === ActionType.PUSH) {
+      const updatedAction: PushAction = {
+        ...(action as PushAction),
+        options: {
+          ...(action as PushAction).options,
+          repoName: value
+        }
+      };
+      
+      onChange(updatedAction, true);
+    }
+  };
+
+  // 处理推送文件夹路径更改
+  const handlePushFolderPathChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const value = event.target.value;
+    setPushFolderPath(value);
+    
+    if (action.type === ActionType.PUSH) {
+      const updatedAction: PushAction = {
+        ...(action as PushAction),
+        options: {
+          ...(action as PushAction).options,
+          folderPath: value
+        }
+      };
+      
+      onChange(updatedAction, true);
+    }
+  };
+
+  // 处理推送提交消息更改
+  const handlePushCommitMessageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const value = event.target.value;
+    setPushCommitMessage(value);
+    
+    if (action.type === ActionType.PUSH) {
+      const updatedAction: PushAction = {
+        ...(action as PushAction),
+        options: {
+          ...(action as PushAction).options,
+          commitMessage: value
         }
       };
       
@@ -420,21 +480,6 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({ action, onChange }) => 
     
     setErrors(newErrors);
     return isValid;
-  };
-  
-  // 处理自定义描述更改
-  const handleCustomDescriptionChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const value = event.target.value;
-    setCustomDescription(value);
-    
-    if (action.type === ActionType.CUSTOM) {
-      const updatedAction: CustomAction = {
-        ...(action as CustomAction),
-        description: value
-      };
-      
-      onChange(updatedAction, !!value.trim());
-    }
   };
   
   // 渲染备份操作表单
@@ -781,8 +826,8 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({ action, onChange }) => 
     );
   };
   
-  // 渲染自定义操作表单
-  const renderCustomForm = () => {
+  // 渲染推送书签表单
+  const renderPushForm = () => {
     return (
       <Box sx={{ mt: 0 }}>
         <Box 
@@ -795,22 +840,67 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({ action, onChange }) => 
           }}
         >
           <Typography variant="subtitle2" gutterBottom>
-            自定义操作配置
+            推送书签配置
           </Typography>
           
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-            自定义操作设置:
-          </Typography>
+          <Box 
+            sx={{ 
+              mb: 2, 
+              p: 1.5, 
+              bgcolor: 'rgba(3, 169, 244, 0.05)', 
+              borderRadius: 1, 
+              border: '1px solid',
+              borderColor: 'rgba(3, 169, 244, 0.2)',
+            }}
+          >
+            <Typography variant="body2" color="info.main" sx={{ mb: 1, fontWeight: 500 }}>
+              关于本操作：将当前浏览器书签推送至指定仓库
+            </Typography>
+            <Typography variant="body2" sx={{ mb: 0.5, fontSize: '0.8rem' }}>
+              作用：方便 <a href="https://github.com/rbetree/menav" target="_blank" rel="noopener noreferrer" style={{color: 'inherit', textDecoration: 'underline'}}>menav-个人导航站</a> 项目的"书签导入"功能
+            </Typography>
+          </Box>
           
           <TextField
             fullWidth
             size="small"
-            margin="dense"
-            disabled
-            label="自定义操作描述"
-            value={customDescription}
-            onChange={handleCustomDescriptionChange}
-            helperText="自定义操作功能正在开发中，暂不可用"
+            margin="normal"
+            label="目标仓库名称"
+            variant="outlined"
+            value={pushRepoName}
+            onChange={handlePushRepoNameChange}
+            helperText="推送的目标GitHub仓库名称，默认为menav"
+            InputLabelProps={{ 
+              shrink: true,
+            }}
+          />
+          
+          <TextField
+            fullWidth
+            size="small"
+            margin="normal"
+            label="目标文件夹路径"
+            variant="outlined"
+            value={pushFolderPath}
+            onChange={handlePushFolderPathChange}
+            helperText="目标文件夹路径，默认为bookmarks"
+            InputLabelProps={{ 
+              shrink: true,
+            }}
+          />
+          
+          <TextField
+            fullWidth
+            size="small"
+            margin="normal"
+            label="提交消息"
+            variant="outlined"
+            value={pushCommitMessage}
+            onChange={handlePushCommitMessageChange}
+            helperText="GitHub提交消息，描述此次推送"
+            InputLabelProps={{ 
+              shrink: true,
+            }}
           />
         </Box>
       </Box>
@@ -822,10 +912,10 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({ action, onChange }) => 
     switch (actionType) {
       case ActionType.BACKUP:
         return renderBackupForm();
+      case ActionType.PUSH:
+        return renderPushForm();
       case ActionType.ORGANIZE:
         return renderOrganizeForm();
-      case ActionType.CUSTOM:
-        return renderCustomForm();
       default:
         return null;
     }
@@ -840,16 +930,16 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({ action, onChange }) => 
       icon: <BackupIcon fontSize="medium" />
     },
     { 
+      type: ActionType.PUSH, 
+      title: "推送书签", 
+      description: "",
+      icon: <UploadIcon fontSize="medium" />
+    },
+    { 
       type: ActionType.ORGANIZE, 
       title: "整理书签", 
       description: "",
       icon: <CleaningServicesIcon fontSize="medium" />
-    },
-    { 
-      type: ActionType.CUSTOM, 
-      title: "开发中", 
-      description: "",
-      icon: <CodeIcon fontSize="medium" />
     }
   ];
   

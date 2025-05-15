@@ -53,7 +53,7 @@ export type Trigger = EventTrigger;
 export enum ActionType {
   BACKUP = 'backup',         // 书签备份
   ORGANIZE = 'organize',     // 书签整理
-  CUSTOM = 'custom'          // 自定义操作（预留扩展）
+  PUSH = 'push',             // 推送书签
 }
 
 // 基础操作接口
@@ -74,6 +74,18 @@ export interface BackupAction extends BaseAction {
   };
 }
 
+// 推送书签操作接口
+export interface PushAction extends BaseAction {
+  type: ActionType.PUSH;
+  target: 'github';          // 推送目标（目前仅支持GitHub）
+  options: {
+    repoName: string;        // 目标仓库名称，默认为 'menav'
+    folderPath: string;      // 目标文件夹路径，默认为 'bookmarks'
+    format: 'html';          // 书签格式（目前仅支持html）
+    commitMessage?: string;  // 提交消息
+  };
+}
+
 // 书签整理操作接口
 export interface OrganizeAction extends BaseAction {
   type: ActionType.ORGANIZE;
@@ -90,14 +102,8 @@ export interface OrganizeAction extends BaseAction {
   }>;
 }
 
-// 自定义操作接口（预留扩展）
-export interface CustomAction extends BaseAction {
-  type: ActionType.CUSTOM;
-  config: any;              // 自定义配置
-}
-
 // 操作联合类型
-export type Action = BackupAction | OrganizeAction | CustomAction;
+export type Action = BackupAction | OrganizeAction | PushAction;
 
 // 任务执行结果接口
 export interface TaskExecutionResult {
@@ -191,6 +197,21 @@ export const createOrganizeAction = (): OrganizeAction => {
         }
       }
     ]
+  };
+};
+
+// 创建推送书签操作工厂函数
+export const createPushAction = (): PushAction => {
+  return {
+    type: ActionType.PUSH,
+    description: '推送书签到指定仓库',
+    target: 'github',
+    options: {
+      repoName: 'menav',
+      folderPath: 'bookmarks',
+      format: 'html',
+      commitMessage: '自动推送书签'
+    }
   };
 };
 

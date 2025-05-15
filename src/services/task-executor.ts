@@ -9,9 +9,9 @@ import {
   ActionType, 
   BackupAction, 
   OrganizeAction,
-  CustomAction,
+  PushAction,
   TaskExecutionResult,
-  TriggerType
+  TriggerType,
 } from '../types/task';
 import taskService from './task-service';
 import backupService from './backup-service';
@@ -176,8 +176,8 @@ class TaskExecutor {
             return await this.executeBackupAction(task);
           case ActionType.ORGANIZE:
             return await this.executeOrganizeAction(task);
-          case ActionType.CUSTOM:
-            return await this.executeCustomAction(task);
+          case ActionType.PUSH:
+            return await this.executePushAction(task);
           default:
             throw new Error(`不支持的任务类型: ${(task.action as any).type}`);
         }
@@ -471,52 +471,115 @@ class TaskExecutor {
   }
   
   /**
-   * 执行自定义操作
+   * 执行推送书签操作
    * @param task 任务对象
    * @returns 执行结果
    */
-  private async executeCustomAction(task: Task): Promise<TaskExecutionResult> {
-    console.log(`执行自定义任务: ${task.id}`);
-    const customAction = task.action as CustomAction;
+  private async executePushAction(task: Task): Promise<TaskExecutionResult> {
+    console.log(`执行推送书签任务: ${task.id}`);
+    const pushAction = task.action as PushAction;
     
     try {
-      // 验证自定义配置
-      if (!customAction.config) {
-        throw new Error('自定义操作缺少配置');
+      // 获取GitHub凭据
+      const credentialsResult = await storageService.getGitHubCredentials();
+      
+      if (!credentialsResult.success || !credentialsResult.data) {
+        console.error(`任务${task.id}执行失败: 未找到GitHub凭据`);
+        return {
+          success: false,
+          timestamp: Date.now(),
+          error: '未找到GitHub凭据，请先在同步设置中配置GitHub账号',
+          details: '请打开扩展的同步页面，完成GitHub账号授权后再执行此任务'
+        };
       }
       
-      // 获取操作类型
-      const operationType = customAction.config.operationType || 'unknown';
+      const credentials = credentialsResult.data;
       
-      // 根据操作类型执行对应的处理逻辑
-      switch (operationType) {
-        case 'logBookmarks':
-          // 模拟记录书签总数的操作
-          const bookmarksResult = await bookmarkService.getAllBookmarks();
-          if (!bookmarksResult.success) {
-            throw new Error(`获取书签失败: ${bookmarksResult.error}`);
-          }
-          
-          const totalBookmarks = bookmarksResult.data.length;
-          return {
-            success: true,
-            timestamp: Date.now(),
-            details: `成功记录当前书签状态：共有 ${totalBookmarks} 个书签`
-          };
-          
-        default:
-          // 对于未知的操作类型，返回一个通用的成功结果
-          return {
-            success: true,
-            timestamp: Date.now(),
-            details: `执行了自定义操作 ${operationType}，配置: ${JSON.stringify(customAction.config)}`
-          };
+      // 获取GitHub用户名并验证凭据有效性
+      let username = 'user'; // 默认占位符
+      try {
+        console.log(`验证GitHub凭据...`);
+        const userResult = await githubService.validateCredentials(credentials);
+        username = userResult.login;
+        console.log(`GitHub凭据验证成功，用户: ${username}`);
+      } catch (error) {
+        console.error(`GitHub凭据验证失败:`, error);
+        return {
+          success: false,
+          timestamp: Date.now(),
+          error: `GitHub凭据无效或已过期: ${error instanceof Error ? error.message : String(error)}`,
+          details: '请重新登录GitHub账号，更新授权信息后再执行此任务'
+        };
       }
+      
+      // 执行推送书签操作
+      console.log(`开始执行推送书签操作，目标仓库: ${pushAction.options.repoName}/${pushAction.options.folderPath}...`);
+      const pushResult = await backupService.pushBookmarksToGitHub(
+        credentials,
+        username,
+        pushAction.options.repoName,
+        pushAction.options.folderPath,
+        pushAction.options.commitMessage
+      );
+      
+      if (!pushResult.success) {
+        console.error(`推送书签失败:`, pushResult.error);
+        return {
+          success: false,
+          timestamp: Date.now(),
+          error: `推送书签失败: ${pushResult.error}`,
+          details: '推送过程中发生错误，请检查网络连接和GitHub仓库权限'
+        };
+      }
+      
+      console.log(`推送书签成功完成，文件URL:`, pushResult.data?.fileUrl);
+      return {
+        success: true,
+        timestamp: Date.now(),
+        details: `成功推送书签到GitHub: ${pushResult.data?.fileUrl || '无文件URL'}`
+      };
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error(`推送书签任务执行异常:`, errorMessage);
+      
       return {
         success: false,
         timestamp: Date.now(),
-        error: `自定义操作失败: ${error instanceof Error ? error.message : String(error)}`
+        error: `推送书签失败: ${errorMessage}`,
+        details: '执行过程中发生未预期的错误，请检查控制台日志获取更多信息'
+      };
+    }
+  }
+
+  /**
+   * 执行任务的操作部分
+   * @param task 任务对象
+   * @returns 执行结果
+   */
+  private async executeTaskAction(task: Task): Promise<TaskExecutionResult> {
+    console.log(`执行任务操作: ${task.id}, 类型: ${task.action.type}`);
+    
+    try {
+      switch (task.action.type) {
+        case ActionType.BACKUP:
+          return await this.executeBackupAction(task);
+        case ActionType.ORGANIZE:
+          return await this.executeOrganizeAction(task);
+        case ActionType.PUSH:
+          return await this.executePushAction(task);
+        default:
+          return {
+            success: false,
+            timestamp: Date.now(),
+            error: `不支持的操作类型: ${(task.action as any).type}`
+          };
+      }
+    } catch (error) {
+      console.error(`执行任务操作异常:`, error);
+      return {
+        success: false,
+        timestamp: Date.now(),
+        error: `执行失败: ${error instanceof Error ? error.message : String(error)}`
       };
     }
   }

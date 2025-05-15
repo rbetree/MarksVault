@@ -592,6 +592,166 @@ class BackupService {
       }
     }, 100); // 短暂延迟，确保UI先渲染
   }
+  
+  /**
+   * 创建HTML格式的书签数据
+   * @returns HTML格式的书签数据
+   */
+  private async createHtmlBookmarkData(): Promise<string> {
+    // 获取所有书签
+    const bookmarksResult = await bookmarkService.getAllBookmarks();
+    if (!bookmarksResult.success) {
+      throw new Error(`获取书签失败: ${bookmarksResult.error}`);
+    }
+    
+    const bookmarks = bookmarksResult.data as BookmarkItem[];
+    
+    // 创建标准的HTML书签格式
+    let html = '<!DOCTYPE NETSCAPE-Bookmark-file-1>\n';
+    html += '<!-- This is an automatically generated file.\n';
+    html += '     It will be read and overwritten.\n';
+    html += '     DO NOT EDIT! -->\n';
+    html += '<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">\n';
+    html += '<TITLE>Bookmarks</TITLE>\n';
+    html += '<H1>Bookmarks</H1>\n';
+    html += '<DL><p>\n';
+    
+    // 递归生成书签HTML
+    const generateBookmarkHtml = (items: BookmarkItem[], indentLevel: number = 1): string => {
+      const indent = '    '.repeat(indentLevel);
+      let result = '';
+      
+      items.forEach(item => {
+        if (item.isFolder) {
+          // 文件夹项
+          result += `${indent}<DT><H3>${this.escapeHtml(item.title)}</H3>\n`;
+          result += `${indent}<DL><p>\n`;
+          
+          if (item.children && item.children.length > 0) {
+            result += generateBookmarkHtml(item.children, indentLevel + 1);
+          }
+          
+          result += `${indent}</DL><p>\n`;
+        } else if (item.url) {
+          // 书签项
+          const addDate = item.dateAdded ? ` ADD_DATE="${Math.floor(item.dateAdded / 1000)}"` : '';
+          result += `${indent}<DT><A HREF="${this.escapeHtml(item.url)}"${addDate}>${this.escapeHtml(item.title)}</A>\n`;
+        }
+      });
+      
+      return result;
+    };
+    
+    html += generateBookmarkHtml(bookmarks);
+    html += '</DL><p>\n';
+    
+    return html;
+  }
+  
+  /**
+   * HTML转义特殊字符
+   * @param text 需要转义的文本
+   * @returns 转义后的文本
+   */
+  private escapeHtml(text: string): string {
+    return text
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+  
+  /**
+   * 推送书签到GitHub
+   * @param credentials GitHub认证凭据
+   * @param username GitHub用户名
+   * @param repoName 目标仓库名称，默认为menav
+   * @param folderPath 目标文件夹路径，默认为bookmarks
+   * @param commitMessage 提交消息
+   * @returns 推送结果
+   */
+  async pushBookmarksToGitHub(
+    credentials: GitHubCredentials, 
+    username: string,
+    repoName: string = 'menav',
+    folderPath: string = 'bookmarks',
+    commitMessage: string = '自动推送书签'
+  ): Promise<BackupResult> {
+    try {
+      // 1. 创建HTML格式的书签数据
+      const htmlBookmarkData = await this.createHtmlBookmarkData();
+      
+      // 2. 确保存储库存在
+      const repoExists = await githubService.repoExists(credentials, username, repoName);
+      if (!repoExists) {
+        // 创建新存储库
+        await githubService.createRepo(credentials, repoName, true);
+      }
+      
+      // 3. 生成文件名 (格式: bookmarks_YYYYMMDD.html)
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      
+      const dateString = `${year}${month}${day}`;
+      const fileName = `bookmarks_${dateString}.html`;
+      const filePath = folderPath ? `${folderPath}/${fileName}` : fileName;
+      
+      // 4. 上传HTML书签文件
+      const uploadResult = await githubService.createOrUpdateFile(
+        credentials,
+        username,
+        repoName,
+        filePath,
+        htmlBookmarkData,
+        commitMessage || `推送书签 - ${now.toLocaleString()}`
+      );
+      
+      // 5. 保存状态 (使用与备份相同的状态结构，但区分开)
+      const backupStatus: BackupStatus = {
+        lastBackupTime: now.getTime(),
+        backupFileUrl: uploadResult.content.html_url,
+        lastBackupFilePath: filePath,
+        lastOperationStatus: 'success'
+      };
+      
+      await storageService.saveBackupStatus({
+        ...backupStatus,
+        stats: {
+          ...backupStatus.stats,
+          isFromCache: false
+        }
+      });
+      
+      // 6. 返回成功结果
+      return {
+        success: true,
+        data: {
+          fileUrl: uploadResult.content.html_url,
+          timestamp: now.getTime(),
+          filePath: filePath
+        },
+        timestamp: now.getTime()
+      };
+    } catch (error) {
+      console.error('推送书签失败:', error);
+      
+      // 保存失败状态
+      const backupStatus: BackupStatus = {
+        lastOperationStatus: 'failed',
+        errorMessage: error instanceof Error ? error.message : String(error)
+      };
+      
+      await storageService.saveBackupStatus(backupStatus);
+      
+      return {
+        success: false,
+        error: `推送失败: ${error instanceof Error ? error.message : String(error)}`
+      };
+    }
+  }
 }
 
 export default BackupService.getInstance(); 
