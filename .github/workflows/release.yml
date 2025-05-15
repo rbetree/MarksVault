@@ -1,0 +1,115 @@
+name: Create Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (format: v1.0.0)'
+        required: true
+        default: 'v0.1.0'
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          lfs: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Build Project
+        run: npm run build
+
+      - name: Get Version
+        id: get_version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_ENV
+          else
+            echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+          fi
+
+      - name: Verify Version
+        run: |
+          PACKAGE_VERSION="v$(node -p "require('./package.json').version")"
+          echo "Package.json version: $PACKAGE_VERSION"
+          echo "Release version: ${{ env.VERSION }}"
+          if [ "${{ env.VERSION }}" != "$PACKAGE_VERSION" ]; then
+            echo "Warning: Release version does not match version in package.json"
+          fi
+
+      - name: Package Chrome Extension (ZIP)
+        run: |
+          cd dist
+          zip -r ../marksvault-${{ env.VERSION }}-chrome.zip ./*
+          cd ..
+
+      - name: Generate Chrome Extension (CRX)
+        uses: cardinalby/webext-buildtools-chrome-crx-action@v2
+        with:
+          zipFilePath: marksvault-${{ env.VERSION }}-chrome.zip
+          crxFilePath: marksvault-${{ env.VERSION }}-chrome.crx
+          privateKey: ${{ secrets.CHROME_CRX_PRIVATE_KEY || 'dummy-key-for-testing' }}
+
+      - name: Generate Changelog
+        id: changelog
+        run: |
+          # If this is a tag-based release, get commits since the previous tag
+          if [ "${{ github.event_name }}" != "workflow_dispatch" ]; then
+            PREVIOUS_TAG=$(git describe --tags --abbrev=0 ${{ env.VERSION }}^ 2>/dev/null || echo "")
+            if [ -z "$PREVIOUS_TAG" ]; then
+              # If there's no previous tag, get all commits
+              CHANGELOG=$(git log --pretty=format:"* %s (%h)" ${{ env.VERSION }})
+            else
+              # Get commits since the previous tag
+              CHANGELOG=$(git log --pretty=format:"* %s (%h)" $PREVIOUS_TAG..${{ env.VERSION }})
+            fi
+          else
+            # For manual releases, get the most recent commits
+            CHANGELOG=$(git log --pretty=format:"* %s (%h)" -n 10)
+          fi
+          echo "CHANGELOG<<EOF" >> $GITHUB_ENV
+          echo "$CHANGELOG" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+          
+          # Generate release date with UTC timezone
+          echo "RELEASE_DATE=$(date +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_ENV
+
+      - name: Create GitHub Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ env.VERSION }}
+          name: ${{ env.VERSION }}
+          body: |
+            **Release Date**: ${{ env.RELEASE_DATE }}
+            
+            **Last 10 Changes**
+            ${{ env.CHANGELOG }}
+
+            请参阅[安装指南](https://github.com/rbetree/MarksVault#-安装指南) 获取详细的安装步骤。
+            
+            Please refer to the [Installation Guide](https://github.com/rbetree/MarksVault#-安装指南) for detailed installation steps.
+
+          draft: false
+          prerelease: false
+          files: |
+            marksvault-${{ env.VERSION }}-chrome.zip
+            marksvault-${{ env.VERSION }}-chrome.crx 
