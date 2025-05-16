@@ -61,13 +61,6 @@ jobs:
           zip -r ../marksvault-${{ env.VERSION }}-chrome.zip ./*
           cd ..
 
-      - name: Generate Chrome Extension (CRX)
-        uses: cardinalby/webext-buildtools-chrome-crx-action@v2
-        with:
-          zipFilePath: marksvault-${{ env.VERSION }}-chrome.zip
-          crxFilePath: marksvault-${{ env.VERSION }}-chrome.crx
-          privateKey: ${{ secrets.CHROME_CRX_PRIVATE_KEY || 'dummy-key-for-testing' }}
-
       - name: Generate Changelog
         id: changelog
         run: |
@@ -111,5 +104,4 @@ jobs:
           draft: false
           prerelease: false
           files: |
-            marksvault-${{ env.VERSION }}-chrome.zip
-            marksvault-${{ env.VERSION }}-chrome.crx 
+            marksvault-${{ env.VERSION }}-chrome.zip 

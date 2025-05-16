@@ -147,6 +147,7 @@
 - **项目集成** - 与[menav](https://github.com/rbetree/menav)项目集成
 
 >[menav](https://github.com/rbetree/menav)是一个使用github pages托管的个人导航站，欢迎fork使用
+
 >与本项目集成，可自动化上传书签到[menav](https://github.com/rbetree/menav)项目，并自动构建书签页
 
 ### ⏱️ 自动化任务系统
@@ -185,7 +186,6 @@ src/                      # 源代码
 ### 直接安装
 1. 前往 [Releases](https://github.com/rbetree/MarksVault/releases) 页面，下载最新版本的扩展文件：
    - `marksvault-vX.X.X-chrome.zip` - 压缩包格式
-   - `marksvault-vX.X.X-chrome.crx` - Chrome扩展包格式
 
 2. 使用ZIP文件安装:
    - 解压下载的 `.zip` 文件到本地文件夹
@@ -193,12 +193,6 @@ src/                      # 源代码
    - 启用右上角的"开发者模式"
    - 点击"加载已解压的扩展程序"
    - 选择刚刚解压的文件夹
-
-3. 使用CRX文件安装:
-   - 打开 Chrome 浏览器，访问 `chrome://extensions/`
-   - 启用右上角的"开发者模式"
-   - 将下载的 `.crx` 文件拖放到扩展页面中
-   - 确认安装提示
 
 ### 开发者安装
 1. 克隆MarksVault仓库到本地环境
