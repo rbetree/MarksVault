@@ -8,18 +8,20 @@
   </p>
 </div>
 
+[![License](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](https://www.gnu.org/licenses/agpl-3.0.html)
+[![GitHub stars](https://img.shields.io/github/stars/rbetree/MarksVault)](https://github.com/rbetree/MarksVault/stargazers)
 
 >MarksVault 是为现代浏览器设计的高级书签管理扩展。它旨在解决浏览器原生书签功能的局限性，为用户提供更强大、更灵活的书签管理体验。通过将书签数据安全地存储在用户自己的GitHub私有仓库中，确保您的数据安全且完全受您控制。
 
 ## 📑 目录
 
-- [UI预览](#-ui预览)
-- [技术栈](#-技术栈)
-- [功能](#-功能)
-- [项目结构](#-项目结构)
-- [安装指南](#-安装指南)
-- [具体使用](#-具体使用)
-- [许可证](#-许可证)
+- [UI预览](#ui预览)
+- [技术栈](#技术栈)
+- [功能](#功能)
+- [项目结构](#项目结构)
+- [安装指南](#安装指南)
+- [具体使用](#具体使用)
+- [Star-Histor](#Star-History)
 
 ## 👀 UI预览
 
@@ -242,9 +244,6 @@ src/                      # 源代码
 
 ### 3. 愉快使用
 
-## 📜 许可证
+## Star-History
 
-MarksVault 使用 GNU Affero General Public License v3.0 (AGPL-3.0) 许可证进行发布。
-
-- 此软件是自由软件，您可以根据自由软件基金会发布的 GNU Affero通用公共许可证（第3版或更高版本）的条款重新分发和/或修改它。
-- 完整的许可证文本可在 [LICENSE](LICENSE) 文件中找到，或访问 <https://www.gnu.org/licenses/agpl-3.0.html>。
+[![Star History Chart](https://api.star-history.com/svg?repos=rbetree/MarksVault&type=Date)](https://www.star-history.com/#rbetree/MarksVault&Date)
