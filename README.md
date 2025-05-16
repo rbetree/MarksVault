@@ -19,6 +19,7 @@
 - [项目结构](#-项目结构)
 - [安装指南](#-安装指南)
 - [具体使用](#-具体使用)
+- [许可证](#-许可证)
 
 ## 👀 UI预览
 
@@ -240,3 +241,10 @@ src/                      # 源代码
    - 默认创建"marksvault-backups"私有仓库用于书签备份
 
 ### 3. 愉快使用
+
+## 📜 许可证
+
+MarksVault 使用 GNU Affero General Public License v3.0 (AGPL-3.0) 许可证进行发布。
+
+- 此软件是自由软件，您可以根据自由软件基金会发布的 GNU Affero通用公共许可证（第3版或更高版本）的条款重新分发和/或修改它。
+- 完整的许可证文本可在 [LICENSE](LICENSE) 文件中找到，或访问 <https://www.gnu.org/licenses/agpl-3.0.html>。

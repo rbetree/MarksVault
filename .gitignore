@@ -36,6 +36,3 @@ yarn-error.log*
 /coverage 
 # SpecStory explanation file
 .specstory/.what-is-this.md
-
-# pem
-chrome_extension.pem
