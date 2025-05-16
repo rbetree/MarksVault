@@ -9,144 +9,196 @@
 </div>
 
 
-## ✨ 项目介绍
+>MarksVault 是为现代浏览器设计的高级书签管理扩展。它旨在解决浏览器原生书签功能的局限性，为用户提供更强大、更灵活的书签管理体验。通过将书签数据安全地存储在用户自己的GitHub私有仓库中，确保您的数据安全且完全受您控制。
 
-MarksVault 是为现代浏览器设计的高级书签管理扩展。它旨在解决浏览器原生书签功能的局限性，为用户提供更强大、更灵活的书签管理体验。通过将书签数据安全地存储在用户自己的GitHub私有仓库中，MarksVault确保您的数据安全且完全受您控制。
+## 📑 目录
 
+- [UI预览](#-ui预览)
+- [技术栈](#-技术栈)
+- [功能](#-功能)
+- [项目结构](#-项目结构)
+- [安装指南](#-安装指南)
+- [具体使用](#-具体使用)
+
+## 👀 UI预览
+
+<div align="center">
+  <table>
+    <tr>
+      <td align="center">
+        <img src="assets/images/screenshots/theme-light.png" alt="明亮主题界面" width="250">
+        <p><i>明亮主题</i></p>
+      </td>
+      <td align="center">
+        <img src="assets/images/screenshots/theme-dark.png" alt="暗黑主题界面" width="250">
+        <p><i>暗黑主题</i></p>
+      </td>
+    </tr>
+  </table>
+</div>
+
+<details>
+<summary>点击展开查看详细界面预览</summary>
+
+### 书签界面
+<div align="center">
+  <table>
+    <tr>
+      <td align="center">
+        <img src="assets/images/screenshots/bookmarks-view-1.png" alt="书签列表视图" width="250">
+        <p><i>列表视图</i></p>
+      </td>
+      <td align="center">
+        <img src="assets/images/screenshots/bookmarks-view-2.png" alt="书签网格视图" width="250">
+        <p><i>网格视图</i></p>
+      </td>
+      <td align="center">
+        <img src="assets/images/screenshots/bookmarks-view-3.png" alt="书签搜索" width="250">
+        <p><i>书签搜索</i></p>
+      </td>
+    </tr>
+  </table>
+</div>
+
+### 任务界面
+<div align="center">
+  <table>
+    <tr>
+      <td align="center">
+        <img src="assets/images/screenshots/tasks-view-1.png" alt="任务卡片列表" width="250">
+        <p><i>任务卡片列表</i></p>
+      </td>
+      <td align="center">
+        <img src="assets/images/screenshots/tasks-view-2.png" alt="任务卡片展开" width="250">
+        <p><i>任务卡片展开</i></p>
+      </td>
+      <td align="center">
+        <img src="assets/images/screenshots/tasks-view-3.png" alt="任务创建" width="250">
+        <p><i>任务创建</i></p>
+      </td>
+    </tr>
+  </table>
+</div>
+
+### 同步界面
+<div align="center">
+  <table>
+    <tr>
+      <td align="center">
+        <img src="assets/images/screenshots/sync-view-1.png" alt="GitHub连接" width="250">
+        <p><i>GitHub连接</i></p>
+      </td>
+      <td align="center">
+        <img src="assets/images/screenshots/sync-view-2.png" alt="备份统计" width="250">
+        <p><i>连接后备份统计</i></p>
+      </td>
+      <td align="center">
+        <img src="assets/images/screenshots/sync-view-3.png" alt="下载恢复" width="250">
+        <p><i>下载恢复</i></p>
+      </td>
+    </tr>
+  </table>
+</div>
+
+### 系统界面
+<div align="center">
+  <table>
+    <tr>
+      <td align="center">
+        <img src="assets/images/screenshots/settings-view-1.png" alt="一般设置" width="250">
+        <p><i>外观设置</i></p>
+      </td>
+      <td align="center">
+        <img src="assets/images/screenshots/settings-view-2.png" alt="高级设置" width="250">
+        <p><i>高级设置</i></p>
+      </td>
+      <td align="center">
+        <img src="assets/images/screenshots/settings-view-3.png" alt="关于信息" width="250">
+        <p><i>关于信息</i></p>
+      </td>
+    </tr>
+  </table>
+</div>
+</details>
 
 ## 🔧 技术栈
 
-
 | 分类 | 核心技术 |
 |------|---------|
-| **前端核心** | React 18.2, TypeScript 5.0, Material-UI 5.13 |
-| **扩展APIs** | Chrome Manifest V3, Bookmarks API, Storage API, Alarms API, Favicon API |
+| **前端核心** | React 18.2.0, TypeScript 5.0.4, Material-UI(MUI) 5.13.0 |
+| **扩展APIs** | Chrome Manifest V3, Bookmarks API, Storage API, Tabs API, Runtime API |
+| **状态管理** | React Context API + Hooks |
 | **外部集成** | GitHub API (仓库操作与内容管理) |
-| **构建与测试** | Webpack 5.82, ESLint 8.40, Jest 29.5 |
+| **构建与测试** | Webpack 5.82.1, ESLint 8.40.0, Jest 29.5.0 |
 | **项目结构** | 功能模块化设计, Service Worker后台, React弹出界面 |
 
-## 🚀 核心功能
+## 🚀 功能
 
-### 📚 智能书签管理
-- **一键导入** - 轻松导入浏览器现有书签
-- **智能分类** - 自定义文件夹、标签和分类系统
-- **批量操作** - 高效处理多个书签(移动、删除、分类)
+### 📚 书签管理
+- **书签列表与网格** - 支持列表和网格两种显示模式
+- **文件夹管理** - 创建和管理书签文件夹
 - **拖拽排序** - 直观地重新排列您的书签
-- **智能文件夹** - 基于访问频率、添加时间等自动整理书签
+- **基础编辑** - 支持书签基本信息编辑
 
 ### 🔄 云端同步与备份
 - **GitHub集成** - 使用您自己的GitHub私有仓库安全存储书签
-- **定时备份** - 自动或手动同步选项
-- **版本控制** - 支持查看历史版本和回滚操作
-- **冲突解决** - 智能处理多设备同步冲突
+- **手动同步** - 支持手动上传备份和下载恢复
+- **推送书签** - 支持将书签推送到指定GitHub仓库
+- **项目集成** - 与[menav](https://github.com/rbetree/menav)项目集成
 
-### 🔍 高级搜索功能
-- **全文检索** - 搜索书签标题、URL和描述
-- **多维过滤** - 按标签、文件夹、日期等筛选
-- **搜索语法** - 支持高级搜索表达式
-- **结果导出** - 导出搜索结果为多种格式
+>[menav](https://github.com/rbetree/menav)是一个使用github pages托管的个人导航站，欢迎fork使用
+>与本项目集成，可自动化上传书签到[menav](https://github.com/rbetree/menav)项目，并自动构建书签页
 
 ### ⏱️ 自动化任务系统
 - **任务管理** - 创建、编辑、删除和启用/禁用自定义任务
-- **触发条件** - 基于时间、事件或状态设置任务触发条件
+- **基于事件的触发** - 设置任务触发条件
 - **操作配置** - 自定义每个任务的具体操作和参数
-- **执行记录** - 查看任务执行历史和详细日志
-
-### ⚙️ 个性化定制
-- **主题切换** - 亮色/暗色模式和自定义主题
-- **快捷键** - 可定制的键盘快捷操作
-- **同步设置** - 灵活配置同步频率和策略
-- **导入/导出** - 支持多种格式的书签导入导出
-
-## 💎 UI设计规范
-
-采用现代化、简洁的UI设计，专注于用户体验和易用性，符合移动端设计思想。
-
-### 设计理念
-
-- **简约直观** - 减少视觉干扰，突出核心功能
-- **一致性** - 统一的色彩、字体和交互方式
-- **响应式** - 适应不同尺寸的弹出窗口
-- **层次分明** - 清晰的信息层级和视觉引导
-- **单一界面** - 所有功能集成在弹出窗口中，不使用独立的选项页面
-
-### 布局结构
-
-采用经典三栏布局设计：
-
-```
-┌────────────────────────────────────────────────────────────┐
-│                          HEADER                            │
-│  ┌─────────────┐                          ┌──────────────┐ │
-│  │ MarksVault  │                          │ GitHub User  │ │
-│  └─────────────┘                          └──────────────┘ │
-├────────────────────────────────────────────────────────────┤
-│                                                            │
-│                                                            │
-│                                                            │
-│                      CONTENT AREA                          │
-│                                                            │
-│  • Bookmarks View  • Tasks View  • Sync View  • Settings   │
-│                                                            │
-│                                                            │
-├────────────────────────────────────────────────────────────┤
-│                        NAVIGATION                          │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐    │
-│  │ Bookmarks│  │  Tasks   │  │   Sync   │  │ Settings │    │
-│  └──────────┘  └──────────┘  └──────────┘  └──────────┘    │
-└────────────────────────────────────────────────────────────┘
-```
-
+- **执行状态跟踪** - 跟踪任务执行状态
 
 ## 📁 项目结构
 
 ```
-MarksVault/
-├── src/                      # 源代码
-│   ├── background/           # 扩展后台脚本
-│   │   └── background.ts     # 后台Service Worker脚本
-│   ├── popup/                # 弹出窗口界面
-│   │   ├── components/       # React组件
-│   │   │   ├── BookmarksView/# 书签管理视图组件
-│   │   │   ├── TasksView/    # 任务管理视图组件
-│   │   │   ├── SyncView/     # 同步设置视图组件
-│   │   │   ├── SettingsView/ # 系统设置视图组件
-│   │   │   └── shared/       # 共享组件
-│   │   │       ├── Header.tsx        # 顶部栏组件
-│   │   │       ├── BottomNavigation.tsx # 底部导航组件
-│   │   │       ├── Toast.tsx         # 通知提示组件
-│   │   │       └── LoadingIndicator.tsx # 加载指示器
-│   │   ├── styles/           # CSS样式文件
-│   │   ├── popup.html        # 弹出窗口HTML
-│   │   └── popup.tsx         # 弹出窗口脚本入口
-│   ├── services/             # 服务层
-│   ├── types/                # TypeScript类型定义
-│   └── utils/                # 工具函数
-├── assets/                   # 静态资源
-│   ├── images/               # 图片资源
-│   └── icons/                # 图标资源
-│       └── logo/             # 扩展图标
-├── dist/                     # 构建输出目录
-├── manifest.json             # 扩展清单文件(定义权限、扩展点等)
-├── webpack.config.js         # Webpack配置
-├── package.json              # npm配置
-├── tsconfig.json             # TypeScript配置
-└── README.md                 # 项目说明文档
+src/                      # 源代码
+├── background/           # 扩展后台脚本
+│   └── background.ts     # 后台Service Worker脚本
+├── popup/                # 弹出窗口界面
+│   ├── components/       # React组件
+│   │   ├── BookmarksView/# 书签管理视图组件
+│   │   ├── TasksView/    # 任务管理视图组件
+│   │   ├── SyncView/     # 同步设置视图组件
+│   │   ├── SettingsView/ # 系统设置视图组件
+│   │   └── shared/       # 共享组件
+│   │       ├── Header.tsx        # 顶部栏组件
+│   │       ├── BottomNavigation.tsx # 底部导航组件
+│   │       ├── Toast.tsx         # 通知提示组件
+│   │       └── LoadingIndicator.tsx # 加载指示器
+│   ├── styles/           # CSS样式文件
+│   ├── popup.html        # 弹出窗口HTML
+│   └── popup.tsx         # 弹出窗口脚本入口
+├── services/             # 服务层
+├── types/                # TypeScript类型定义
+└── utils/                # 工具函数
 ```
 
-### 主要目录结构说明
-
-- **background/**: 包含扩展的后台Service Worker脚本，负责处理全局事件和状态
-- **popup/**: 弹出窗口界面，包含所有用户交互的UI组件
-  - 采用基于功能的组织方式，将不同功能视图分开管理
-  - 共享组件位于shared目录，可被多个视图复用
-- **services/**: 服务层，处理与外部API的交互，如GitHub API
-- **utils/**: 提供各种工具服务，如书签管理、存储操作、任务调度等
-- **types/**: TypeScript类型定义，确保类型安全
-
-该结构遵循职责分离原则，将UI组件、业务逻辑和数据操作清晰分开，同时符合Chrome扩展的架构特点。
-
 ## 📥 安装指南
+
+### 直接安装
+1. 前往 [Releases](https://github.com/rbetree/MarksVault/releases) 页面，下载最新版本的扩展文件：
+   - `marksvault-vX.X.X-chrome.zip` - 压缩包格式
+   - `marksvault-vX.X.X-chrome.crx` - Chrome扩展包格式
+
+2. 使用ZIP文件安装:
+   - 解压下载的 `.zip` 文件到本地文件夹
+   - 打开 Chrome 浏览器，访问 `chrome://extensions/`
+   - 启用右上角的"开发者模式"
+   - 点击"加载已解压的扩展程序"
+   - 选择刚刚解压的文件夹
+
+3. 使用CRX文件安装:
+   - 打开 Chrome 浏览器，访问 `chrome://extensions/`
+   - 启用右上角的"开发者模式"
+   - 将下载的 `.crx` 文件拖放到扩展页面中
+   - 确认安装提示
 
 ### 开发者安装
 1. 克隆MarksVault仓库到本地环境
@@ -169,29 +221,28 @@ MarksVault/
    - 选择项目中的`dist`目录
 
 
-## 📝 使用示例
+## 📝 具体使用
 
-**书签整理示例:**
-1. 点击MarksVault图标打开扩展
-2. 使用拖放功能将书签移动到新文件夹
-3. 为书签添加自定义标签
-4. 使用筛选器快速找到特定类别的书签
+### 1. 初始设置
 
-**同步示例:**
-1. 在设置中配置GitHub存储
-2. 点击"上传"将当前书签保存到GitHub
-3. 在另一台设备上安装MarksVault并配置相同的GitHub连接
-4. 点击"下载"获取您的书签
+1. **安装完成后**:
+   - 在Chrome浏览器右上角的扩展图标区域找到MarksVault图标并点击
+   - 扩展弹出窗口会显示，底部有四个导航选项：书签、任务、同步和设置
+   - 首次打开时会自动进入书签页面
 
-**自动化任务示例:**
-1. 点击MarksVault图标打开扩展
-2. 在底部导航栏中选择"任务管理"选项
-3. 点击"创建新任务"按钮
-4. 配置任务:
-   - 名称: "自动备份"
-   - 触发条件: "浏览器启动后5秒"
-   - 操作: "上传书签到GitHub"
-   - 参数: 可选择是否包含特定文件夹
-5. 保存任务并开启
-6. 现在每次打开浏览器5秒后，MarksVault将自动上传您的书签!
+### 2. GitHub同步设置
 
+1. **获取GitHub Token**:
+   - 打开同步页，快速创建令牌
+   - 在令牌创建页，直接创建即可（必要权限将自动勾选）
+   - 生成令牌后，立即复制它（页面刷新后将不再显示）
+
+2. **配置GitHub凭据**:
+   - 将复制的令牌粘贴到同步页GitHub Token输入框中
+   - 点击"连接GitHub"按钮
+   - 如配置成功，页面会显示您的备份统计信息
+
+3. **配置备份仓库**:
+   - 默认创建"marksvault-backups"私有仓库用于书签备份
+
+### 3. 愉快使用
