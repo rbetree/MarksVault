@@ -215,6 +215,40 @@ export class GitHubService {
       
       if (!response.ok) {
         const errorData = await response.json();
+        
+        // 特殊处理422错误 - 仓库名称已存在
+        if (response.status === 422 && 
+            errorData.errors && 
+            errorData.errors.some((e: any) => e.code === 'custom' && e.field === 'name' && e.message.includes('already exists'))) {
+          
+          console.log('仓库名称已存在，尝试获取现有仓库');
+          
+          // 尝试获取现有仓库信息
+          try {
+            const ownerResponse = await this.validateCredentials(credentials);
+            const ownerName = ownerResponse.login;
+            
+            const existingRepoResponse = await fetch(`${this.baseUrl}/repos/${ownerName}/${name}`, {
+              method: 'GET',
+              headers
+            });
+            
+            if (existingRepoResponse.ok) {
+              const repoData = await existingRepoResponse.json();
+              console.log('已成功获取现有仓库信息');
+              
+              // 返回现有仓库的信息，添加一个标记表示这是现有仓库
+              return {
+                ...repoData,
+                _repoExisted: true
+              };
+            }
+          } catch (fetchError) {
+            console.error('获取现有仓库失败:', fetchError);
+            // 如果获取失败，继续抛出原始错误
+          }
+        }
+        
         throw new Error(`创建仓库失败: ${response.status} - ${JSON.stringify(errorData)}`);
       }
       

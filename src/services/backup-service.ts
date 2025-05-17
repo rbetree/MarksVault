@@ -139,10 +139,28 @@ class BackupService {
       const repoExists = await githubService.repoExists(credentials, username, DEFAULT_BACKUP_REPO);
       if (!repoExists) {
         // 创建新存储库
-        await githubService.createRepo(credentials, DEFAULT_BACKUP_REPO, true);
-        
-        // 给存储库一些时间初始化
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        try {
+          const createRepoResult = await githubService.createRepo(credentials, DEFAULT_BACKUP_REPO, true);
+          
+          // 检查创建结果中是否有_repoExisted标记，表示仓库已存在但成功获取了信息
+          if (createRepoResult._repoExisted) {
+            console.log('仓库已存在，使用现有仓库');
+          } else {
+            // 给存储库一些时间初始化
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+        } catch (repoError) {
+          // 如果创建仓库失败，再次检查仓库是否存在
+          console.error('创建仓库失败，再次检查仓库是否存在:', repoError);
+          const recheckedExists = await githubService.repoExists(credentials, username, DEFAULT_BACKUP_REPO);
+          
+          if (!recheckedExists) {
+            // 如果确实不存在，则抛出原始错误
+            throw repoError;
+          } else {
+            console.log('仓库已存在，继续备份流程');
+          }
+        }
       }
       
       // 3. 序列化数据
@@ -969,7 +987,28 @@ class BackupService {
       const repoExists = await githubService.repoExists(credentials, username, repoName);
       if (!repoExists) {
         // 创建新存储库
-        await githubService.createRepo(credentials, repoName, true);
+        try {
+          const createRepoResult = await githubService.createRepo(credentials, repoName, true);
+          
+          // 检查创建结果中是否有_repoExisted标记，表示仓库已存在但成功获取了信息
+          if (createRepoResult._repoExisted) {
+            console.log('目标仓库已存在，使用现有仓库');
+          } else {
+            // 给新创建的仓库一些时间初始化
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+        } catch (repoError) {
+          // 如果创建仓库失败，再次检查仓库是否存在
+          console.error('创建目标仓库失败，再次检查仓库是否存在:', repoError);
+          const recheckedExists = await githubService.repoExists(credentials, username, repoName);
+          
+          if (!recheckedExists) {
+            // 如果确实不存在，则抛出原始错误
+            throw repoError;
+          } else {
+            console.log('目标仓库已存在，继续推送流程');
+          }
+        }
       }
       
       // 3. 生成文件名 (格式: bookmarks_YYYYMMDD.html)
