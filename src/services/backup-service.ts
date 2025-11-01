@@ -4,6 +4,7 @@ import { BookmarkItem } from '../utils/bookmark-service';
 import bookmarkService from '../utils/bookmark-service';
 import githubService from './github-service';
 import storageService from '../utils/storage-service';
+import { getFaviconUrl } from '../utils/favicon-service';
 
 // 备份存储库名称
 const DEFAULT_BACKUP_REPO = 'marksvault-backups';
@@ -895,6 +896,70 @@ class BackupService {
   }
   
   /**
+   * 获取图标并转换为 Base64 Data URI (PNG 格式)
+   * @param url 网站 URL
+   * @returns Base64 编码的 PNG 图标数据或 null
+   */
+  private async fetchIconAsBase64(url: string): Promise<string | null> {
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      
+      // 如果已经是 PNG 格式，直接转换
+      if (blob.type === 'image/png') {
+        return new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = () => resolve(null);
+          reader.readAsDataURL(blob);
+        });
+      }
+      
+      // 如果不是 PNG，通过 Canvas 转换为 PNG
+      return new Promise((resolve) => {
+        const img = new Image();
+        const objectUrl = URL.createObjectURL(blob);
+        
+        img.onload = () => {
+          try {
+            // 创建 canvas 进行格式转换
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+              URL.revokeObjectURL(objectUrl);
+              resolve(null);
+              return;
+            }
+            
+            ctx.drawImage(img, 0, 0);
+            
+            // 转换为 PNG 格式的 Data URI
+            const pngDataUrl = canvas.toDataURL('image/png');
+            URL.revokeObjectURL(objectUrl);
+            resolve(pngDataUrl);
+          } catch (error) {
+            URL.revokeObjectURL(objectUrl);
+            resolve(null);
+          }
+        };
+        
+        img.onerror = () => {
+          URL.revokeObjectURL(objectUrl);
+          resolve(null);
+        };
+        
+        img.src = objectUrl;
+      });
+    } catch (error) {
+      console.warn('获取图标失败:', error);
+      return null;
+    }
+  }
+  
+  /**
    * 创建HTML格式的书签数据
    * @returns HTML格式的书签数据
    */
@@ -917,33 +982,77 @@ class BackupService {
     html += '<H1>Bookmarks</H1>\n';
     html += '<DL><p>\n';
     
-    // 递归生成书签HTML
-    const generateBookmarkHtml = (items: BookmarkItem[], indentLevel: number = 1): string => {
+    // 判断是否为书签栏文件夹
+    const isBookmarkBar = (item: BookmarkItem): boolean => {
+      // 通过ID判断（Chrome/Edge书签栏ID为'1'）
+      if (item.id === '1') {
+        return true;
+      }
+      // 通过标题判断
+      const bookmarkBarTitles = ['書籤列', '书签栏', 'Bookmarks Bar', 'Bookmarks bar', 'Bookmark Bar'];
+      return bookmarkBarTitles.includes(item.title);
+    };
+    
+    // 递归生成书签HTML（异步）
+    const generateBookmarkHtml = async (items: BookmarkItem[], indentLevel: number = 1, skipRootWrapper: boolean = true): Promise<string> => {
       const indent = '    '.repeat(indentLevel);
       let result = '';
       
-      items.forEach(item => {
+      for (const item of items) {
         if (item.isFolder) {
-          // 文件夹项
-          result += `${indent}<DT><H3>${this.escapeHtml(item.title)}</H3>\n`;
+          // 对于根节点的第一层，完全跳过根包装文件夹，直接处理其子节点
+          if (skipRootWrapper && indentLevel === 1 && !isBookmarkBar(item)) {
+            // 如果不是书签栏，直接递归处理子节点，不输出此节点的HTML
+            if (item.children && item.children.length > 0) {
+              result += await generateBookmarkHtml(item.children, indentLevel, false);
+            }
+            continue;
+          }
+          
+          // 文件夹项 - 只添加 ADD_DATE 和 LAST_MODIFIED 属性
+          const addDate = item.dateAdded ? Math.floor(item.dateAdded / 1000) : Math.floor(Date.now() / 1000);
+          const lastModified = item.dateGroupModified ? Math.floor(item.dateGroupModified / 1000) : 0;
+          
+          // 检查是否为书签栏
+          const personalToolbar = isBookmarkBar(item) ? ' PERSONAL_TOOLBAR_FOLDER="true"' : '';
+          
+          result += `${indent}<DT><H3 ADD_DATE="${addDate}" LAST_MODIFIED="${lastModified}"${personalToolbar}>${this.escapeHtml(item.title)}</H3>\n`;
           result += `${indent}<DL><p>\n`;
           
           if (item.children && item.children.length > 0) {
-            result += generateBookmarkHtml(item.children, indentLevel + 1);
+            result += await generateBookmarkHtml(item.children, indentLevel + 1, false);
           }
           
           result += `${indent}</DL><p>\n`;
         } else if (item.url) {
-          // 书签项
-          const addDate = item.dateAdded ? ` ADD_DATE="${Math.floor(item.dateAdded / 1000)}"` : '';
-          result += `${indent}<DT><A HREF="${this.escapeHtml(item.url)}"${addDate}>${this.escapeHtml(item.title)}</A>\n`;
+          // 书签项 - 只添加 ADD_DATE 和 ICON 属性（不添加 LAST_MODIFIED）
+          const addDate = item.dateAdded ? Math.floor(item.dateAdded / 1000) : Math.floor(Date.now() / 1000);
+          
+          // 获取 ICON - 保持 PNG 格式
+          let iconAttr = '';
+          try {
+            const faviconUrl = getFaviconUrl(item.url);
+            if (faviconUrl) {
+              const iconData = await this.fetchIconAsBase64(faviconUrl);
+              if (iconData) {
+                // 确保使用 PNG 格式
+                if (iconData.startsWith('data:image/')) {
+                  iconAttr = ` ICON="${iconData}"`;
+                }
+              }
+            }
+          } catch (error) {
+            console.warn('Failed to fetch icon for', item.url, error);
+          }
+          
+          result += `${indent}<DT><A HREF="${this.escapeHtml(item.url)}" ADD_DATE="${addDate}"${iconAttr}>${this.escapeHtml(item.title)}</A>\n`;
         }
-      });
+      }
       
       return result;
     };
     
-    html += generateBookmarkHtml(bookmarks);
+    html += await generateBookmarkHtml(bookmarks, 1, true);
     html += '</DL><p>\n';
     
     return html;
