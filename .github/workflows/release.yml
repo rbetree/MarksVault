@@ -64,23 +64,39 @@ jobs:
       - name: Generate Changelog
         id: changelog
         run: |
-          # If this is a tag-based release, get commits since the previous tag
+          # Get the previous tag (if exists)
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          
           if [ "${{ github.event_name }}" != "workflow_dispatch" ]; then
-            PREVIOUS_TAG=$(git describe --tags --abbrev=0 ${{ env.VERSION }}^ 2>/dev/null || echo "")
+            # Tag-based release: get commits between previous tag and current tag
             if [ -z "$PREVIOUS_TAG" ]; then
-              # If there's no previous tag, get all commits
+              # If there's no previous tag, get all commits up to current tag
               CHANGELOG=$(git log --pretty=format:"* %s (%h)" ${{ env.VERSION }})
+              echo "CHANGELOG_TITLE=All Changes" >> $GITHUB_ENV
             else
               # Get commits since the previous tag
               CHANGELOG=$(git log --pretty=format:"* %s (%h)" $PREVIOUS_TAG..${{ env.VERSION }})
+              echo "CHANGELOG_TITLE=Changes Since $PREVIOUS_TAG" >> $GITHUB_ENV
             fi
           else
-            # For manual releases, get the most recent commits
-            CHANGELOG=$(git log --pretty=format:"* %s (%h)" -n 10)
+            # Manual release: get commits since the previous tag (up to 10 most recent)
+            if [ -z "$PREVIOUS_TAG" ]; then
+              # If there's no previous tag, get the most recent 10 commits
+              CHANGELOG=$(git log --pretty=format:"* %s (%h)" -n 10)
+              echo "CHANGELOG_TITLE=Recent Changes (Last 10 Commits)" >> $GITHUB_ENV
+            else
+              # Get up to 10 most recent commits since the previous tag
+              CHANGELOG=$(git log --pretty=format:"* %s (%h)" $PREVIOUS_TAG..HEAD -n 10)
+              echo "CHANGELOG_TITLE=Recent Changes Since $PREVIOUS_TAG (Last 10 Commits)" >> $GITHUB_ENV
+            fi
           fi
-          echo "CHANGELOG<<EOF" >> $GITHUB_ENV
-          echo "$CHANGELOG" >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
+          
+          # Use delimiter to properly handle multiline output
+          {
+            echo "CHANGELOG<<EOF"
+            echo "$CHANGELOG"
+            echo "EOF"
+          } >> $GITHUB_ENV
           
           # Generate release date with UTC timezone
           echo "RELEASE_DATE=$(date +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_ENV
@@ -94,14 +110,19 @@ jobs:
           body: |
             **Release Date**: ${{ env.RELEASE_DATE }}
             
-            **Last 10 Changes**
+            ## ${{ env.CHANGELOG_TITLE }}
+            
             ${{ env.CHANGELOG }}
-
-            请参阅[安装指南](https://github.com/rbetree/MarksVault#-安装指南) 获取详细的安装步骤。
+            
+            ---
+            
+            ## 📦 Installation | 安装
             
             Please refer to the [Installation Guide](https://github.com/rbetree/MarksVault#-安装指南) for detailed installation steps.
+            
+            请参阅[安装指南](https://github.com/rbetree/MarksVault#-安装指南) 获取详细的安装步骤。
 
           draft: false
           prerelease: false
           files: |
-            marksvault-${{ env.VERSION }}-chrome.zip 
+            marksvault-${{ env.VERSION }}-chrome.zip

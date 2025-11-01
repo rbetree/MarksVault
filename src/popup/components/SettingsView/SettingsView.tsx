@@ -413,7 +413,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ toastRef }) => {
                     </Typography>
                     <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.5 }}>
                       <Chip 
-                        label="v0.1.0" 
+                        label="v0.1.1" 
                         size="small" 
                         color="primary" 
                         sx={{ fontSize: '0.7rem', height: 20 }}

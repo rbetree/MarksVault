@@ -34,6 +34,14 @@ yarn-error.log*
 .env.production.local
 
 # 测试覆盖率
-/coverage 
+/coverage
 # SpecStory explanation file
 .specstory/.what-is-this.md
+
+# 扩展商店发布相关
+store-packages/
+*.zip
+*.crx
+*.pem
+store-screenshots-raw/
+build-temp/
