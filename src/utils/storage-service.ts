@@ -1,6 +1,6 @@
 // 用户设置类型
 export interface UserSettings {
-  isDarkMode: boolean;
+  isDarkMode?: boolean; // @deprecated 已弃用，仅保留用于向后兼容
   syncEnabled: boolean;
   viewType: 'list' | 'grid'; // 视图类型：列表或网格
   themeColor?: string; // 自定义主题颜色
@@ -61,7 +61,6 @@ class StorageService {
     try {
       const result = await chrome.storage.local.get('settings');
       const defaultSettings: UserSettings = {
-        isDarkMode: false,
         syncEnabled: false,
         viewType: 'grid', // 默认使用网格视图
         notifications: {

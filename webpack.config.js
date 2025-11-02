@@ -8,6 +8,7 @@ module.exports = {
   entry: {
     popup: path.resolve('src/popup/popup.tsx'),
     background: path.resolve('src/background/background.ts'),
+    taskconfig: path.resolve('src/taskconfig/taskconfig.tsx'),
   },
   module: {
     rules: [
@@ -27,6 +28,12 @@ module.exports = {
       template: path.resolve('src/popup/popup.html'),
       filename: 'popup/popup.html',
       chunks: ['popup'],
+    }),
+    new HtmlWebpackPlugin({
+      template: path.resolve('src/taskconfig/taskconfig.html'),
+      filename: 'taskconfig/taskconfig.html',
+      chunks: ['taskconfig'],
+      inject: 'body',
     }),
     new CopyWebpackPlugin({
       patterns: [

@@ -73,7 +73,7 @@ const THEME_COLORS = [
  * 包含所有用户可配置的设置选项
  */
 const SettingsView: React.FC<SettingsViewProps> = ({ toastRef }) => {
-  const { mode, toggleColorMode, changeThemeColor } = useThemeContext();
+  const { changeThemeColor } = useThemeContext();
   
   // 确保初始状态包含所有必要的字段
   const defaultNotifications = {
@@ -83,7 +83,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ toastRef }) => {
   };
   
   const [settings, setSettings] = useState<UserSettings>({
-    isDarkMode: mode === 'dark',
+    isDarkMode: true,
     syncEnabled: false,
     viewType: 'grid',
     themeColor: '#4285F4',
@@ -128,12 +128,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({ toastRef }) => {
     
     loadSettings();
   }, []);
-  
-  // 处理深色模式切换
-  const handleDarkModeToggle = () => {
-    toggleColorMode();
-    // 设置状态将由ThemeContext管理，这里无需再更新本地状态
-  };
   
   // 处理标签切换
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
@@ -231,23 +225,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ toastRef }) => {
           <TabPanel value={tabValue} index={0}>
             {/* 界面设置分组 */}
             <SettingGroup title="界面设置" icon={<VisibilityIcon fontSize="small" />}>
-              <FormGroup>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={mode === 'dark'}
-                      onChange={handleDarkModeToggle}
-                      color="primary"
-                      size="small"
-                    />
-                  }
-                  label={
-                    <Typography variant="body2">深色模式</Typography>
-                  }
-                />
-              </FormGroup>
-              
-              <Box sx={{ mt: 1.5 }}>
+              <Box>
                 <Typography variant="body2" sx={{ mb: 0.5 }}>主题颜色</Typography>
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                   {THEME_COLORS.map((color) => (

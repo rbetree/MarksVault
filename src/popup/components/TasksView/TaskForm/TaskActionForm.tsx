@@ -62,13 +62,20 @@ interface FolderOption {
 interface TaskActionFormProps {
   action: Action;
   onChange: (updatedAction: Action, isValid: boolean) => void;
+  showDetailsInSeparateColumn?: boolean; // 当为true时，只渲染操作类型选择卡片
+  showOnlyDetails?: boolean; // 当为true时，只渲染详细配置表单
 }
 
 /**
  * 任务操作配置表单组件
  * 用于配置任务的具体操作，包括备份、整理等
  */
-const TaskActionForm: React.FC<TaskActionFormProps> = ({ action, onChange }) => {
+const TaskActionForm: React.FC<TaskActionFormProps> = ({
+  action,
+  onChange,
+  showDetailsInSeparateColumn = false,
+  showOnlyDetails = false
+}) => {
   // 操作类型
   const [actionType, setActionType] = useState<ActionType>(action.type);
   
@@ -943,13 +950,74 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({ action, onChange }) => 
     }
   ];
   
+  // 如果只显示详细配置
+  if (showOnlyDetails) {
+    return (
+      <Box>
+        {renderActionForm()}
+      </Box>
+    );
+  }
+  
+  // 如果只显示操作类型选择（详细配置在右栏）
+  if (showDetailsInSeparateColumn) {
+    return (
+      <Box>
+        <Grid container spacing={2}>
+          {actionTypeOptions.map((option) => (
+            <Grid item xs={4} key={option.type}>
+              <Card
+                sx={{
+                  cursor: 'pointer',
+                  height: '100%',
+                  borderColor: actionType === option.type ? 'primary.main' : 'divider',
+                  borderWidth: actionType === option.type ? 2 : 1,
+                  borderStyle: 'solid',
+                  borderRadius: 2,
+                  position: 'relative',
+                  overflow: 'hidden',
+                  boxShadow: actionType === option.type ? 1 : 0
+                }}
+                onClick={() => handleActionTypeChange(option.type)}
+              >
+                <CardContent sx={{ p: 1.5, textAlign: 'center', '&:last-child': { pb: 1.5 } }}>
+                  <Box sx={{
+                    width: '40px',
+                    height: '40px',
+                    margin: '0 auto 10px',
+                    mb: 1.5,
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: actionType === option.type ? 'primary.main' : 'text.secondary',
+                    backgroundColor: actionType === option.type ? 'action.selected' : 'transparent'
+                  }}>
+                    {option.icon}
+                  </Box>
+                  <Typography variant="body1" component="div" sx={{ fontWeight: 500 }}>
+                    {option.title}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ fontSize: '10px', mt: 0.5 }}>
+                    {option.description}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+          ))}
+        </Grid>
+      </Box>
+    );
+  }
+  
+  // 默认渲染：显示操作类型选择和详细配置（向后兼容）
   return (
     <Box>
       <Grid container spacing={2} sx={{ mb: 2 }}>
         {actionTypeOptions.map((option) => (
           <Grid item xs={4} key={option.type}>
-            <Card 
-              sx={{ 
+            <Card
+              sx={{
                 cursor: 'pointer',
                 height: '100%',
                 borderColor: actionType === option.type ? 'primary.main' : 'divider',
@@ -963,7 +1031,7 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({ action, onChange }) => 
               onClick={() => handleActionTypeChange(option.type)}
             >
               <CardContent sx={{ p: 1.5, textAlign: 'center', '&:last-child': { pb: 1.5 } }}>
-                <Box sx={{ 
+                <Box sx={{
                   width: '40px',
                   height: '40px',
                   margin: '0 auto 10px',
@@ -989,12 +1057,12 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({ action, onChange }) => 
         ))}
       </Grid>
       
-      <Paper 
-        elevation={0} 
-        sx={{ 
-          p: 0, 
+      <Paper
+        elevation={0}
+        sx={{
+          p: 0,
           bgcolor: 'transparent',
-          borderRadius: 2, 
+          borderRadius: 2,
           border: 'none',
           transition: 'all 0.3s ease',
           boxShadow: 'none'

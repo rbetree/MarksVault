@@ -23,9 +23,8 @@ import taskService from '../../../services/task-service';
 import TaskCard from './TaskCard';
 import EmptyTaskList from './EmptyTaskList';
 import TaskSkeleton from './TaskSkeleton';
-import TaskDialog from './TaskForm';
-import { 
-  taskHeaderStyles, 
+import {
+  taskHeaderStyles,
   filterContainerStyles,
   fabStyles,
   globalFabStyles
@@ -48,11 +47,6 @@ const TasksView: React.FC<TasksViewProps> = ({ toastRef }) => {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [deleteTaskId, setDeleteTaskId] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  
-  // 任务表单对话框状态
-  const [showTaskDialog, setShowTaskDialog] = useState(false);
-  const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
-  const [currentTask, setCurrentTask] = useState<Task | undefined>(undefined);
   
   // 加载任务数据
   useEffect(() => {
@@ -85,31 +79,31 @@ const TasksView: React.FC<TasksViewProps> = ({ toastRef }) => {
     fetchTasks();
   }, [filterStatus, refreshTrigger]);
   
-  // 加载当前编辑的任务详情
+  // 监听storage变化，处理任务配置页面的结果
   useEffect(() => {
-    const fetchTask = async () => {
-      if (!currentTaskId) {
-        setCurrentTask(undefined);
-        return;
-      }
-      
-      try {
-        const result = await taskService.getTaskById(currentTaskId);
-        if (result.success) {
-          setCurrentTask(result.data as Task);
-        } else {
-          toastRef?.current?.showToast(`加载任务详情失败: ${result.error}`, 'error');
-          setCurrentTask(undefined);
+    const handleStorageChange = (
+      changes: { [key: string]: chrome.storage.StorageChange },
+      areaName: string
+    ) => {
+      if (areaName === 'local' && changes.taskConfigResult) {
+        const result = changes.taskConfigResult.newValue;
+        if (result && result.success) {
+          // 刷新任务列表
+          refreshTasks();
+          // 显示成功提示
+          toastRef?.current?.showToast(
+            result.mode === 'create' ? '任务创建成功' : '任务更新成功',
+            'success'
+          );
+          // 清除标记
+          chrome.storage.local.remove('taskConfigResult');
         }
-      } catch (error) {
-        console.error('获取任务详情时出错:', error);
-        toastRef?.current?.showToast('加载任务详情时发生错误', 'error');
-        setCurrentTask(undefined);
       }
     };
     
-    fetchTask();
-  }, [currentTaskId, toastRef]);
+    chrome.storage.onChanged.addListener(handleStorageChange);
+    return () => chrome.storage.onChanged.removeListener(handleStorageChange);
+  }, [toastRef]);
   
   // 刷新任务列表
   const refreshTasks = () => {
@@ -127,10 +121,23 @@ const TasksView: React.FC<TasksViewProps> = ({ toastRef }) => {
     }
   };
   
+  // 打开任务配置页面
+  const openTaskConfigPage = (mode: 'create' | 'edit', taskId?: string) => {
+    const url = chrome.runtime.getURL('taskconfig/taskconfig.html');
+    const params = new URLSearchParams({ mode });
+    if (taskId) {
+      params.append('taskId', taskId);
+    }
+    
+    chrome.tabs.create({
+      url: `${url}?${params.toString()}`,
+      active: true
+    });
+  };
+  
   // 处理任务编辑
   const handleEditTask = (taskId: string) => {
-    setCurrentTaskId(taskId);
-    setShowTaskDialog(true);
+    openTaskConfigPage('edit', taskId);
   };
   
   // 处理删除确认
@@ -164,27 +171,9 @@ const TasksView: React.FC<TasksViewProps> = ({ toastRef }) => {
     }
   };
   
-  // 打开创建任务对话框
+  // 打开创建任务页面
   const handleCreateTask = () => {
-    setCurrentTaskId(null);
-    setCurrentTask(undefined);
-    setShowTaskDialog(true);
-  };
-  
-  // 关闭任务对话框
-  const handleCloseTaskDialog = () => {
-    setShowTaskDialog(false);
-    setCurrentTaskId(null);
-    setCurrentTask(undefined);
-  };
-  
-  // 任务保存后的回调
-  const handleTaskSaved = (taskId: string, isNew: boolean) => {
-    refreshTasks();
-    toastRef?.current?.showToast(
-      isNew ? '任务已创建' : '任务已更新', 
-      'success'
-    );
+    openTaskConfigPage('create');
   };
   
   // 过滤器变更处理
@@ -281,13 +270,13 @@ const TasksView: React.FC<TasksViewProps> = ({ toastRef }) => {
       {renderTasks()}
       
       {/* 浮动添加按钮 */}
-      <Fab 
-        color="primary" 
+      <Fab
+        color="primary"
         size="medium"
-        aria-label="添加任务" 
+        aria-label="添加任务"
         sx={globalFabStyles}
         onClick={handleCreateTask}
-        disabled={deleteTaskId !== null || showTaskDialog}
+        disabled={deleteTaskId !== null}
       >
         <AddIcon />
       </Fab>
@@ -315,15 +304,6 @@ const TasksView: React.FC<TasksViewProps> = ({ toastRef }) => {
           </Button>
         </DialogActions>
       </Dialog>
-      
-      {/* 任务创建/编辑对话框 */}
-      <TaskDialog
-        open={showTaskDialog}
-        onClose={handleCloseTaskDialog}
-        task={currentTask}
-        onTaskSaved={handleTaskSaved}
-        disableRestoreFocus={true}
-      />
     </Box>
   );
 };
