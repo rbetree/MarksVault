@@ -25,10 +25,7 @@ const TRIGGER_OPTIONS: TriggerOption[] = [
   // 移除扩展图标点击选项，因为在manifest.json中配置了default_popup，此事件永远不会触发
   // { value: 'event_extension_clicked', label: '扩展图标点击时', eventType: EventType.EXTENSION_CLICKED },
   
-  { value: 'event_bookmark_created', label: '创建书签时', eventType: EventType.BOOKMARK_CREATED },
-  { value: 'event_bookmark_removed', label: '删除书签时', eventType: EventType.BOOKMARK_REMOVED },
-  { value: 'event_bookmark_changed', label: '修改书签时', eventType: EventType.BOOKMARK_CHANGED },
-  { value: 'event_bookmark_moved', label: '移动书签时', eventType: EventType.BOOKMARK_MOVED },
+  { value: 'event_bookmark_changed', label: '书签变更时', eventType: EventType.BOOKMARK_CHANGED },
 ];
 
 interface TaskTriggerFormProps {

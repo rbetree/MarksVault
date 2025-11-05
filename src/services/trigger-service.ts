@@ -110,8 +110,6 @@ class TriggerService {
    */
   public async handleEventTrigger(eventType: EventType, eventData?: any): Promise<void> {
     try {
-      console.log(`处理事件触发: ${eventType}`, eventData ? '，包含事件数据' : '');
-      
       // 获取所有已启用的任务
       const result = await taskService.getTasksByStatus(TaskStatus.ENABLED);
       if (!result.success) {
@@ -122,14 +120,13 @@ class TriggerService {
       const enabledTasks = result.data as Task[];
       
       // 筛选与事件类型匹配的事件触发器任务
-      const matchingTasks = enabledTasks.filter(task => 
-        task.trigger.type === TriggerType.EVENT && 
-        task.trigger.event === eventType &&
-        this.matchesConditions(task, eventData)
-      );
+      const matchingTasks = enabledTasks.filter(task => {
+        return task.trigger.type === TriggerType.EVENT &&
+               task.trigger.event === eventType &&
+               this.matchesConditions(task, eventData);
+      });
       
       if (matchingTasks.length === 0) {
-        console.log(`没有找到对应事件 ${eventType} 的任务或条件不匹配`);
         return;
       }
       
@@ -191,11 +188,8 @@ class TriggerService {
     
     // 根据不同事件类型检查不同条件
     switch (trigger.event) {
-      // 书签相关事件
-      case EventType.BOOKMARK_CREATED:
+      // 书签变更事件（包括创建、删除、修改、移动）
       case EventType.BOOKMARK_CHANGED:
-      case EventType.BOOKMARK_MOVED:
-      case EventType.BOOKMARK_REMOVED:
         return this.matchBookmarkConditions(conditions, eventData);
       
       // 浏览器和扩展事件

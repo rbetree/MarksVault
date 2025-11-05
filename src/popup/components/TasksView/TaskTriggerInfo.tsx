@@ -27,10 +27,7 @@ const TaskTriggerInfo: React.FC<TaskTriggerInfoProps> = ({ trigger, compact = fa
       case EventType.EXTENSION_CLICKED:
         return <WebIcon fontSize="small" color="action" sx={{ fontSize: '14px' }} />;
         
-      case EventType.BOOKMARK_CREATED:
-      case EventType.BOOKMARK_REMOVED:
       case EventType.BOOKMARK_CHANGED:
-      case EventType.BOOKMARK_MOVED:
         return <BookmarkIcon fontSize="small" color="action" sx={{ fontSize: '14px' }} />;
         
       default:
@@ -46,14 +43,8 @@ const TaskTriggerInfo: React.FC<TaskTriggerInfoProps> = ({ trigger, compact = fa
       case EventType.EXTENSION_CLICKED:
         return '扩展图标点击时';
         
-      case EventType.BOOKMARK_CREATED:
-        return '创建书签时';
-      case EventType.BOOKMARK_REMOVED:
-        return '删除书签时';
       case EventType.BOOKMARK_CHANGED:
-        return '修改书签时';
-      case EventType.BOOKMARK_MOVED:
-        return '移动书签时';
+        return '书签变更时';
         
       default:
         return '未知事件类型';

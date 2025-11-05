@@ -65,25 +65,21 @@ chrome.runtime.onStartup.addListener(async () => {
   await triggerService.handleEventTrigger(EventType.BROWSER_STARTUP);
 });
 
-// 监听书签事件
+// 监听书签事件 - 统一触发书签变更事件
 chrome.bookmarks.onCreated.addListener(async (id, bookmark) => {
-  console.log('书签创建事件触发', bookmark);
-  await triggerService.handleEventTrigger(EventType.BOOKMARK_CREATED, { id, bookmark });
+  await triggerService.handleEventTrigger(EventType.BOOKMARK_CHANGED, { id, bookmark });
 });
 
 chrome.bookmarks.onRemoved.addListener(async (id, removeInfo) => {
-  console.log('书签删除事件触发', removeInfo);
-  await triggerService.handleEventTrigger(EventType.BOOKMARK_REMOVED, { id, removeInfo });
+  await triggerService.handleEventTrigger(EventType.BOOKMARK_CHANGED, { id, removeInfo });
 });
 
 chrome.bookmarks.onChanged.addListener(async (id, changeInfo) => {
-  console.log('书签修改事件触发', changeInfo);
   await triggerService.handleEventTrigger(EventType.BOOKMARK_CHANGED, { id, changeInfo });
 });
 
 chrome.bookmarks.onMoved.addListener(async (id, moveInfo) => {
-  console.log('书签移动事件触发', moveInfo);
-  await triggerService.handleEventTrigger(EventType.BOOKMARK_MOVED, { id, moveInfo });
+  await triggerService.handleEventTrigger(EventType.BOOKMARK_CHANGED, { id, moveInfo });
 });
 
 // 由于在manifest.json中配置了default_popup，chrome.action.onClicked事件永远不会触发
