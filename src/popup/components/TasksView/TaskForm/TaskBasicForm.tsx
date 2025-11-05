@@ -23,7 +23,21 @@ const TaskBasicForm: React.FC<TaskBasicFormProps> = ({ taskData, onChange }) => 
   // 初始化表单数据
   useEffect(() => {
     setName(taskData.name);
-  }, [taskData]);
+    // 初始化时就通知父组件当前的验证状态
+    const isValid = !!taskData.name.trim();
+    if (!taskData.name.trim()) {
+      setNameError('任务名称不能为空');
+    } else {
+      setNameError('');
+    }
+    onChange(
+      {
+        name: taskData.name,
+        status: TaskStatus.ENABLED
+      },
+      isValid
+    );
+  }, [taskData, onChange]);
   
   // 处理名称更改
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
