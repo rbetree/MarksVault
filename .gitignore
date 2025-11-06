@@ -47,3 +47,4 @@ store-packages/
 *.pem
 store-screenshots-raw/
 build-temp/
+AGENTS.md

@@ -23,20 +23,23 @@ import UploadIcon from '@mui/icons-material/Upload';
 import Autocomplete from '@mui/material/Autocomplete';
 import CircularProgress from '@mui/material/CircularProgress';
 import FolderIcon from '@mui/icons-material/Folder';
-import { 
-  Action, 
-  ActionType, 
-  BackupAction, 
-  OrganizeAction, 
+import {
+  Action,
+  ActionType,
+  BackupAction,
+  OrganizeAction,
   PushAction,
+  SelectivePushAction,
   createBackupAction,
   createOrganizeAction,
-  createPushAction
+  createPushAction,
+  createSelectivePushAction
 } from '../../../../types/task';
 import { Radio, RadioGroup } from '@mui/material';
 import { Typography } from '@mui/material';
 import { Divider } from '@mui/material';
 import bookmarkService from '../../../../utils/bookmark-service';
+import SelectivePushActionForm from './SelectivePushActionForm';
 
 // 扩展的整理操作接口，用于UI渲染
 interface ExtendedOrganizeOperation {
@@ -106,6 +109,11 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({
   );
   const [pushCommitMessage, setPushCommitMessage] = useState<string>(
     action.type === ActionType.PUSH ? (action as PushAction).options.commitMessage || '自动推送书签' : '自动推送书签'
+  );
+  
+  // 选择性推送操作状态
+  const [selectivePush, setSelectivePush] = useState<SelectivePushAction>(
+    action.type === ActionType.SELECTIVE_PUSH ? (action as SelectivePushAction) : createSelectivePushAction([], '', 'bookmarks')
   );
   
   // 整理操作状态
@@ -181,6 +189,9 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({
       setPushRepoName(pushAction.options.repoName || 'menav');
       setPushFolderPath(pushAction.options.folderPath || 'bookmarks');
       setPushCommitMessage(pushAction.options.commitMessage || '自动推送书签');
+    } else if (action.type === ActionType.SELECTIVE_PUSH) {
+      const selectivePushAction = action as SelectivePushAction;
+      setSelectivePush(selectivePushAction);
     } else if (action.type === ActionType.ORGANIZE) {
       // 转换操作
       setOperations(
@@ -202,6 +213,9 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({
         break;
       case ActionType.PUSH:
         newAction = createPushAction();
+        break;
+      case ActionType.SELECTIVE_PUSH:
+        newAction = createSelectivePushAction([], '', 'bookmarks');
         break;
       case ActionType.ORGANIZE:
       default:
@@ -914,6 +928,28 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({
     );
   };
   
+  // 渲染选择性推送表单
+  const renderSelectivePushForm = () => {
+    return (
+      <Box sx={{ mt: 0 }}>
+        <SelectivePushActionForm
+          action={selectivePush}
+          onChange={(updatedAction) => {
+            setSelectivePush(updatedAction);
+            // 验证表单
+            const isValid = updatedAction.options.selections.length > 0 &&
+                           updatedAction.options.repoName.trim() !== '' &&
+                           updatedAction.options.folderPath.trim() !== '';
+            onChange(updatedAction, isValid);
+          }}
+          onValidation={(isValid) => {
+            onChange(selectivePush, isValid);
+          }}
+        />
+      </Box>
+    );
+  };
+  
   // 根据操作类型渲染相应的表单
   const renderActionForm = () => {
     switch (actionType) {
@@ -921,6 +957,8 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({
         return renderBackupForm();
       case ActionType.PUSH:
         return renderPushForm();
+      case ActionType.SELECTIVE_PUSH:
+        return renderSelectivePushForm();
       case ActionType.ORGANIZE:
         return renderOrganizeForm();
       default:
@@ -942,9 +980,15 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({
       description: "",
       icon: <UploadIcon fontSize="medium" />
     },
-    { 
-      type: ActionType.ORGANIZE, 
-      title: "整理书签", 
+    {
+      type: ActionType.SELECTIVE_PUSH,
+      title: "选择性推送",
+      description: "选择特定书签推送",
+      icon: <UploadIcon fontSize="medium" />
+    },
+    {
+      type: ActionType.ORGANIZE,
+      title: "整理书签",
       description: "",
       icon: <CleaningServicesIcon fontSize="medium" />
     }

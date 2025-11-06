@@ -189,9 +189,10 @@ const TaskDialog: React.FC<TaskDialogProps> = ({
           </Grid>
           
           <Grid item xs={12}>
-            <TaskTriggerForm 
+            <TaskTriggerForm
               trigger={formData.trigger}
               onChange={handleTriggerChange}
+              currentActionType={formData.action.type}
             />
           </Grid>
           

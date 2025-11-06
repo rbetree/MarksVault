@@ -31,7 +31,7 @@ import Tooltip from '@mui/material/Tooltip';
 import Chip from '@mui/material/Chip';
 import CircularProgress from '@mui/material/CircularProgress';
 import Alert from '@mui/material/Alert';
-import { Task, TaskStatus, TriggerType, TaskExecutionResult } from '../../../types/task';
+import { Task, TaskStatus, TriggerType, TaskExecutionResult, EventType } from '../../../types/task';
 import TaskStatusChip from './TaskStatusChip';
 import TaskTriggerInfo from './TaskTriggerInfo';
 import TaskActionInfo from './TaskActionInfo';
@@ -156,12 +156,16 @@ const TaskCard: React.FC<TaskCardProps> = ({
            errorMessage.includes('凭据无效');
   };
   
-  // 判断任务是否可以启用/禁用
-  const canToggleStatus = task.status !== TaskStatus.COMPLETED && 
+  // 判断是否为手动任务
+  const isManualTask = task.trigger.type === TriggerType.MANUAL;
+  
+  // 判断任务是否可以启用/禁用（手动任务不需要此功能）
+  const canToggleStatus = !isManualTask &&
+                          task.status !== TaskStatus.COMPLETED &&
                           task.status !== TaskStatus.RUNNING;
   
   // 判断任务是否可以手动执行
-  const canExecuteTask = task.status !== TaskStatus.RUNNING && 
+  const canExecuteTask = task.status !== TaskStatus.RUNNING &&
                          task.status !== TaskStatus.DISABLED;
   
   // 获取下次执行时间显示
@@ -379,39 +383,72 @@ const TaskCard: React.FC<TaskCardProps> = ({
             <TaskTriggerInfo trigger={task.trigger} compact />
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            {/* 手动执行按钮 */}
-            <Tooltip title="立即执行">
-              <span style={{ display: 'inline-block' }}>
-                <IconButton 
-                  onClick={handleExecuteTask} 
-                  disabled={!canExecuteTask || executing}
-                  color="primary"
-                  size="small"
-                  sx={{ padding: 0.4 }}
-                >
-                  {executing ? 
-                    <CircularProgress size={14} /> : 
-                    <RefreshIcon sx={{ fontSize: '14px' }} />
-                  }
-                </IconButton>
-              </span>
-            </Tooltip>
-            
-            <Tooltip title={task.status === TaskStatus.ENABLED ? '禁用任务' : '启用任务'}>
-              <span style={{ display: 'inline-block' }}>
-                <IconButton 
-                  onClick={handleToggleStatus} 
-                  disabled={!canToggleStatus || loading}
-                  color={task.status === TaskStatus.ENABLED ? 'primary' : 'default'}
-                  size="small"
-                  sx={{ padding: 0.4 }}
-                >
-                  {task.status === TaskStatus.ENABLED ? 
-                  <PauseIcon sx={{ fontSize: '14px' }} /> : 
-                  <PlayArrowIcon sx={{ fontSize: '14px' }} />}
-                </IconButton>
-              </span>
-            </Tooltip>
+            {/* 手动任务：显示更显眼的执行按钮 */}
+            {isManualTask ? (
+              <Tooltip title="立即执行">
+                <span style={{ display: 'inline-block' }}>
+                  <IconButton
+                    onClick={handleExecuteTask}
+                    disabled={!canExecuteTask || executing}
+                    color="primary"
+                    size="small"
+                    sx={{
+                      padding: 0.4,
+                      backgroundColor: 'primary.main',
+                      color: 'white',
+                      '&:hover': {
+                        backgroundColor: 'primary.dark',
+                      },
+                      '&.Mui-disabled': {
+                        backgroundColor: 'action.disabledBackground',
+                        color: 'action.disabled',
+                      }
+                    }}
+                  >
+                    {executing ?
+                      <CircularProgress size={14} sx={{ color: 'inherit' }} /> :
+                      <PlayArrowIcon sx={{ fontSize: '14px' }} />
+                    }
+                  </IconButton>
+                </span>
+              </Tooltip>
+            ) : (
+              <>
+                {/* 自动任务：显示手动执行和启用/禁用按钮 */}
+                <Tooltip title="立即执行">
+                  <span style={{ display: 'inline-block' }}>
+                    <IconButton
+                      onClick={handleExecuteTask}
+                      disabled={!canExecuteTask || executing}
+                      color="primary"
+                      size="small"
+                      sx={{ padding: 0.4 }}
+                    >
+                      {executing ?
+                        <CircularProgress size={14} /> :
+                        <RefreshIcon sx={{ fontSize: '14px' }} />
+                      }
+                    </IconButton>
+                  </span>
+                </Tooltip>
+                
+                <Tooltip title={task.status === TaskStatus.ENABLED ? '禁用任务' : '启用任务'}>
+                  <span style={{ display: 'inline-block' }}>
+                    <IconButton
+                      onClick={handleToggleStatus}
+                      disabled={!canToggleStatus || loading}
+                      color={task.status === TaskStatus.ENABLED ? 'primary' : 'default'}
+                      size="small"
+                      sx={{ padding: 0.4 }}
+                    >
+                      {task.status === TaskStatus.ENABLED ?
+                      <PauseIcon sx={{ fontSize: '14px' }} /> :
+                      <PlayArrowIcon sx={{ fontSize: '14px' }} />}
+                    </IconButton>
+                  </span>
+                </Tooltip>
+              </>
+            )}
             
             <Tooltip title="编辑任务">
               <IconButton onClick={handleEdit} size="small" sx={{ padding: 0.4 }}>

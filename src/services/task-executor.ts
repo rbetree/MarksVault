@@ -3,13 +3,15 @@
  * 负责执行触发的任务并记录结果
  */
 
-import { 
-  Task, 
-  TaskStatus, 
-  ActionType, 
-  BackupAction, 
+import {
+  Task,
+  TaskStatus,
+  ActionType,
+  BackupAction,
   OrganizeAction,
   PushAction,
+  SelectivePushAction,
+  BookmarkSelection,
   TaskExecutionResult,
   TriggerType,
 } from '../types/task';
@@ -178,6 +180,8 @@ class TaskExecutor {
             return await this.executeOrganizeAction(task);
           case ActionType.PUSH:
             return await this.executePushAction(task);
+          case ActionType.SELECTIVE_PUSH:
+            return await this.executeSelectivePush(task);
           default:
             throw new Error(`不支持的任务类型: ${(task.action as any).type}`);
         }
@@ -546,6 +550,100 @@ class TaskExecutor {
         success: false,
         timestamp: Date.now(),
         error: `推送书签失败: ${errorMessage}`,
+        details: '执行过程中发生未预期的错误，请检查控制台日志获取更多信息'
+      };
+    }
+  }
+
+  /**
+   * 执行选择性推送
+   * @param task 任务对象
+   * @returns 执行结果
+   */
+  private async executeSelectivePush(task: Task): Promise<TaskExecutionResult> {
+    console.log(`执行选择性推送任务: ${task.id}`);
+    const selectivePushAction = task.action as SelectivePushAction;
+    
+    try {
+      // 1. 验证selections不为空
+      if (!selectivePushAction.options.selections || selectivePushAction.options.selections.length === 0) {
+        return {
+          success: false,
+          timestamp: Date.now(),
+          error: '未选择任何书签',
+          details: '请在任务配置中选择至少一个书签或文件夹'
+        };
+      }
+      
+      // 2. 获取GitHub凭据
+      const credentialsResult = await storageService.getGitHubCredentials();
+      
+      if (!credentialsResult.success || !credentialsResult.data) {
+        console.error(`任务${task.id}执行失败: 未找到GitHub凭据`);
+        return {
+          success: false,
+          timestamp: Date.now(),
+          error: '未找到GitHub凭据，请先在同步设置中配置GitHub账号',
+          details: '请打开扩展的同步页面，完成GitHub账号授权后再执行此任务'
+        };
+      }
+      
+      const credentials = credentialsResult.data;
+      
+      // 3. 验证GitHub凭据
+      let username = 'user'; // 默认占位符
+      try {
+        console.log(`验证GitHub凭据...`);
+        const userResult = await githubService.validateCredentials(credentials);
+        username = userResult.login;
+        console.log(`GitHub凭据验证成功，用户: ${username}`);
+      } catch (error) {
+        console.error(`GitHub凭据验证失败:`, error);
+        return {
+          success: false,
+          timestamp: Date.now(),
+          error: `GitHub凭据无效或已过期: ${error instanceof Error ? error.message : String(error)}`,
+          details: '请重新登录GitHub账号，更新授权信息后再执行此任务'
+        };
+      }
+      
+      // 4. 使用BackupService生成HTML
+      console.log(`生成选择性书签HTML，选中数量: ${selectivePushAction.options.selections.length}...`);
+      const html = await backupService.generateSelectiveHtml(selectivePushAction.options.selections);
+      
+      // 5. 生成文件名(使用时间戳)
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+      const filename = `selective-bookmarks-${timestamp}.html`;
+      
+      // 6. 使用GitHubService上传
+      const folderPath = selectivePushAction.options.folderPath || '';
+      const filePath = folderPath ? `${folderPath}/${filename}` : filename;
+      const commitMessage = selectivePushAction.options.commitMessage || '选择性推送书签';
+      
+      console.log(`开始上传到GitHub，目标路径: ${filePath}...`);
+      const uploadResult = await githubService.createOrUpdateFile(
+        credentials,
+        username,
+        selectivePushAction.options.repoName,
+        filePath,
+        html,
+        commitMessage
+      );
+      
+      console.log(`选择性推送完成:`, filePath);
+      return {
+        success: true,
+        timestamp: Date.now(),
+        details: `成功推送 ${selectivePushAction.options.selections.length} 个选中书签到 ${selectivePushAction.options.repoName}/${filePath}`
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error(`选择性推送任务执行异常:`, errorMessage);
+      
+      return {
+        success: false,
+        timestamp: Date.now(),
+        error: `选择性推送失败: ${errorMessage}`,
         details: '执行过程中发生未预期的错误，请检查控制台日志获取更多信息'
       };
     }

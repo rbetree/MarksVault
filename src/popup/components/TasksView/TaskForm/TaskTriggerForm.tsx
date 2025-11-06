@@ -4,12 +4,16 @@ import FormControl from '@mui/material/FormControl';
 import Select, { SelectChangeEvent } from '@mui/material/Select';
 import InputLabel from '@mui/material/InputLabel';
 import MenuItem from '@mui/material/MenuItem';
-import { 
-  Trigger, 
-  TriggerType, 
-  EventTrigger, 
+import TextField from '@mui/material/TextField';
+import {
+  Trigger,
+  TriggerType,
+  EventTrigger,
   EventType,
-  createEventTrigger
+  ManualTrigger,
+  ActionType,
+  createEventTrigger,
+  createManualTrigger
 } from '../../../../types/task';
 
 // 定义统一的触发方式类型
@@ -31,26 +35,38 @@ const TRIGGER_OPTIONS: TriggerOption[] = [
 interface TaskTriggerFormProps {
   trigger: Trigger;
   onChange: (updatedTrigger: Trigger, isValid: boolean) => void;
+  currentActionType?: ActionType;
 }
 
 /**
  * 任务触发器配置表单组件
  * 用于选择任务的触发条件
  */
-const TaskTriggerForm: React.FC<TaskTriggerFormProps> = ({ trigger, onChange }) => {
+const TaskTriggerForm: React.FC<TaskTriggerFormProps> = ({ trigger, onChange, currentActionType }) => {
   // 触发器选项值
   const [triggerOptionValue, setTriggerOptionValue] = useState<string>('');
   
+  // 当action类型为SELECTIVE_PUSH时，强制使用MANUAL触发器
+  useEffect(() => {
+    if (currentActionType === ActionType.SELECTIVE_PUSH && trigger.type !== TriggerType.MANUAL) {
+      onChange(createManualTrigger('选择性推送任务'), true);
+    }
+  }, [currentActionType, trigger.type, onChange]);
+  
   // 初始化表单数据
   useEffect(() => {
-    const eventTrigger = trigger as EventTrigger;
-    const eventType = eventTrigger.event;
-    
-    // 设置事件触发器的触发选项值
-    const option = TRIGGER_OPTIONS.find(opt => opt.eventType === eventType);
-    
-    if (option) {
-      setTriggerOptionValue(option.value);
+    if (trigger.type === TriggerType.MANUAL) {
+      setTriggerOptionValue('manual');
+    } else if (trigger.type === TriggerType.EVENT) {
+      const eventTrigger = trigger as EventTrigger;
+      const eventType = eventTrigger.event;
+      
+      // 设置事件触发器的触发选项值
+      const option = TRIGGER_OPTIONS.find(opt => opt.eventType === eventType);
+      
+      if (option) {
+        setTriggerOptionValue(option.value);
+      }
     }
   }, [trigger]);
   
@@ -59,10 +75,16 @@ const TaskTriggerForm: React.FC<TaskTriggerFormProps> = ({ trigger, onChange }) 
     const newValue = event.target.value;
     setTriggerOptionValue(newValue);
     
-    const selectedOption = TRIGGER_OPTIONS.find(opt => opt.value === newValue);
-    if (selectedOption) {
-      // 更新触发器
-      updateEventTrigger(selectedOption.eventType);
+    if (newValue === 'manual') {
+      // 创建手动触发器
+      const newTrigger = createManualTrigger('手动执行任务');
+      onChange(newTrigger, true);
+    } else {
+      const selectedOption = TRIGGER_OPTIONS.find(opt => opt.value === newValue);
+      if (selectedOption) {
+        // 更新触发器
+        updateEventTrigger(selectedOption.eventType);
+      }
     }
   };
   
@@ -82,6 +104,7 @@ const TaskTriggerForm: React.FC<TaskTriggerFormProps> = ({ trigger, onChange }) 
           value={triggerOptionValue}
           label="触发条件"
           onChange={handleTriggerOptionChange}
+          disabled={currentActionType === ActionType.SELECTIVE_PUSH}
           MenuProps={{
             PaperProps: {
               style: {
@@ -90,9 +113,12 @@ const TaskTriggerForm: React.FC<TaskTriggerFormProps> = ({ trigger, onChange }) 
             },
           }}
         >
+          <MenuItem value="manual" dense>
+            手动触发
+          </MenuItem>
           {TRIGGER_OPTIONS.map((option) => (
-            <MenuItem 
-              key={option.value} 
+            <MenuItem
+              key={option.value}
               value={option.value}
               dense // 使菜单项更紧凑
             >
@@ -101,6 +127,23 @@ const TaskTriggerForm: React.FC<TaskTriggerFormProps> = ({ trigger, onChange }) 
           ))}
         </Select>
       </FormControl>
+      
+      {trigger.type === TriggerType.MANUAL && (
+        <TextField
+          label="任务描述"
+          value={(trigger as ManualTrigger).description}
+          onChange={(e) => onChange({
+            ...trigger,
+            description: e.target.value
+          } as ManualTrigger, true)}
+          fullWidth
+          multiline
+          rows={2}
+          size="small"
+          margin="dense"
+          helperText="描述此手动任务的用途"
+        />
+      )}
     </Box>
   );
 };

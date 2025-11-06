@@ -117,8 +117,40 @@ const TaskTriggerInfo: React.FC<TaskTriggerInfoProps> = ({ trigger, compact = fa
     );
   };
 
+  // 渲染手动触发器信息
+  const renderManualTrigger = () => {
+    if (trigger.type !== TriggerType.MANUAL) return null;
+    
+    if (compact) {
+      return (
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <NotificationsIcon fontSize="small" color="action" sx={{ fontSize: '14px' }} />
+          <Typography variant="body2" sx={{ ml: 0.75, fontSize: '11px' }}>
+            手动触发
+          </Typography>
+        </Box>
+      );
+    }
+
+    return (
+      <Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+          <NotificationsIcon fontSize="small" color="action" sx={{ fontSize: '14px' }} />
+          <Typography variant="subtitle2" sx={{ ml: 0.75, fontSize: '12px' }}>
+            手动触发
+          </Typography>
+        </Box>
+        <Typography variant="body2" color="text.secondary" sx={{ ml: 3, fontSize: '11px' }}>
+          {trigger.description}
+        </Typography>
+      </Box>
+    );
+  };
+
   // 渲染事件触发器信息
   const renderEventTrigger = () => {
+    if (trigger.type !== TriggerType.EVENT) return null;
+    
     const { event, conditions } = trigger;
     const eventTitle = getEventTypeText(event);
     const eventIcon = getEventIcon(event);
@@ -161,6 +193,11 @@ const TaskTriggerInfo: React.FC<TaskTriggerInfoProps> = ({ trigger, compact = fa
     );
   };
 
+  // 根据触发器类型渲染对应内容
+  if (trigger.type === TriggerType.MANUAL) {
+    return renderManualTrigger();
+  }
+  
   return renderEventTrigger();
 };
 

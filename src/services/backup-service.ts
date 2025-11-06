@@ -5,6 +5,7 @@ import bookmarkService from '../utils/bookmark-service';
 import githubService from './github-service';
 import storageService from '../utils/storage-service';
 import { getFaviconUrl } from '../utils/favicon-service';
+import { BookmarkSelection } from '../types/task';
 
 // 备份存储库名称
 const DEFAULT_BACKUP_REPO = 'marksvault-backups';
@@ -1070,6 +1071,76 @@ class BackupService {
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#039;");
+  }
+  
+  /**
+   * 根据选择的书签生成HTML
+   * @param selections 用户选择的书签数组
+   * @returns HTML字符串
+   */
+  async generateSelectiveHtml(selections: BookmarkSelection[]): Promise<string> {
+    // 1. 按customOrder排序
+    const sortedSelections = this.sortSelections(selections);
+    
+    // 2. 生成HTML头部
+    let html = this.generateHtmlHeader('选择性书签导出');
+    
+    // 3. 递归生成书签HTML
+    html += '<DL><p>\n';
+    html += this.generateSelectiveBookmarkNodes(sortedSelections);
+    html += '</DL><p>\n';
+    
+    return html;
+  }
+
+  /**
+   * 排序书签选择
+   */
+  private sortSelections(selections: BookmarkSelection[]): BookmarkSelection[] {
+    return [...selections].sort((a, b) => {
+      const orderA = a.customOrder ?? Infinity;
+      const orderB = b.customOrder ?? Infinity;
+      return orderA - orderB;
+    });
+  }
+
+  /**
+   * 递归生成书签节点HTML
+   */
+  private generateSelectiveBookmarkNodes(selections: BookmarkSelection[], indent: number = 1): string {
+    let html = '';
+    const indentStr = '  '.repeat(indent);
+    
+    for (const selection of selections) {
+      if (selection.type === 'folder') {
+        // 文件夹节点
+        html += `${indentStr}<DT><H3>${this.escapeHtml(selection.title)}</H3>\n`;
+        if (selection.children && selection.children.length > 0) {
+          html += `${indentStr}<DL><p>\n`;
+          html += this.generateSelectiveBookmarkNodes(selection.children, indent + 1);
+          html += `${indentStr}</DL><p>\n`;
+        }
+      } else {
+        // 书签节点
+        html += `${indentStr}<DT><A HREF="${this.escapeHtml(selection.url || '')}">${this.escapeHtml(selection.title)}</A>\n`;
+      }
+    }
+    
+    return html;
+  }
+
+  /**
+   * 生成HTML头部
+   */
+  private generateHtmlHeader(title: string): string {
+    return `<!DOCTYPE NETSCAPE-Bookmark-file-1>
+<!-- This is an automatically generated file.
+     It will be read and overwritten.
+     DO NOT EDIT! -->
+<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">
+<TITLE>${this.escapeHtml(title)}</TITLE>
+<H1>${this.escapeHtml(title)}</H1>
+`;
   }
   
   /**

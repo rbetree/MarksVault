@@ -14,7 +14,8 @@ export enum TaskStatus {
 
 // 触发器类型枚举
 export enum TriggerType {
-  EVENT = 'event'      // 基于事件的触发器
+  EVENT = 'event',     // 基于事件的触发器
+  MANUAL = 'manual'    // 手动触发
 }
 
 // 基础触发器接口
@@ -43,14 +44,24 @@ export interface EventTrigger extends BaseTrigger {
   lastTriggered?: number;       // 上次触发时间戳
 }
 
+/**
+ * 手动触发器接口
+ * 用于需要用户手动执行的任务，例如选择性推送书签
+ */
+export interface ManualTrigger extends BaseTrigger {
+  type: TriggerType.MANUAL;
+  description: string;  // 触发器描述
+}
+
 // 触发器联合类型
-export type Trigger = EventTrigger;
+export type Trigger = EventTrigger | ManualTrigger;
 
 // 任务操作类型枚举
 export enum ActionType {
   BACKUP = 'backup',         // 书签备份
   ORGANIZE = 'organize',     // 书签整理
   PUSH = 'push',             // 推送书签
+  SELECTIVE_PUSH = 'selective_push', // 选择性推送书签
 }
 
 // 基础操作接口
@@ -83,6 +94,35 @@ export interface PushAction extends BaseAction {
   };
 }
 
+/**
+ * 书签选择接口
+ * 用于表示用户选中的书签或文件夹
+ */
+export interface BookmarkSelection {
+  id: string;                       // 书签或文件夹的唯一ID
+  title: string;                    // 书签或文件夹的标题
+  type: 'bookmark' | 'folder';      // 类型：书签或文件夹
+  url?: string;                     // URL（仅书签有）
+  children?: BookmarkSelection[];   // 子项（仅文件夹有）
+  customOrder?: number;             // 自定义排序顺序
+}
+
+/**
+ * 选择性推送书签操作接口
+ * 允许用户选择特定的书签或文件夹进行推送
+ */
+export interface SelectivePushAction extends BaseAction {
+  type: ActionType.SELECTIVE_PUSH;
+  target: 'github';          // 推送目标（目前仅支持GitHub）
+  options: {
+    repoName: string;        // 目标仓库名称
+    folderPath: string;      // 目标文件夹路径
+    format: 'html';          // 书签格式（目前仅支持html）
+    commitMessage?: string;  // 提交消息
+    selections: BookmarkSelection[]; // 用户选中的书签或文件夹列表
+  };
+}
+
 // 书签整理操作接口
 export interface OrganizeAction extends BaseAction {
   type: ActionType.ORGANIZE;
@@ -100,7 +140,7 @@ export interface OrganizeAction extends BaseAction {
 }
 
 // 操作联合类型
-export type Action = BackupAction | OrganizeAction | PushAction;
+export type Action = BackupAction | OrganizeAction | PushAction | SelectivePushAction;
 
 // 任务执行结果接口
 export interface TaskExecutionResult {
@@ -166,6 +206,19 @@ export const createEventTrigger = (eventType: EventType, conditions?: Record<str
   };
 };
 
+/**
+ * 创建手动触发器工厂函数
+ * @param description 触发器描述，默认为'手动触发'
+ * @returns 手动触发器对象
+ */
+export const createManualTrigger = (description: string = '手动触发'): ManualTrigger => {
+  return {
+    type: TriggerType.MANUAL,
+    enabled: true,
+    description
+  };
+};
+
 // 创建备份操作工厂函数
 export const createBackupAction = (operation: 'backup' | 'restore' = 'backup'): BackupAction => {
   return {
@@ -208,6 +261,34 @@ export const createPushAction = (): PushAction => {
       folderPath: 'bookmarks',
       format: 'html',
       commitMessage: '自动推送书签'
+    }
+  };
+};
+
+/**
+ * 创建选择性推送操作工厂函数
+ * @param selections 用户选中的书签或文件夹列表，默认为空数组
+ * @param repoName 目标仓库名称，默认为'menav'
+ * @param folderPath 目标文件夹路径，默认为'bookmarks'
+ * @param commitMessage 提交消息，默认为'选择性推送书签'
+ * @returns 选择性推送操作对象
+ */
+export const createSelectivePushAction = (
+  selections: BookmarkSelection[] = [],
+  repoName: string = 'menav',
+  folderPath: string = 'bookmarks',
+  commitMessage: string = '选择性推送书签'
+): SelectivePushAction => {
+  return {
+    type: ActionType.SELECTIVE_PUSH,
+    description: '选择性推送书签到指定仓库',
+    target: 'github',
+    options: {
+      repoName,
+      folderPath,
+      format: 'html',
+      commitMessage,
+      selections
     }
   };
 };
