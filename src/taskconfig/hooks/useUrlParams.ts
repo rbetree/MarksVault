@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 
-export type TaskConfigMode = 'create' | 'edit';
+export type TaskConfigMode = 'create' | 'edit' | 'execute';
 
 interface UrlParams {
   mode: TaskConfigMode;
@@ -18,7 +18,7 @@ export function useUrlParams(): UrlParams {
     const taskId = params.get('taskId') || undefined;
 
     return {
-      mode: mode === 'edit' ? 'edit' : 'create',
+      mode: mode === 'edit' ? 'edit' : mode === 'execute' ? 'execute' : 'create',
       taskId,
     };
   }, []);

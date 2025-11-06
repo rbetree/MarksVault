@@ -3,8 +3,7 @@ import Box from '@mui/material/Box';
 import TextField from '@mui/material/TextField';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
-import { SelectivePushAction, BookmarkSelection } from '../../../../types/task';
-import BookmarkSelector from './BookmarkSelector';
+import { SelectivePushAction } from '../../../../types/task';
 
 interface SelectivePushActionFormProps {
   action: SelectivePushAction;
@@ -25,7 +24,6 @@ const SelectivePushActionForm: React.FC<SelectivePushActionFormProps> = ({
   const [repoName, setRepoName] = useState<string>(action.options.repoName || 'menav');
   const [folderPath, setFolderPath] = useState<string>(action.options.folderPath || 'bookmarks');
   const [commitMessage, setCommitMessage] = useState<string>(action.options.commitMessage || '选择性推送书签');
-  const [selections, setSelections] = useState<BookmarkSelection[]>(action.options.selections || []);
   
   // 表单验证错误
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
@@ -40,10 +38,6 @@ const SelectivePushActionForm: React.FC<SelectivePushActionFormProps> = ({
     
     if (!folderPath.trim()) {
       newErrors.folderPath = '文件夹路径不能为空';
-    }
-    
-    if (selections.length === 0) {
-      newErrors.selections = '至少需要选择一个书签或文件夹';
     }
     
     setErrors(newErrors);
@@ -65,14 +59,13 @@ const SelectivePushActionForm: React.FC<SelectivePushActionFormProps> = ({
         ...action.options,
         repoName,
         folderPath,
-        commitMessage,
-        selections
+        commitMessage
       }
     };
     
     onChange(updatedAction);
     validateForm();
-  }, [repoName, folderPath, commitMessage, selections]);
+  }, [repoName, folderPath, commitMessage]);
 
   // 处理仓库名称变更
   const handleRepoNameChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -87,11 +80,6 @@ const SelectivePushActionForm: React.FC<SelectivePushActionFormProps> = ({
   // 处理提交消息变更
   const handleCommitMessageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setCommitMessage(event.target.value);
-  };
-
-  // 处理书签选择变更
-  const handleSelectionsChange = (newSelections: BookmarkSelection[]) => {
-    setSelections(newSelections);
   };
 
   return (
@@ -120,10 +108,10 @@ const SelectivePushActionForm: React.FC<SelectivePushActionFormProps> = ({
           }}
         >
           <Typography variant="body2" color="info.main" sx={{ mb: 0.5, fontWeight: 500 }}>
-            关于本操作：选择特定书签或文件夹推送至指定仓库
+            关于本操作
           </Typography>
           <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>
-            此操作仅推送您选中的书签和文件夹,而不是全部书签
+            配置推送参数后，点击任务卡片的"运行"按钮来选择要推送的书签
           </Typography>
         </Box>
 
@@ -170,22 +158,6 @@ const SelectivePushActionForm: React.FC<SelectivePushActionFormProps> = ({
               shrink: true
             }}
           />
-
-          <Box>
-            <Typography variant="body2" sx={{ mb: 1, fontWeight: 500 }}>
-              选择要推送的书签 {errors.selections && <span style={{ color: 'red' }}>*</span>}
-            </Typography>
-            {errors.selections && (
-              <Typography variant="caption" color="error" sx={{ mb: 1, display: 'block' }}>
-                {errors.selections}
-              </Typography>
-            )}
-            <BookmarkSelector
-              selections={selections}
-              onChange={handleSelectionsChange}
-              maxHeight="500px"
-            />
-          </Box>
         </Stack>
       </Box>
     </Box>

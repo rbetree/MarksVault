@@ -32,8 +32,8 @@ export function useTaskConfigData(
       setError(null);
 
       try {
-        if (mode === 'edit' && taskId) {
-          // 编辑模式：加载指定任务
+        if ((mode === 'edit' || mode === 'execute') && taskId) {
+          // 编辑模式或执行模式：加载指定任务
           const result = await taskService.getTaskById(taskId);
           if (result.success && result.data) {
             setTaskData(result.data);

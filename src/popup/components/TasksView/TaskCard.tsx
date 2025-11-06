@@ -31,7 +31,7 @@ import Tooltip from '@mui/material/Tooltip';
 import Chip from '@mui/material/Chip';
 import CircularProgress from '@mui/material/CircularProgress';
 import Alert from '@mui/material/Alert';
-import { Task, TaskStatus, TriggerType, TaskExecutionResult, EventType } from '../../../types/task';
+import { Task, TaskStatus, TriggerType, TaskExecutionResult, EventType, ActionType } from '../../../types/task';
 import TaskStatusChip from './TaskStatusChip';
 import TaskTriggerInfo from './TaskTriggerInfo';
 import TaskActionInfo from './TaskActionInfo';
@@ -102,6 +102,14 @@ const TaskCard: React.FC<TaskCardProps> = ({
   const handleExecuteTask = async () => {
     if (executing) return;
     
+    // 如果是选择性推送任务，打开任务配置页面（执行模式）
+    if (task.action.type === ActionType.SELECTIVE_PUSH) {
+      const url = chrome.runtime.getURL(`taskconfig/taskconfig.html?mode=execute&taskId=${task.id}`);
+      chrome.tabs.create({ url });
+      return;
+    }
+    
+    // 其他类型的任务，直接执行
     setExecuting(true);
     try {
       console.log(`手动执行任务: ${task.id}`);

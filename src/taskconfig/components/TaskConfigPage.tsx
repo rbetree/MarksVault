@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { Box, CircularProgress, Alert } from '@mui/material';
 import TaskConfigHeader from './TaskConfigHeader';
 import TaskFormContainer from './TaskFormContainer';
+import SelectivePushExecutor from './SelectivePushExecutor';
 import { useUrlParams } from '../hooks/useUrlParams';
 import { useTaskConfigData } from '../hooks/useTaskConfigData';
-import { Task } from '../../types/task';
+import { Task, ActionType } from '../../types/task';
 import { taskConfigStyles } from '../styles/taskConfigStyles';
 
 /**
@@ -88,6 +89,13 @@ const TaskConfigPage: React.FC = () => {
     window.close();
   };
 
+  /**
+   * 处理执行完成
+   */
+  const handleExecuteComplete = () => {
+    window.close();
+  };
+
   // 加载中状态
   if (loading) {
     return (
@@ -123,6 +131,33 @@ const TaskConfigPage: React.FC = () => {
     );
   }
 
+  // 执行模式：渲染选择性推送执行器
+  if (mode === 'execute') {
+    // 验证任务类型是否为SELECTIVE_PUSH
+    if (formData.action.type !== ActionType.SELECTIVE_PUSH) {
+      return (
+        <Box sx={taskConfigStyles.pageContainer}>
+          <Box sx={taskConfigStyles.errorContainer}>
+            <Alert severity="error" sx={{ maxWidth: 600 }}>
+              此任务不是选择性推送任务，无法在执行模式下打开
+            </Alert>
+          </Box>
+        </Box>
+      );
+    }
+
+    return (
+      <Box sx={taskConfigStyles.pageContainer}>
+        <SelectivePushExecutor
+          task={formData}
+          onComplete={handleExecuteComplete}
+          onCancel={handleCancel}
+        />
+      </Box>
+    );
+  }
+
+  // 创建/编辑模式：渲染任务表单
   return (
     <Box sx={taskConfigStyles.pageContainer}>
       {/* 头部 */}

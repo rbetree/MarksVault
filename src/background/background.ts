@@ -89,4 +89,59 @@ chrome.bookmarks.onMoved.addListener(async (id, moveInfo) => {
 //   await triggerService.handleEventTrigger(EventType.EXTENSION_CLICKED, { tab });
 // });
 
-export {}; 
+// 监听来自书签选择页面的执行请求
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === 'EXECUTE_SELECTIVE_PUSH') {
+    const { taskId, selections } = message.payload;
+    
+    // 异步执行选择性推送
+    (async () => {
+      try {
+        console.log('收到选择性推送请求:', { taskId, selectionsCount: selections.length });
+        
+        // 加载任务数据
+        const taskResult = await taskService.getTaskById(taskId);
+        if (!taskResult.success || !taskResult.data) {
+          sendResponse({ success: false, error: '任务不存在' });
+          return;
+        }
+        
+        const task = taskResult.data;
+        
+        // 创建带有selections的临时任务对象
+        const taskWithSelections = {
+          ...task,
+          action: {
+            ...task.action,
+            options: {
+              ...task.action.options,
+              selections,
+            },
+          },
+        };
+        
+        // 使用executeTask执行（它会调用内部的executeSelectivePush）
+        const result = await taskExecutor.executeTask(taskWithSelections.id);
+        
+        if (result.success) {
+          console.log('选择性推送成功');
+          sendResponse({ success: true });
+        } else {
+          console.error('选择性推送失败:', result.error);
+          sendResponse({ success: false, error: result.error });
+        }
+      } catch (error) {
+        console.error('执行选择性推送时出错:', error);
+        sendResponse({
+          success: false,
+          error: error instanceof Error ? error.message : '未知错误'
+        });
+      }
+    })();
+    
+    // 返回true表示将异步发送响应
+    return true;
+  }
+});
+
+export {};

@@ -113,7 +113,7 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({
   
   // 选择性推送操作状态
   const [selectivePush, setSelectivePush] = useState<SelectivePushAction>(
-    action.type === ActionType.SELECTIVE_PUSH ? (action as SelectivePushAction) : createSelectivePushAction([], '', 'bookmarks')
+    action.type === ActionType.SELECTIVE_PUSH ? (action as SelectivePushAction) : createSelectivePushAction('menav', 'bookmarks', '选择性推送书签')
   );
   
   // 整理操作状态
@@ -215,7 +215,7 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({
         newAction = createPushAction();
         break;
       case ActionType.SELECTIVE_PUSH:
-        newAction = createSelectivePushAction([], '', 'bookmarks');
+        newAction = createSelectivePushAction('menav', 'bookmarks', '选择性推送书签');
         break;
       case ActionType.ORGANIZE:
       default:
@@ -936,9 +936,8 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({
           action={selectivePush}
           onChange={(updatedAction) => {
             setSelectivePush(updatedAction);
-            // 验证表单
-            const isValid = updatedAction.options.selections.length > 0 &&
-                           updatedAction.options.repoName.trim() !== '' &&
+            // 验证表单（selections在配置阶段不需要验证）
+            const isValid = updatedAction.options.repoName.trim() !== '' &&
                            updatedAction.options.folderPath.trim() !== '';
             onChange(updatedAction, isValid);
           }}

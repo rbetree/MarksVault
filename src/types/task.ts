@@ -119,7 +119,7 @@ export interface SelectivePushAction extends BaseAction {
     folderPath: string;      // 目标文件夹路径
     format: 'html';          // 书签格式（目前仅支持html）
     commitMessage?: string;  // 提交消息
-    selections: BookmarkSelection[]; // 用户选中的书签或文件夹列表
+    selections?: BookmarkSelection[]; // 用户选中的书签或文件夹列表（配置时为空，执行时才选择）
   };
 }
 
@@ -274,7 +274,6 @@ export const createPushAction = (): PushAction => {
  * @returns 选择性推送操作对象
  */
 export const createSelectivePushAction = (
-  selections: BookmarkSelection[] = [],
   repoName: string = 'menav',
   folderPath: string = 'bookmarks',
   commitMessage: string = '选择性推送书签'
@@ -287,8 +286,8 @@ export const createSelectivePushAction = (
       repoName,
       folderPath,
       format: 'html',
-      commitMessage,
-      selections
+      commitMessage
+      // selections字段在执行时才添加，配置时不需要
     }
   };
 };
