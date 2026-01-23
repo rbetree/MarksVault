@@ -47,13 +47,13 @@ const TasksView: React.FC<TasksViewProps> = ({ toastRef }) => {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [deleteTaskId, setDeleteTaskId] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  
+
   // 加载任务数据
   useEffect(() => {
     const fetchTasks = async () => {
       setLoading(true);
       setError(null);
-      
+
       try {
         let result;
         if (filterStatus === 'all') {
@@ -61,7 +61,7 @@ const TasksView: React.FC<TasksViewProps> = ({ toastRef }) => {
         } else {
           result = await taskService.getTasksByStatus(filterStatus);
         }
-        
+
         if (result.success) {
           setTasks(result.data as Task[]);
         } else {
@@ -75,10 +75,10 @@ const TasksView: React.FC<TasksViewProps> = ({ toastRef }) => {
         setIsRefreshing(false);
       }
     };
-    
+
     fetchTasks();
   }, [filterStatus, refreshTrigger]);
-  
+
   // 监听storage变化，处理任务配置页面的结果
   useEffect(() => {
     const handleStorageChange = (
@@ -100,17 +100,17 @@ const TasksView: React.FC<TasksViewProps> = ({ toastRef }) => {
         }
       }
     };
-    
+
     chrome.storage.onChanged.addListener(handleStorageChange);
     return () => chrome.storage.onChanged.removeListener(handleStorageChange);
   }, [toastRef]);
-  
+
   // 刷新任务列表
   const refreshTasks = () => {
     setIsRefreshing(true);
     setRefreshTrigger(prev => prev + 1);
   };
-  
+
   // 处理任务状态变更
   const handleTaskStatusChange = (taskId: string, success: boolean) => {
     if (success) {
@@ -120,7 +120,7 @@ const TasksView: React.FC<TasksViewProps> = ({ toastRef }) => {
       toastRef?.current?.showToast('更新任务状态失败', 'error');
     }
   };
-  
+
   // 打开任务配置页面
   const openTaskConfigPage = (mode: 'create' | 'edit', taskId?: string) => {
     const url = chrome.runtime.getURL('taskconfig/taskconfig.html');
@@ -128,35 +128,35 @@ const TasksView: React.FC<TasksViewProps> = ({ toastRef }) => {
     if (taskId) {
       params.append('taskId', taskId);
     }
-    
+
     chrome.tabs.create({
       url: `${url}?${params.toString()}`,
       active: true
     });
   };
-  
+
   // 处理任务编辑
   const handleEditTask = (taskId: string) => {
     openTaskConfigPage('edit', taskId);
   };
-  
+
   // 处理删除确认
   const handleDeleteConfirm = (taskId: string) => {
     setDeleteTaskId(taskId);
   };
-  
+
   // 关闭删除确认对话框
   const handleDeleteCancel = () => {
     setDeleteTaskId(null);
   };
-  
+
   // 执行删除操作
   const handleDeleteConfirmed = async () => {
     if (!deleteTaskId) return;
-    
+
     try {
       const result = await taskService.deleteTask(deleteTaskId);
-      
+
       if (result.success) {
         refreshTasks();
         toastRef?.current?.showToast('任务已删除', 'success');
@@ -170,27 +170,27 @@ const TasksView: React.FC<TasksViewProps> = ({ toastRef }) => {
       setDeleteTaskId(null);
     }
   };
-  
+
   // 打开创建任务页面
   const handleCreateTask = () => {
     openTaskConfigPage('create');
   };
-  
+
   // 过滤器变更处理
   const handleFilterChange = (event: SelectChangeEvent<TaskStatus | 'all'>) => {
     setFilterStatus(event.target.value as TaskStatus | 'all');
   };
-  
+
   // 渲染任务列表
   const renderTasks = () => {
     if (loading) {
       return <TaskSkeleton count={3} />;
     }
-    
+
     if (error) {
       return (
-        <Alert 
-          severity="error" 
+        <Alert
+          severity="error"
           sx={{ my: 2 }}
           action={
             <Button color="inherit" size="small" onClick={refreshTasks}>
@@ -202,15 +202,15 @@ const TasksView: React.FC<TasksViewProps> = ({ toastRef }) => {
         </Alert>
       );
     }
-    
+
     if (tasks.length === 0) {
       return (
-        <EmptyTaskList 
+        <EmptyTaskList
           filtered={filterStatus !== 'all'}
         />
       );
     }
-    
+
     return (
       <Box sx={{ mt: 2 }}>
         {tasks.map(task => (
@@ -225,20 +225,20 @@ const TasksView: React.FC<TasksViewProps> = ({ toastRef }) => {
       </Box>
     );
   };
-  
+
   return (
-    <Box sx={{ p: 2 }}>
+    <Box sx={{ width: '100%', pt: 0.5 }}>
       {/* 头部区域 */}
-      <Box sx={taskHeaderStyles}>
-        <Typography variant="h5" component="h1">
+      <Box sx={{ ...taskHeaderStyles, px: 0, mb: 1.5 }}>
+        <Typography variant="h5" component="h1" sx={{ fontWeight: 500 }}>
           任务管理
         </Typography>
-        
+
         <Box sx={filterContainerStyles}>
           <Tooltip title="刷新任务列表">
             <span style={{ display: 'inline-block' }}>
-              <IconButton 
-                onClick={refreshTasks} 
+              <IconButton
+                onClick={refreshTasks}
                 disabled={loading || isRefreshing}
                 size="small"
               >
@@ -246,14 +246,15 @@ const TasksView: React.FC<TasksViewProps> = ({ toastRef }) => {
               </IconButton>
             </span>
           </Tooltip>
-          
-          <FormControl size="small" sx={{ minWidth: 120 }}>
-            <InputLabel id="status-filter-label">状态</InputLabel>
+
+          <FormControl size="small" sx={{ minWidth: 110, '& .MuiInputBase-root': { height: '34px' } }}>
+            <InputLabel id="status-filter-label" sx={{ fontSize: '0.875rem' }}>状态</InputLabel>
             <Select
               labelId="status-filter-label"
               value={filterStatus}
               label="状态"
               onChange={handleFilterChange}
+              sx={{ fontSize: '0.875rem' }}
             >
               <MenuItem value="all">全部</MenuItem>
               <MenuItem value={TaskStatus.ENABLED}>已启用</MenuItem>
@@ -265,10 +266,10 @@ const TasksView: React.FC<TasksViewProps> = ({ toastRef }) => {
           </FormControl>
         </Box>
       </Box>
-      
+
       {/* 任务列表 */}
       {renderTasks()}
-      
+
       {/* 浮动添加按钮 */}
       <Fab
         color="primary"
@@ -280,7 +281,7 @@ const TasksView: React.FC<TasksViewProps> = ({ toastRef }) => {
       >
         <AddIcon />
       </Fab>
-      
+
       {/* 删除确认对话框 */}
       <Dialog
         open={deleteTaskId !== null}

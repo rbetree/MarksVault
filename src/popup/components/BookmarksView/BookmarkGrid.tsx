@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import Box from '@mui/material/Box';
+import LoadingIndicator from '../shared/LoadingIndicator';
 import Typography from '@mui/material/Typography';
 import Divider from '@mui/material/Divider';
 import Paper from '@mui/material/Paper';
@@ -42,12 +43,12 @@ const GridContainer = styled(Box)(({ theme }) => ({
   gap: '4px',
   alignContent: 'flex-start',
   overflowY: 'auto',
-  backgroundColor: theme.palette.background.paper,
+  backgroundColor: 'transparent',
 }));
 
 const SearchArea = styled(Box)(({ theme }) => ({
   padding: theme.spacing(0.5, 0.5, 0, 0.5),
-  backgroundColor: theme.palette.background.paper,
+  backgroundColor: 'transparent',
   display: 'flex',
   flexDirection: 'row',
   alignItems: 'center',
@@ -311,10 +312,10 @@ const BookmarkGrid: React.FC<BookmarkGridProps> = ({
               display: 'flex',
               alignItems: 'center',
               width: '100%',
-              boxShadow: 'none',
-              border: '1px solid',
-              borderColor: 'divider',
-              height: '40px'
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              height: '32px',
+              borderRadius: 1,
+              bgcolor: 'rgba(255, 255, 255, 0.03)',
             }}
           >
             {isSearching ? (
@@ -378,10 +379,10 @@ const BookmarkGrid: React.FC<BookmarkGridProps> = ({
               display: 'flex',
               alignItems: 'center',
               width: '100%',
-              boxShadow: 'none',
-              border: '1px solid',
-              borderColor: 'divider',
-              height: '40px'
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              height: '32px',
+              borderRadius: 1,
+              bgcolor: 'rgba(255, 255, 255, 0.03)',
             }}
           >
             <InputBase
@@ -419,14 +420,17 @@ const BookmarkGrid: React.FC<BookmarkGridProps> = ({
         </RightColumn>
       </SearchArea>
 
-      <Divider />
 
       {/* 书签网格 */}
       <GridContainer
         onDragOver={handleGridDragOver}
         onDrop={handleGridDrop}
       >
-        {bookmarks.length === 0 ? (
+        {isLoading ? (
+          <Box sx={{ width: '100%', height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+            <LoadingIndicator message="" />
+          </Box>
+        ) : bookmarks.length === 0 ? (
           <EmptyState>
             <Typography variant="body1">
               {searchText ? '没有找到匹配的书签' : '没有书签'}
@@ -466,18 +470,21 @@ const BookmarkGrid: React.FC<BookmarkGridProps> = ({
         <MenuItem
           onClick={() => handleSortSelect('default')}
           selected={sortMethod === 'default'}
+          sx={{ minHeight: '32px', py: 0.5, px: 1.5, fontSize: '13px' }}
         >
           默认排序
         </MenuItem>
         <MenuItem
           onClick={() => handleSortSelect('name')}
           selected={sortMethod === 'name'}
+          sx={{ minHeight: '32px', py: 0.5, px: 1.5, fontSize: '13px' }}
         >
           按名称排序
         </MenuItem>
         <MenuItem
           onClick={() => handleSortSelect('dateAdded')}
           selected={sortMethod === 'dateAdded'}
+          sx={{ minHeight: '32px', py: 0.5, px: 1.5, fontSize: '13px' }}
         >
           按添加日期排序
         </MenuItem>

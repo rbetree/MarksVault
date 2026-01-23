@@ -27,7 +27,7 @@ const App: React.FC = () => {
 
   const [currentView, setCurrentView] = useState<NavOption>(initView());
   const toastRef = useRef<ToastRef>(null);
-  
+
   // GitHub用户状态管理
   const [authStatus, setAuthStatus] = useState<AuthStatus>(AuthStatus.INITIAL);
   const [user, setUser] = useState<GitHubUser | null>(null);
@@ -39,7 +39,7 @@ const App: React.FC = () => {
       try {
         setIsLoading(true);
         const credentialsResult = await storageService.getGitHubCredentials();
-        
+
         if (credentialsResult.success && credentialsResult.data) {
           try {
             const userData = await githubService.validateCredentials(credentialsResult.data);
@@ -67,16 +67,16 @@ const App: React.FC = () => {
   // 处理认证
   const handleAuth = async (credentials: GitHubCredentials) => {
     setAuthStatus(AuthStatus.AUTHENTICATING);
-    
+
     try {
       const userData = await githubService.validateCredentials(credentials);
-      
+
       // 存储有效的凭据
       await storageService.saveGitHubCredentials(credentials);
-      
+
       setUser(userData);
       setAuthStatus(AuthStatus.AUTHENTICATED);
-      
+
       toastRef?.current?.showToast('GitHub认证成功', 'success');
     } catch (error) {
       console.error('Authentication failed:', error);
@@ -106,8 +106,8 @@ const App: React.FC = () => {
         return <TasksView toastRef={toastRef} />;
       case 'sync':
         return (
-          <SyncView 
-            toastRef={toastRef} 
+          <SyncView
+            toastRef={toastRef}
             authStatus={authStatus}
             user={user}
             onAuth={handleAuth}
@@ -141,11 +141,11 @@ const App: React.FC = () => {
             overflow: 'hidden',
           }}
         >
-          <Header 
+          <Header
             user={user}
             onLogout={handleLogout}
           />
-          
+
           <Container
             disableGutters
             maxWidth={false}
@@ -155,16 +155,17 @@ const App: React.FC = () => {
               display: 'flex',
               flexDirection: 'column',
               pb: 7, // 为所有页面添加底部导航栏的高度间距
+              px: { xs: 1.5, sm: 2 }, // 统一内容区域的水平内边距
             }}
           >
             {renderContent()}
           </Container>
-          
+
           <AppBottomNavigation
             value={currentView}
             onChange={handleNavChange}
           />
-          
+
           <Toast ref={toastRef} />
         </Box>
       </ErrorBoundary>

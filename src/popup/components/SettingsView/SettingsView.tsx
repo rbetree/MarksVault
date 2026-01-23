@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';import Box from '@mui/material/Box';import Typography from '@mui/material/Typography';import Switch from '@mui/material/Switch';import FormControlLabel from '@mui/material/FormControlLabel';import FormGroup from '@mui/material/FormGroup';import Tabs from '@mui/material/Tabs';import Tab from '@mui/material/Tab';import Card from '@mui/material/Card';import CardContent from '@mui/material/CardContent';import CardHeader from '@mui/material/CardHeader';import Divider from '@mui/material/Divider';import SettingsIcon from '@mui/icons-material/Settings';import BuildIcon from '@mui/icons-material/Build';import InfoIcon from '@mui/icons-material/Info';import NotificationsIcon from '@mui/icons-material/Notifications';import VisibilityIcon from '@mui/icons-material/Visibility';import GitHubIcon from '@mui/icons-material/GitHub';import BugReportIcon from '@mui/icons-material/BugReport';import CodeIcon from '@mui/icons-material/Code';import FeaturedPlayListIcon from '@mui/icons-material/FeaturedPlayList';import PeopleIcon from '@mui/icons-material/People';import Link from '@mui/material/Link';import Avatar from '@mui/material/Avatar';import Grid from '@mui/material/Grid';import Chip from '@mui/material/Chip';import Paper from '@mui/material/Paper';import { ToastRef } from '../shared/Toast';import storageService, { UserSettings } from '../../../utils/storage-service';import SettingsActions from './SettingsActions';import { useThemeContext } from '../../contexts/ThemeContext';import CloudUploadIcon from '@mui/icons-material/CloudUpload';
+import React, { useState, useEffect } from 'react'; import Box from '@mui/material/Box'; import Typography from '@mui/material/Typography'; import Switch from '@mui/material/Switch'; import FormControlLabel from '@mui/material/FormControlLabel'; import FormGroup from '@mui/material/FormGroup'; import Tabs from '@mui/material/Tabs'; import Tab from '@mui/material/Tab'; import Card from '@mui/material/Card'; import CardContent from '@mui/material/CardContent'; import CardHeader from '@mui/material/CardHeader'; import Divider from '@mui/material/Divider'; import SettingsIcon from '@mui/icons-material/Settings'; import BuildIcon from '@mui/icons-material/Build'; import InfoIcon from '@mui/icons-material/Info'; import NotificationsIcon from '@mui/icons-material/Notifications'; import VisibilityIcon from '@mui/icons-material/Visibility'; import GitHubIcon from '@mui/icons-material/GitHub'; import BugReportIcon from '@mui/icons-material/BugReport'; import CodeIcon from '@mui/icons-material/Code'; import FeaturedPlayListIcon from '@mui/icons-material/FeaturedPlayList'; import PeopleIcon from '@mui/icons-material/People'; import Link from '@mui/material/Link'; import Avatar from '@mui/material/Avatar'; import Grid from '@mui/material/Grid'; import Chip from '@mui/material/Chip'; import Paper from '@mui/material/Paper'; import { ToastRef } from '../shared/Toast'; import storageService, { UserSettings } from '../../../utils/storage-service'; import SettingsActions from './SettingsActions'; import { useThemeContext } from '../../contexts/ThemeContext'; import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 
 interface SettingsViewProps {
   toastRef?: React.RefObject<ToastRef>;
@@ -74,14 +74,14 @@ const THEME_COLORS = [
  */
 const SettingsView: React.FC<SettingsViewProps> = ({ toastRef }) => {
   const { changeThemeColor } = useThemeContext();
-  
+
   // 确保初始状态包含所有必要的字段
   const defaultNotifications = {
     bookmarkChanges: true,
     syncStatus: true,
     backupReminders: true
   };
-  
+
   const [settings, setSettings] = useState<UserSettings>({
     isDarkMode: true,
     syncEnabled: false,
@@ -92,20 +92,20 @@ const SettingsView: React.FC<SettingsViewProps> = ({ toastRef }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tabValue, setTabValue] = useState(0);
-  
+
   // 从存储服务加载设置
   useEffect(() => {
     const loadSettings = async () => {
       setLoading(true);
       setError(null);
-      
+
       try {
         const result = await storageService.getSettings();
-        
+
         if (result.success && result.data) {
           // 确保notifications字段总是完整的
           const loadedNotifications = result.data.notifications || {};
-          
+
           setSettings({
             ...settings,
             ...result.data,
@@ -125,10 +125,10 @@ const SettingsView: React.FC<SettingsViewProps> = ({ toastRef }) => {
         setLoading(false);
       }
     };
-    
+
     loadSettings();
   }, []);
-  
+
   // 处理标签切换
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
@@ -137,9 +137,9 @@ const SettingsView: React.FC<SettingsViewProps> = ({ toastRef }) => {
   // 处理主题颜色更改
   const handleThemeColorChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const newColor = event.target.value;
-    const newSettings = { 
-      ...settings, 
-      themeColor: newColor 
+    const newSettings = {
+      ...settings,
+      themeColor: newColor
     };
     setSettings(newSettings);
     storageService.updateSettings({ themeColor: newColor });
@@ -154,27 +154,27 @@ const SettingsView: React.FC<SettingsViewProps> = ({ toastRef }) => {
       syncStatus: true,
       backupReminders: true
     };
-    
+
     const newNotifications = {
       ...currentNotifications,
       [setting]: checked
     };
-    
+
     const newSettings = {
       ...settings,
       notifications: newNotifications
     };
-    
+
     setSettings(newSettings);
     storageService.updateSettings({ notifications: newNotifications });
   };
 
   return (
-    <Box sx={{ p: 2, pb: 2, display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <Card sx={{ boxShadow: '0 2px 8px rgba(0,0,0,0.08)', borderRadius: 2, flex: 1, display: 'flex', flexDirection: 'column', overflow: 'auto' }}>
-        <Tabs 
-          value={tabValue} 
-          onChange={handleTabChange} 
+    <Box sx={{ p: 0, pt: 0.5, display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <Card sx={{ boxShadow: (theme) => theme.palette.mode === 'dark' ? '0 2px 12px rgba(0,0,0,0.4)' : '0 2px 8px rgba(0,0,0,0.08)', borderRadius: 2, flex: 1, display: 'flex', flexDirection: 'column', overflow: 'auto' }}>
+        <Tabs
+          value={tabValue}
+          onChange={handleTabChange}
           variant="fullWidth"
           sx={{
             borderBottom: 1,
@@ -183,43 +183,46 @@ const SettingsView: React.FC<SettingsViewProps> = ({ toastRef }) => {
               minHeight: '48px',
               py: 1,
             },
+            '& .MuiTabs-indicator': {
+              height: 2,
+            }
           }}
         >
-          <Tab 
-            icon={<SettingsIcon fontSize="small" />} 
-            label="一般设置" 
+          <Tab
+            icon={<SettingsIcon fontSize="small" />}
+            label="一般设置"
             iconPosition="start"
-            sx={{ 
-              fontSize: '0.875rem', 
-              minHeight: '48px', 
+            sx={{
+              fontSize: '0.875rem',
+              minHeight: '48px',
               textTransform: 'none',
               fontWeight: 500
             }}
           />
-          <Tab 
-            icon={<BuildIcon fontSize="small" />} 
-            label="高级设置" 
+          <Tab
+            icon={<BuildIcon fontSize="small" />}
+            label="高级设置"
             iconPosition="start"
-            sx={{ 
-              fontSize: '0.875rem', 
-              minHeight: '48px', 
+            sx={{
+              fontSize: '0.875rem',
+              minHeight: '48px',
               textTransform: 'none',
               fontWeight: 500
             }}
           />
-          <Tab 
-            icon={<InfoIcon fontSize="small" />} 
-            label="关于" 
+          <Tab
+            icon={<InfoIcon fontSize="small" />}
+            label="关于"
             iconPosition="start"
-            sx={{ 
-              fontSize: '0.875rem', 
-              minHeight: '48px', 
+            sx={{
+              fontSize: '0.875rem',
+              minHeight: '48px',
               textTransform: 'none',
               fontWeight: 500
             }}
           />
         </Tabs>
-        
+
         <CardContent sx={{ p: 2, flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
           {/* 一般设置标签页 */}
           <TabPanel value={tabValue} index={0}>
@@ -259,7 +262,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ toastRef }) => {
                 </Box>
               </Box>
             </SettingGroup>
-            
+
             {/* 通知设置分组 */}
             <SettingGroup title="通知设置" icon={<NotificationsIcon fontSize="small" />}>
               <FormGroup>
@@ -304,7 +307,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ toastRef }) => {
                 />
               </FormGroup>
             </SettingGroup>
-            
+
             {/* 备份设置分组 */}
             <SettingGroup title="备份设置" icon={<CloudUploadIcon fontSize="small" />}>
               <Box sx={{ mb: 2 }}>
@@ -325,11 +328,11 @@ const SettingsView: React.FC<SettingsViewProps> = ({ toastRef }) => {
                         }
                       };
                       setSettings(newSettings);
-                      storageService.updateSettings({ 
+                      storageService.updateSettings({
                         backup: { maxBackupsPerType: value }
                       });
                     }}
-                    style={{ 
+                    style={{
                       width: '60px',
                       padding: '4px 8px',
                       border: '1px solid #ccc',
@@ -347,21 +350,21 @@ const SettingsView: React.FC<SettingsViewProps> = ({ toastRef }) => {
               </Box>
             </SettingGroup>
           </TabPanel>
-          
+
           {/* 高级设置标签页 */}
           <TabPanel value={tabValue} index={1}>
             <SettingsActions toastRef={toastRef} />
           </TabPanel>
-          
+
           {/* 关于信息标签页 */}
           <TabPanel value={tabValue} index={2}>
             <Box sx={{ px: 0.5 }}>
               {/* 项目基本信息部分 */}
-              <Paper 
-                elevation={0} 
-                sx={{ 
-                  p: 1, 
-                  mb: 1, 
+              <Paper
+                elevation={0}
+                sx={{
+                  p: 1,
+                  mb: 1,
                   borderRadius: 2,
                   display: 'flex',
                   flexDirection: 'column',
@@ -372,11 +375,11 @@ const SettingsView: React.FC<SettingsViewProps> = ({ toastRef }) => {
                 }}
               >
                 <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', mb: 1 }}>
-                  <Avatar 
+                  <Avatar
                     src="/assets/icons/logo/icon128.png"
                     alt="MarksVault Logo"
-                    sx={{ 
-                      width: 48, 
+                    sx={{
+                      width: 48,
                       height: 48,
                       boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
                       bgcolor: 'background.paper',
@@ -390,10 +393,10 @@ const SettingsView: React.FC<SettingsViewProps> = ({ toastRef }) => {
                       MarksVault
                     </Typography>
                     <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.5 }}>
-                      <Chip 
-                        label="v0.1.1" 
-                        size="small" 
-                        color="primary" 
+                      <Chip
+                        label="v0.1.1"
+                        size="small"
+                        color="primary"
                         sx={{ fontSize: '0.7rem', height: 20 }}
                       />
                       <Box sx={{ display: 'flex', ml: 1.5 }}>
@@ -403,7 +406,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ toastRef }) => {
                             e.preventDefault();
                             chrome.tabs.create({ url: 'https://github.com/rbetree/MarksVault' });
                           }}
-                          sx={{ 
+                          sx={{
                             color: 'primary.main',
                             display: 'flex'
                           }}
@@ -417,7 +420,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ toastRef }) => {
                             e.preventDefault();
                             chrome.tabs.create({ url: 'https://github.com/rbetree/MarksVault/issues' });
                           }}
-                          sx={{ 
+                          sx={{
                             color: 'primary.main',
                             ml: 1,
                             display: 'flex'

@@ -10,11 +10,11 @@ const brightenColor = (color: string): string => {
     let r = parseInt(hex.slice(0, 2), 16);
     let g = parseInt(hex.slice(2, 4), 16);
     let b = parseInt(hex.slice(4, 6), 16);
-    
+
     r = Math.min(255, r + 40);
     g = Math.min(255, g + 40);
     b = Math.min(255, b + 40);
-    
+
     return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
   }
   // 默认返回原颜色
@@ -39,9 +39,12 @@ export const createAppTheme = (themeColor: string = '#4285F4') => {
         fontWeight: 500,
       },
       body1: {
-        fontSize: '13px',
+        fontSize: '14px',
       },
       body2: {
+        fontSize: '12px',
+      },
+      caption: {
         fontSize: '11px',
       },
       button: {

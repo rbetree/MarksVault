@@ -75,12 +75,12 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
   // 排序书签列表
   const sortBookmarks = (bookmarks: BookmarkItem[], method: 'default' | 'name' | 'dateAdded'): BookmarkItem[] => {
     if (method === 'default') return bookmarks;
-    
+
     return [...bookmarks].sort((a, b) => {
       // 确保文件夹始终排在前面
       if (a.isFolder && !b.isFolder) return -1;
       if (!a.isFolder && b.isFolder) return 1;
-      
+
       // 然后根据排序方法排序
       if (method === 'name') {
         return a.title.localeCompare(b.title);
@@ -94,13 +94,13 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
   // 处理搜索
   const handleSearch = async (query: string) => {
     setSearchText(query);
-    
+
     if (!query.trim()) {
       setIsSearching(false);
       setSearchResults([]);
       return;
     }
-    
+
     setIsSearching(true);
     try {
       const result = await bookmarkService.searchBookmarks(query);
@@ -150,14 +150,14 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
   // 构建书签ID映射
   const buildBookmarkMap = (items: BookmarkItem[]) => {
     const map = new Map<string, BookmarkItem>();
-    
+
     const processItem = (item: BookmarkItem) => {
       map.set(item.id, item);
       if (item.children) {
         item.children.forEach(processItem);
       }
     };
-    
+
     items.forEach(processItem);
     bookmarksMap.current = map;
   };
@@ -165,14 +165,14 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
   // 更新当前显示的书签列表
   const updateCurrentBookmarks = () => {
     if (!bookmarks.length) return;
-    
+
     let items: BookmarkItem[] = [];
-    
+
     if (!currentFolderId) {
       // 根级书签，通常是书签栏文件夹
-      const bookmarkBar = bookmarks[0].children?.find(b => b.title === "书签栏") 
+      const bookmarkBar = bookmarks[0].children?.find(b => b.title === "书签栏")
         || bookmarks[0].children?.[0];
-      
+
       if (bookmarkBar && bookmarkBar.children) {
         // 存储书签栏ID以便后续使用
         setBookmarkBarId(bookmarkBar.id);
@@ -184,7 +184,7 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
         items = folder.children;
       }
     }
-    
+
     // 应用排序
     setCurrentBookmarks(sortBookmarks(items, sortMethod));
   };
@@ -193,7 +193,7 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
   const navigateToFolder = (folderId: string) => {
     // 导航到新文件夹时清除搜索状态
     clearSearch();
-    
+
     const folder = bookmarksMap.current.get(folderId);
     if (folder) {
       setFolderStack(prev => [...prev, folder]);
@@ -205,13 +205,13 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
   const navigateBack = () => {
     // 导航返回时清除搜索状态
     clearSearch();
-    
+
     if (folderStack.length > 0) {
       const newStack = [...folderStack];
       newStack.pop(); // 移除当前文件夹
-      
+
       setFolderStack(newStack);
-      
+
       if (newStack.length > 0) {
         // 设置为上一级文件夹
         setCurrentFolderId(newStack[newStack.length - 1].id);
@@ -278,7 +278,7 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
     try {
       // 获取当前书签信息以确认是否是文件夹
       const bookmarkItem = bookmarksMap.current.get(bookmarkId);
-      
+
       // 检查是否是尝试将文件夹拖入其子文件夹（这是不允许的）
       if (bookmarkItem?.isFolder) {
         if (isSubfolder(bookmarkId, destinationFolderId)) {
@@ -286,16 +286,16 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
           return false;
         }
       }
-      
+
       const destination: { parentId: string; index?: number } = {
         parentId: destinationFolderId
       };
-      
+
       // 如果提供了索引，也传入索引
       if (index !== undefined) {
         destination.index = index;
       }
-      
+
       const result = await bookmarkService.moveBookmark(bookmarkId, destination);
       return handleResult(result, '书签已移动');
     } catch (error) {
@@ -304,14 +304,14 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
       return false;
     }
   };
-  
+
   // 检查是否是子文件夹的辅助函数
   const isSubfolder = (folderId: string, possibleSubfolderId: string): boolean => {
     // 如果尝试移动到自己，返回true（不允许）
     if (folderId === possibleSubfolderId) {
       return true;
     }
-    
+
     let folder = bookmarksMap.current.get(possibleSubfolderId);
     while (folder && folder.parentId) {
       if (folder.parentId === folderId) {
@@ -324,9 +324,7 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
 
   // 渲染书签视图
   const renderBookmarkView = () => {
-    if (isLoading) {
-      return <LoadingIndicator message="加载书签中..." />;
-    }
+    // 不再在加载时直接返回 LoadingIndicator，以便组件外壳（头部等）能立即渲染
 
     const commonProps = {
       bookmarks: isSearching ? searchResults : currentBookmarks,
@@ -351,8 +349,8 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
       onClearSearch: clearSearch
     };
 
-    return viewType === 'grid' ? 
-      <BookmarkGrid {...commonProps} /> : 
+    return viewType === 'grid' ?
+      <BookmarkGrid {...commonProps} /> :
       <BookmarkList {...commonProps} />;
   };
 

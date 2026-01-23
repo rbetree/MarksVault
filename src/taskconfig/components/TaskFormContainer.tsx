@@ -54,7 +54,7 @@ const TaskFormContainer: React.FC<TaskFormContainerProps> = ({
   return (
     <Box
       sx={{
-        maxWidth: '1400px',
+        maxWidth: '1200px', // 适度缩小最大宽度，避免宽屏下左右拉得太开
         margin: '0 auto',
         width: '100%'
       }}
@@ -62,133 +62,133 @@ const TaskFormContainer: React.FC<TaskFormContainerProps> = ({
       <Box
         sx={{
           display: 'flex',
-          gap: 2,
+          gap: 3, // 增加间距以提升层次感
           width: '100%',
           px: 2,
           pb: 3
         }}
       >
-      {/* 左栏：基础信息、触发条件、执行操作选项 */}
-      <Box
-        sx={{
-          flex: '0 0 400px',
-          minWidth: 0
-        }}
-      >
-        {/* 基础信息表单 */}
-        <Paper
-          elevation={1}
+        {/* 左栏：基础信息、触发条件、执行操作选项 */}
+        <Box
           sx={{
-            p: 3,
-            mb: 2,
-            borderRadius: 2
+            flex: '0 0 360px', // 缩小左侧表单宽度，使其比例更平衡
+            minWidth: 0
           }}
         >
-          <Typography
-            variant="h6"
+          {/* 基础信息表单 */}
+          <Paper
+            elevation={1}
             sx={{
+              p: 3,
               mb: 2,
-              fontSize: '1.1rem',
-              fontWeight: 500,
-              color: 'text.primary'
+              borderRadius: 2
             }}
           >
-            基础信息
-          </Typography>
-          <TaskBasicForm
-            taskData={taskData}
-            onChange={handleBasicInfoChange}
-          />
-        </Paper>
+            <Typography
+              variant="h6"
+              sx={{
+                mb: 2,
+                fontSize: '1.1rem',
+                fontWeight: 500,
+                color: 'text.primary'
+              }}
+            >
+              基础信息
+            </Typography>
+            <TaskBasicForm
+              taskData={taskData}
+              onChange={handleBasicInfoChange}
+            />
+          </Paper>
 
-        {/* 触发条件表单 */}
-        <Paper
-          elevation={1}
-          sx={{
-            p: 3,
-            mb: 2,
-            borderRadius: 2
-          }}
-        >
-          <Typography
-            variant="h6"
+          {/* 触发条件表单 */}
+          <Paper
+            elevation={1}
             sx={{
+              p: 3,
               mb: 2,
-              fontSize: '1.1rem',
-              fontWeight: 500,
-              color: 'text.primary'
+              borderRadius: 2
             }}
           >
-            触发条件
-          </Typography>
-          <TaskTriggerForm
-            trigger={taskData.trigger}
-            onChange={handleTriggerChange}
-          />
-        </Paper>
+            <Typography
+              variant="h6"
+              sx={{
+                mb: 2,
+                fontSize: '1.1rem',
+                fontWeight: 500,
+                color: 'text.primary'
+              }}
+            >
+              触发条件
+            </Typography>
+            <TaskTriggerForm
+              trigger={taskData.trigger}
+              onChange={handleTriggerChange}
+            />
+          </Paper>
 
-        {/* 执行操作选项 */}
-        <Paper
-          elevation={1}
-          sx={{
-            p: 3,
-            mb: 2,
-            borderRadius: 2
-          }}
-        >
-          <Typography
-            variant="h6"
+          {/* 执行操作选项 */}
+          <Paper
+            elevation={1}
             sx={{
+              p: 3,
               mb: 2,
-              fontSize: '1.1rem',
-              fontWeight: 500,
-              color: 'text.primary'
+              borderRadius: 2
             }}
           >
-            执行操作
-          </Typography>
-          <TaskActionForm
-            action={taskData.action}
-            onChange={handleActionChange}
-            showDetailsInSeparateColumn={true}
-          />
-        </Paper>
-      </Box>
+            <Typography
+              variant="h6"
+              sx={{
+                mb: 2,
+                fontSize: '1.1rem',
+                fontWeight: 500,
+                color: 'text.primary'
+              }}
+            >
+              执行操作
+            </Typography>
+            <TaskActionForm
+              action={taskData.action}
+              onChange={handleActionChange}
+              showDetailsInSeparateColumn={true}
+            />
+          </Paper>
+        </Box>
 
-      {/* 右栏：执行操作详细配置 */}
-      <Box
-        sx={{
-          flex: 1,
-          minWidth: 0
-        }}
-      >
-        <Paper
-          elevation={1}
+        {/* 右栏：执行操作详细配置 */}
+        <Box
           sx={{
-            p: 3,
-            borderRadius: 2,
-            position: 'sticky',
-            top: 16
+            flex: 1,
+            minWidth: 0
           }}
         >
-          <Typography
-            variant="h6"
+          <Paper
+            elevation={1}
             sx={{
-              mb: 2,
-              fontSize: '1.1rem',
-              fontWeight: 500,
-              color: 'text.primary'
+              p: 3,
+              borderRadius: 2,
+              position: 'sticky',
+              top: 16
             }}
           >
-            操作详细配置
-          </Typography>
-          <TaskActionForm
-            action={taskData.action}
-            onChange={handleActionChange}
-            showOnlyDetails={true}
-          />
-        </Paper>
-      </Box>
+            <Typography
+              variant="h6"
+              sx={{
+                mb: 2,
+                fontSize: '1.1rem',
+                fontWeight: 500,
+                color: 'text.primary'
+              }}
+            >
+              操作详细配置
+            </Typography>
+            <TaskActionForm
+              action={taskData.action}
+              onChange={handleActionChange}
+              showOnlyDetails={true}
+            />
+          </Paper>
+        </Box>
       </Box>
     </Box>
   );

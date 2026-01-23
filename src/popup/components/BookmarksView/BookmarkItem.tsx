@@ -20,7 +20,7 @@ import { styled } from '@mui/material/styles';
 const DropTargetFolder = styled(ListItemButton)(({ theme }) => ({
   transition: 'all 0.15s ease-in-out',
   padding: theme.spacing(0.1, 0.5),
-  minHeight: '36px',
+  minHeight: '40px', // 统一规范高度为 40px
   display: 'flex',
   alignItems: 'center',
   breakInside: 'avoid',
@@ -73,7 +73,7 @@ const ItemContainer = styled(ListItemButton)(({ theme }) => ({
   paddingBottom: theme.spacing(0.1),
   paddingLeft: theme.spacing(0.5),
   paddingRight: theme.spacing(0.5),
-  minHeight: '36px',
+  minHeight: '40px', // 统一规范高度为 40px
   display: 'flex',
   alignItems: 'center',
   breakInside: 'avoid',
@@ -359,11 +359,11 @@ const BookmarkItem: React.FC<BookmarkItemProps> = ({
               noWrap: true,
               title: bookmark.title,
               variant: 'body2',
-              sx: { fontWeight: 500, lineHeight: 1.4 }
+              sx: { fontWeight: 500, lineHeight: 1.4, fontSize: '12px' }
             }}
             secondaryTypographyProps={{
               variant: 'caption',
-              sx: { lineHeight: 1.4, minHeight: '1.4em' } // 预留二级文本高度
+              sx: { lineHeight: 1.4, minHeight: '1.4em', fontSize: '11px' }
             }}
           />
         </DropTargetFolder>
@@ -405,13 +405,13 @@ const BookmarkItem: React.FC<BookmarkItemProps> = ({
               noWrap: true,
               title: bookmark.title,
               variant: 'body2',
-              sx: { fontWeight: 500, lineHeight: 1.4 }
+              sx: { fontWeight: 500, lineHeight: 1.4, fontSize: '12px' }
             }}
             secondaryTypographyProps={{
               noWrap: true,
               title: bookmark.url,
               variant: 'caption',
-              sx: { lineHeight: 1.3 }
+              sx: { lineHeight: 1.4, minHeight: '1.4em', fontSize: '11px' }
             }}
           />
         </ItemContainer>
@@ -423,41 +423,56 @@ const BookmarkItem: React.FC<BookmarkItemProps> = ({
         anchorReference="anchorPosition"
         anchorPosition={menuAnchorPosition || undefined}
       >
-        <MenuItem onClick={handleEdit}>
-          <ListItemIcon>
+        <MenuItem
+          onClick={handleEdit}
+          sx={{ minHeight: '32px', py: 0.5, px: 1.5 }}
+        >
+          <ListItemIcon sx={{ minWidth: '28px' }}>
             <EditIcon fontSize="small" />
           </ListItemIcon>
-          <ListItemText>编辑</ListItemText>
+          <ListItemText primaryTypographyProps={{ variant: 'body2', sx: { fontSize: '13px' } }}>编辑</ListItemText>
         </MenuItem>
         {!bookmark.isFolder && bookmark.url && (
-          <MenuItem onClick={handleOpenInNewTab}>
-            <ListItemIcon>
+          <MenuItem
+            onClick={handleOpenInNewTab}
+            sx={{ minHeight: '32px', py: 0.5, px: 1.5 }}
+          >
+            <ListItemIcon sx={{ minWidth: '28px' }}>
               <OpenInNewIcon fontSize="small" />
             </ListItemIcon>
-            <ListItemText>新标签页打开</ListItemText>
+            <ListItemText primaryTypographyProps={{ variant: 'body2', sx: { fontSize: '13px' } }}>新标签页打开</ListItemText>
           </MenuItem>
         )}
         {bookmark.isFolder && (
-          <MenuItem onClick={handleOpenAllInNewTabs}>
-            <ListItemIcon>
+          <MenuItem
+            onClick={handleOpenAllInNewTabs}
+            sx={{ minHeight: '32px', py: 0.5, px: 1.5 }}
+          >
+            <ListItemIcon sx={{ minWidth: '28px' }}>
               <OpenInNewIcon fontSize="small" />
             </ListItemIcon>
-            <ListItemText>在新标签页中打开所有</ListItemText>
+            <ListItemText primaryTypographyProps={{ variant: 'body2', sx: { fontSize: '13px' } }}>在新标签页中打开所有</ListItemText>
           </MenuItem>
         )}
         {bookmark.isFolder && (
-          <MenuItem onClick={handleExportFolder}>
-            <ListItemIcon>
+          <MenuItem
+            onClick={handleExportFolder}
+            sx={{ minHeight: '32px', py: 0.5, px: 1.5 }}
+          >
+            <ListItemIcon sx={{ minWidth: '28px' }}>
               <FileDownloadIcon fontSize="small" />
             </ListItemIcon>
-            <ListItemText>导出文件夹</ListItemText>
+            <ListItemText primaryTypographyProps={{ variant: 'body2', sx: { fontSize: '13px' } }}>导出文件夹</ListItemText>
           </MenuItem>
         )}
-        <MenuItem onClick={handleDelete}>
-          <ListItemIcon>
+        <MenuItem
+          onClick={handleDelete}
+          sx={{ minHeight: '32px', py: 0.5, px: 1.5 }}
+        >
+          <ListItemIcon sx={{ minWidth: '28px' }}>
             <DeleteIcon fontSize="small" />
           </ListItemIcon>
-          <ListItemText>删除</ListItemText>
+          <ListItemText primaryTypographyProps={{ variant: 'body2', sx: { fontSize: '13px' } }}>删除</ListItemText>
         </MenuItem>
       </Menu>
     </ListItem>

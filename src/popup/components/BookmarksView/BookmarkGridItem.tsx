@@ -21,8 +21,8 @@ const DRAG_TYPE = 'application/marksvault-bookmark';
 
 // 样式化组件
 const GridItemContainer = styled(Box)(({ theme }) => ({
-  width: '60px',
-  minHeight: '72px',
+  width: '56px',
+  minHeight: '68px',
   display: 'flex',
   flexDirection: 'column',
   alignItems: 'center',
@@ -37,6 +37,7 @@ const GridItemContainer = styled(Box)(({ theme }) => ({
   '&:hover': {
     backgroundColor: theme.palette.action.hover,
     transform: 'translateY(-1px)',
+    boxShadow: theme.shadows[2],
   },
   '&[data-isover="true"][data-isfolder="true"]': {
     backgroundColor: theme.palette.action.selected,
@@ -51,8 +52,8 @@ const GridItemContainer = styled(Box)(({ theme }) => ({
 }));
 
 const IconContainer = styled(Box)(({ theme }) => ({
-  width: '40px',
-  height: '40px',
+  width: '36px',
+  height: '36px',
   display: 'flex',
   justifyContent: 'center',
   alignItems: 'center',
@@ -61,14 +62,14 @@ const IconContainer = styled(Box)(({ theme }) => ({
 }));
 
 const ItemTitle = styled(Typography)(({ theme }) => ({
-  fontSize: '11px',
+  fontSize: '12px',
   fontWeight: 400,
-  maxWidth: '60px',
+  maxWidth: '52px',
   overflow: 'hidden',
   textOverflow: 'ellipsis',
   whiteSpace: 'nowrap',
   marginTop: theme.spacing(0.1),
-  lineHeight: 1.4, // 确保 g 显示完整
+  lineHeight: 1.4,
 }));
 
 const ItemCount = styled(Typography)(({ theme }) => ({
@@ -373,7 +374,7 @@ const BookmarkGridItem: React.FC<BookmarkGridItemProps> = ({
 
       <IconContainer>
         {bookmark.isFolder ? (
-          <FolderIcon sx={{ fontSize: 40, color: isOver && interactionMode === 'move' ? 'primary.main' : 'primary.main' }} />
+          <FolderIcon sx={{ fontSize: 36, color: isOver && interactionMode === 'move' ? 'primary.main' : 'primary.main' }} />
         ) : (
           iconUrl && !iconError ? (
             <img
@@ -383,7 +384,7 @@ const BookmarkGridItem: React.FC<BookmarkGridItemProps> = ({
               onError={handleIconError}
             />
           ) : (
-            <LinkIcon sx={{ fontSize: 40, color: 'secondary.main' }} />
+            <LinkIcon sx={{ fontSize: 36, color: 'secondary.main' }} />
           )
         )}
       </IconContainer>
@@ -392,53 +393,62 @@ const BookmarkGridItem: React.FC<BookmarkGridItemProps> = ({
         {bookmark.title}
       </ItemTitle>
 
-      {bookmark.isFolder && (
-        <ItemCount sx={{ minHeight: '1.2em' }}>
-          {itemCount !== null ? `${itemCount} 项` : ' '}
-        </ItemCount>
-      )}
-
       <Menu
         open={isMenuOpen}
         onClose={handleMenuClose}
         anchorReference="anchorPosition"
         anchorPosition={menuAnchorPosition || undefined}
       >
-        <MenuItem onClick={handleEdit}>
-          <ListItemIcon>
+        <MenuItem
+          onClick={handleEdit}
+          sx={{ minHeight: '32px', py: 0.5, px: 1.5 }}
+        >
+          <ListItemIcon sx={{ minWidth: '28px' }}>
             <EditIcon fontSize="small" />
           </ListItemIcon>
-          <ListItemText>编辑</ListItemText>
+          <ListItemText primaryTypographyProps={{ variant: 'body2', sx: { fontSize: '13px' } }}>编辑</ListItemText>
         </MenuItem>
         {!bookmark.isFolder && bookmark.url && (
-          <MenuItem onClick={handleOpenInNewTab}>
-            <ListItemIcon>
+          <MenuItem
+            onClick={handleOpenInNewTab}
+            sx={{ minHeight: '32px', py: 0.5, px: 1.5 }}
+          >
+            <ListItemIcon sx={{ minWidth: '28px' }}>
               <OpenInNewIcon fontSize="small" />
             </ListItemIcon>
-            <ListItemText>新标签页打开</ListItemText>
+            <ListItemText primaryTypographyProps={{ variant: 'body2', sx: { fontSize: '13px' } }}>新标签页打开</ListItemText>
           </MenuItem>
         )}
         {bookmark.isFolder && (
-          <MenuItem onClick={handleOpenAllInNewTabs}>
-            <ListItemIcon>
+          <MenuItem
+            onClick={handleOpenAllInNewTabs}
+            sx={{ minHeight: '32px', py: 0.5, px: 1.5 }}
+          >
+            <ListItemIcon sx={{ minWidth: '28px' }}>
               <OpenInNewIcon fontSize="small" />
             </ListItemIcon>
-            <ListItemText>在新标签页中打开所有</ListItemText>
+            <ListItemText primaryTypographyProps={{ variant: 'body2', sx: { fontSize: '13px' } }}>在新标签页中打开所有</ListItemText>
           </MenuItem>
         )}
         {bookmark.isFolder && (
-          <MenuItem onClick={handleExportFolder}>
-            <ListItemIcon>
+          <MenuItem
+            onClick={handleExportFolder}
+            sx={{ minHeight: '32px', py: 0.5, px: 1.5 }}
+          >
+            <ListItemIcon sx={{ minWidth: '28px' }}>
               <FileDownloadIcon fontSize="small" />
             </ListItemIcon>
-            <ListItemText>导出文件夹</ListItemText>
+            <ListItemText primaryTypographyProps={{ variant: 'body2', sx: { fontSize: '13px' } }}>导出文件夹</ListItemText>
           </MenuItem>
         )}
-        <MenuItem onClick={handleDelete}>
-          <ListItemIcon>
+        <MenuItem
+          onClick={handleDelete}
+          sx={{ minHeight: '32px', py: 0.5, px: 1.5 }}
+        >
+          <ListItemIcon sx={{ minWidth: '28px' }}>
             <DeleteIcon fontSize="small" />
           </ListItemIcon>
-          <ListItemText>删除</ListItemText>
+          <ListItemText primaryTypographyProps={{ variant: 'body2', sx: { fontSize: '13px' } }}>删除</ListItemText>
         </MenuItem>
       </Menu>
     </GridItemContainer>

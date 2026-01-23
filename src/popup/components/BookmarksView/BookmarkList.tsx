@@ -3,6 +3,7 @@ import List from '@mui/material/List';
 import Typography from '@mui/material/Typography';
 import Divider from '@mui/material/Divider';
 import Box from '@mui/material/Box';
+import LoadingIndicator from '../shared/LoadingIndicator';
 import Paper from '@mui/material/Paper';
 import InputBase from '@mui/material/InputBase';
 import IconButton from '@mui/material/IconButton';
@@ -27,11 +28,12 @@ import ViewToggleButton from './ViewToggleButton';
 import { styled } from '@mui/material/styles';
 import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
+import { globalFabStyles } from '../../styles/TaskStyles';
 
 // 样式化组件
 const SearchArea = styled(Box)(({ theme }) => ({
   padding: theme.spacing(0.5, 0.5, 0, 0.5),
-  backgroundColor: theme.palette.background.paper,
+  backgroundColor: 'transparent',
   display: 'flex',
   flexDirection: 'row',
   alignItems: 'center',
@@ -291,10 +293,10 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
               display: 'flex',
               alignItems: 'center',
               width: '100%',
-              boxShadow: 'none',
-              border: '1px solid',
-              borderColor: 'divider',
-              height: '40px',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              height: '32px',
+              borderRadius: 1,
+              bgcolor: 'rgba(255, 255, 255, 0.03)',
             }}
           >
             {isSearching ? (
@@ -358,10 +360,10 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
               display: 'flex',
               alignItems: 'center',
               width: '100%',
-              boxShadow: 'none',
-              border: '1px solid',
-              borderColor: 'divider',
-              height: '40px',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              height: '32px',
+              borderRadius: 1,
+              bgcolor: 'rgba(255, 255, 255, 0.03)',
             }}
           >
             <InputBase
@@ -400,7 +402,6 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
         </RightColumn>
       </SearchArea>
 
-      <Divider />
 
       {/* 书签列表 - 改为双栏垂直分栏布局 */}
       <Box
@@ -418,12 +419,17 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
           '& > *': {
             breakInside: 'avoid',
             marginBottom: '4px'
-          }
+          },
+          backgroundColor: 'transparent'
         }}
         onDragOver={handleListDragOver}
         onDrop={handleListDrop}
       >
-        {bookmarks.length === 0 ? (
+        {isLoading ? (
+          <Box sx={{ width: '100%', height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', columnSpan: 'all' }}>
+            <LoadingIndicator message="" />
+          </Box>
+        ) : bookmarks.length === 0 ? (
           <Box sx={{ p: 3, textAlign: 'center', columnSpan: 'all' }}>
             <Typography color="text.secondary">
               {searchText ? '没有找到匹配的书签' : '没有书签'}
@@ -443,6 +449,17 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
           ))
         )}
       </Box>
+
+      {/* 悬浮添加按钮 */}
+      <Fab
+        color="primary"
+        size="medium"
+        aria-label="add"
+        sx={globalFabStyles}
+        onClick={handleAddClick}
+      >
+        <AddIcon />
+      </Fab>
 
       {/* 排序菜单 */}
       <Menu
