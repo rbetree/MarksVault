@@ -34,13 +34,13 @@ const DRAG_TYPE = 'application/marksvault-bookmark';
 
 // 样式化组件
 const GridContainer = styled(Box)(({ theme }) => ({
-  display: 'flex',
-  flexWrap: 'wrap',
-  padding: theme.spacing(0.5, 1),
-  justifyContent: 'flex-start',
+  display: 'grid',
+  gridTemplateColumns: 'repeat(6, 1fr)',
+  padding: theme.spacing(0.5),
   width: '100%',
   height: '100%',
   gap: '4px',
+  justifyItems: 'center',
   alignContent: 'flex-start',
   overflowY: 'auto',
   backgroundColor: 'transparent',
@@ -470,21 +470,21 @@ const BookmarkGrid: React.FC<BookmarkGridProps> = ({
         <MenuItem
           onClick={() => handleSortSelect('default')}
           selected={sortMethod === 'default'}
-          sx={{ minHeight: '32px', py: 0.5, px: 1.5, fontSize: '13px' }}
+          sx={{ minHeight: '32px', display: 'flex', alignItems: 'center', py: 0.5, px: 1.5, fontSize: '0.85rem' }}
         >
           默认排序
         </MenuItem>
         <MenuItem
           onClick={() => handleSortSelect('name')}
           selected={sortMethod === 'name'}
-          sx={{ minHeight: '32px', py: 0.5, px: 1.5, fontSize: '13px' }}
+          sx={{ minHeight: '32px', display: 'flex', alignItems: 'center', py: 0.5, px: 1.5, fontSize: '0.85rem' }}
         >
           按名称排序
         </MenuItem>
         <MenuItem
           onClick={() => handleSortSelect('dateAdded')}
           selected={sortMethod === 'dateAdded'}
-          sx={{ minHeight: '32px', py: 0.5, px: 1.5, fontSize: '13px' }}
+          sx={{ minHeight: '32px', display: 'flex', alignItems: 'center', py: 0.5, px: 1.5, fontSize: '0.85rem' }}
         >
           按添加日期排序
         </MenuItem>

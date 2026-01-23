@@ -155,7 +155,7 @@ const App: React.FC = () => {
               display: 'flex',
               flexDirection: 'column',
               pb: 7, // 为所有页面添加底部导航栏的高度间距
-              px: { xs: 1.5, sm: 2 }, // 统一内容区域的水平内边距
+              px: 0.5, // 统一内容区域的水平内边距
             }}
           >
             {renderContent()}

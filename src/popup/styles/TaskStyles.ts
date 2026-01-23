@@ -50,15 +50,15 @@ export const taskListItemStyles: SxProps<Theme> = {
 
 // 任务列表头部
 export const taskHeaderStyles: SxProps<Theme> = {
-  display: 'flex', 
-  justifyContent: 'space-between', 
-  alignItems: 'center', 
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
   mb: 1.5
 };
 
 // 过滤器容器样式
 export const filterContainerStyles: SxProps<Theme> = {
-  display: 'flex', 
+  display: 'flex',
   gap: 0.75,
   flexWrap: 'wrap'
 };
@@ -194,17 +194,17 @@ export const combineStyles = <T extends Theme = Theme>(
 ): SxProps<T> => {
   // 过滤掉undefined和null
   const validStyles = styles.filter(style => style !== undefined && style !== null) as SxProps<T>[];
-  
+
   // 如果没有有效样式，返回空对象
   if (validStyles.length === 0) {
     return {} as SxProps<T>;
   }
-  
+
   // 如果只有一个有效样式，直接返回它
   if (validStyles.length === 1) {
     return validStyles[0];
   }
-  
+
   // 合并所有样式
   return validStyles.reduce((acc, style) => ({ ...acc, ...style }), {} as SxProps<T>);
 }; 

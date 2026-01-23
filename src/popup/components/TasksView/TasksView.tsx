@@ -29,6 +29,29 @@ import {
   fabStyles,
   globalFabStyles
 } from '../../styles/TaskStyles';
+import { styled } from '@mui/material/styles';
+import Paper from '@mui/material/Paper';
+
+const ActionArea = styled(Box)(({ theme }) => ({
+  padding: theme.spacing(0.5, 0.5, 0, 0.5),
+  backgroundColor: 'transparent',
+  display: 'flex',
+  flexDirection: 'row',
+  alignItems: 'center',
+  width: '100%',
+  justifyContent: 'space-between',
+}));
+
+const LeftColumn = styled(Box)(({ theme }) => ({
+  flex: 1,
+  paddingRight: theme.spacing(0.5),
+}));
+
+const RightColumn = styled(Box)(({ theme }) => ({
+  flex: '0 0 auto',
+  minWidth: '140px',
+  paddingLeft: theme.spacing(0.5),
+}));
 
 interface TasksViewProps {
   toastRef?: React.RefObject<ToastRef>;
@@ -227,48 +250,96 @@ const TasksView: React.FC<TasksViewProps> = ({ toastRef }) => {
   };
 
   return (
-    <Box sx={{ width: '100%', pt: 0.5 }}>
-      {/* 头部区域 */}
-      <Box sx={{ ...taskHeaderStyles, px: 0, mb: 1.5 }}>
-        <Typography variant="h5" component="h1" sx={{ fontWeight: 500 }}>
-          任务管理
-        </Typography>
-
-        <Box sx={filterContainerStyles}>
-          <Tooltip title="刷新任务列表">
-            <span style={{ display: 'inline-block' }}>
-              <IconButton
-                onClick={refreshTasks}
-                disabled={loading || isRefreshing}
-                size="small"
-              >
-                <RefreshIcon />
-              </IconButton>
-            </span>
-          </Tooltip>
-
-          <FormControl size="small" sx={{ minWidth: 110, '& .MuiInputBase-root': { height: '34px' } }}>
-            <InputLabel id="status-filter-label" sx={{ fontSize: '0.875rem' }}>状态</InputLabel>
-            <Select
-              labelId="status-filter-label"
-              value={filterStatus}
-              label="状态"
-              onChange={handleFilterChange}
-              sx={{ fontSize: '0.875rem' }}
+    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      {/* 操作区域 */}
+      <ActionArea>
+        {/* 左侧：页面标题/路径 */}
+        <LeftColumn>
+          <Paper
+            sx={{
+              p: '1px 4px',
+              display: 'flex',
+              alignItems: 'center',
+              width: '100%',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              height: '32px',
+              borderRadius: 1,
+              bgcolor: 'rgba(255, 255, 255, 0.03)',
+              boxShadow: 'none',
+              pl: 1
+            }}
+          >
+            <Typography
+              variant="body2"
+              noWrap
+              sx={{
+                fontWeight: 400,
+                fontSize: '0.9rem',
+                color: 'text.primary',
+              }}
             >
-              <MenuItem value="all">全部</MenuItem>
-              <MenuItem value={TaskStatus.ENABLED}>已启用</MenuItem>
-              <MenuItem value={TaskStatus.DISABLED}>已禁用</MenuItem>
-              <MenuItem value={TaskStatus.RUNNING}>运行中</MenuItem>
-              <MenuItem value={TaskStatus.COMPLETED}>已完成</MenuItem>
-              <MenuItem value={TaskStatus.FAILED}>失败</MenuItem>
-            </Select>
-          </FormControl>
-        </Box>
-      </Box>
+              任务管理
+            </Typography>
+          </Paper>
+        </LeftColumn>
 
-      {/* 任务列表 */}
-      {renderTasks()}
+        {/* 右侧：操作按钮 */}
+        <RightColumn>
+          <Paper
+            sx={{
+              p: '1px 4px',
+              display: 'flex',
+              alignItems: 'center',
+              width: '100%',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              height: '32px',
+              borderRadius: 1,
+              bgcolor: 'rgba(255, 255, 255, 0.03)',
+              boxShadow: 'none',
+              justifyContent: 'flex-end',
+              pr: 0.5
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <Tooltip title="刷新任务列表">
+                <IconButton
+                  onClick={refreshTasks}
+                  disabled={loading || isRefreshing}
+                  size="small"
+                  sx={{ p: 0.5, mr: 1 }}
+                >
+                  <RefreshIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+
+              <FormControl size="small" sx={{ minWidth: 80, '& .MuiInputBase-root': { height: '24px', fontSize: '0.8rem', border: 'none' }, '& .MuiOutlinedInput-notchedOutline': { border: 'none' } }}>
+                <Select
+                  value={filterStatus}
+                  onChange={handleFilterChange}
+                  sx={{
+                    fontSize: '0.8rem',
+                    '& .MuiSelect-select': { py: 0, pr: '24px !important' }
+                  }}
+                  variant="standard"
+                  disableUnderline
+                >
+                  <MenuItem value="all" sx={{ fontSize: '0.85rem', minHeight: '32px', py: 0.5 }}>全部</MenuItem>
+                  <MenuItem value={TaskStatus.ENABLED} sx={{ fontSize: '0.85rem', minHeight: '32px', py: 0.5 }}>已启用</MenuItem>
+                  <MenuItem value={TaskStatus.DISABLED} sx={{ fontSize: '0.85rem', minHeight: '32px', py: 0.5 }}>已禁用</MenuItem>
+                  <MenuItem value={TaskStatus.RUNNING} sx={{ fontSize: '0.85rem', minHeight: '32px', py: 0.5 }}>运行中</MenuItem>
+                  <MenuItem value={TaskStatus.COMPLETED} sx={{ fontSize: '0.85rem', minHeight: '32px', py: 0.5 }}>已完成</MenuItem>
+                  <MenuItem value={TaskStatus.FAILED} sx={{ fontSize: '0.85rem', minHeight: '32px', py: 0.5 }}>失败</MenuItem>
+                </Select>
+              </FormControl>
+            </Box>
+          </Paper>
+        </RightColumn>
+      </ActionArea>
+
+      {/* 任务内容区 */}
+      <Box sx={{ flexGrow: 1, overflowY: 'auto', px: 0.5, pt: 1, backgroundColor: 'transparent' }}>
+        {renderTasks()}
+      </Box>
 
       {/* 浮动添加按钮 */}
       <Fab

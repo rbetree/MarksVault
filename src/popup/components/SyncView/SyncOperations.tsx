@@ -77,17 +77,17 @@ const SyncOperations: React.FC<SyncOperationsProps> = ({ user, onLogout, toastRe
     const loadData = async () => {
       try {
         setIsStatsLoading(true);
-        
+
         // 加载GitHub凭据
         const credentialsResult = await storageService.getGitHubCredentials();
         if (credentialsResult.success && credentialsResult.data) {
           setCredentials(credentialsResult.data);
         }
-        
+
         // 使用缓存优先策略加载备份状态
         const status = await backupService.getBackupStatus(false, handleBackupStatusUpdate);
         setBackupStatus(status);
-        
+
         // 如果状态中有isFromCache标记，表示使用的是缓存数据，后台正在更新
         if (status.stats?.isFromCache) {
           setIsStatsUpdating(true);
@@ -106,33 +106,33 @@ const SyncOperations: React.FC<SyncOperationsProps> = ({ user, onLogout, toastRe
   const handleUpload = async () => {
     setIsUploading(true);
     setBackupError(null);
-    
+
     try {
       // 获取GitHub凭据
       const credentialsResult = await storageService.getGitHubCredentials();
       if (!credentialsResult.success || !credentialsResult.data) {
         throw new Error('无法获取GitHub凭据，请重新登录');
       }
-      
+
       // 执行备份
       const backupResult = await backupService.backupToGitHub(
         credentialsResult.data,
         user.login
       );
-      
+
       if (!backupResult.success) {
         throw new Error(backupResult.error || '备份失败');
       }
-      
+
       // 更新状态
       const status = await backupService.getBackupStatus();
       setBackupStatus(status);
-      
+
       // 刷新备份列表（如果选择对话框是打开的）
       if (backupSelectionRefreshRef.current) {
         backupSelectionRefreshRef.current();
       }
-      
+
       toastRef?.current?.showToast('书签成功备份到GitHub', 'success');
     } catch (error) {
       console.error('上传失败:', error);
@@ -178,18 +178,18 @@ const SyncOperations: React.FC<SyncOperationsProps> = ({ user, onLogout, toastRe
     setShowRestoreConfirm(false);
     setIsDownloading(true);
     setRestoreError(null);
-    
+
     try {
       // 获取GitHub凭据
       const credentialsResult = await storageService.getGitHubCredentials();
       if (!credentialsResult.success || !credentialsResult.data) {
         throw new Error('无法获取GitHub凭据，请重新登录');
       }
-      
+
       if (!selectedBackupPath) {
         throw new Error('未选择备份文件');
       }
-      
+
       // 执行恢复，使用选定的备份文件
       const restoreResult = await backupService.restoreFromGitHub(
         credentialsResult.data,
@@ -197,16 +197,16 @@ const SyncOperations: React.FC<SyncOperationsProps> = ({ user, onLogout, toastRe
         true, // 使用指定的备份文件
         selectedBackupPath
       );
-      
+
       if (!restoreResult.success) {
         throw new Error(restoreResult.error || '恢复失败');
       }
-      
+
       // 更新状态
       const status = await backupService.getBackupStatus();
       setBackupStatus(status);
       setSelectedBackupPath(null); // 重置选择
-      
+
       toastRef?.current?.showToast('书签已成功恢复', 'success');
     } catch (error) {
       console.error('下载恢复失败:', error);
@@ -245,13 +245,13 @@ const SyncOperations: React.FC<SyncOperationsProps> = ({ user, onLogout, toastRe
 
   // 统计信息卡片的骨架屏组件 - 与实际内容布局完全一致
   const StatsSkeletonCard = () => (
-    <Card 
-      variant="outlined" 
-      sx={{ 
-        mb: 2, 
-        bgcolor: 'background.paper', 
+    <Box
+      sx={{
+        mb: 2,
+        bgcolor: 'transparent',
         borderRadius: 1,
-        position: 'relative'
+        position: 'relative',
+        border: '1px solid rgba(255, 255, 255, 0.05)'
       }}
     >
       {/* 骨架屏卡片标题 - 使用真实标题，只有图标和刷新按钮用骨架屏 */}
@@ -268,16 +268,16 @@ const SyncOperations: React.FC<SyncOperationsProps> = ({ user, onLogout, toastRe
         }
         sx={{ pb: 0 }}
       />
-      
-      <CardContent sx={{ pt: 1 }}>
+
+      <Box sx={{ pt: 1 }}>
         {/* 骨架屏统计数字区域 - 与实际内容布局一致 */}
         <Grid container spacing={2}>
           {/* 备份数量区域 */}
           <Grid item xs={4}>
-            <Box sx={{ 
-              display: 'flex', 
-              flexDirection: 'column', 
-              alignItems: 'center', 
+            <Box sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
               p: 1
             }}>
               <Skeleton variant="circular" width={24} height={24} sx={{ mb: 0.5 }} />
@@ -285,13 +285,13 @@ const SyncOperations: React.FC<SyncOperationsProps> = ({ user, onLogout, toastRe
               <Skeleton variant="text" width={80} height={16} />
             </Box>
           </Grid>
-          
+
           {/* 书签数量区域 */}
           <Grid item xs={4}>
-            <Box sx={{ 
-              display: 'flex', 
-              flexDirection: 'column', 
-              alignItems: 'center', 
+            <Box sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
               p: 1
             }}>
               <Skeleton variant="circular" width={24} height={24} sx={{ mb: 0.5 }} />
@@ -299,13 +299,13 @@ const SyncOperations: React.FC<SyncOperationsProps> = ({ user, onLogout, toastRe
               <Skeleton variant="text" width={80} height={16} />
             </Box>
           </Grid>
-          
+
           {/* 文件夹数量区域 */}
           <Grid item xs={4}>
-            <Box sx={{ 
-              display: 'flex', 
-              flexDirection: 'column', 
-              alignItems: 'center', 
+            <Box sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
               p: 1
             }}>
               <Skeleton variant="circular" width={24} height={24} sx={{ mb: 0.5 }} />
@@ -313,11 +313,11 @@ const SyncOperations: React.FC<SyncOperationsProps> = ({ user, onLogout, toastRe
               <Skeleton variant="text" width={80} height={16} />
             </Box>
           </Grid>
-          
+
           <Grid item xs={12}>
             <Divider sx={{ my: 0.5 }} />
           </Grid>
-          
+
           <Grid item xs={12}>
             <Box sx={{ display: 'flex', alignItems: 'center' }}>
               <Skeleton variant="text" width={100} height={16} sx={{ mr: 1 }} />
@@ -325,17 +325,17 @@ const SyncOperations: React.FC<SyncOperationsProps> = ({ user, onLogout, toastRe
             </Box>
           </Grid>
         </Grid>
-      </CardContent>
-    </Card>
+      </Box>
+    </Box >
   );
 
   return (
-    <Card variant="outlined" sx={{ m: 0 }}>
-      <CardContent>
+    <Box sx={{ m: 0, bgcolor: 'transparent', boxShadow: 'none' }}>
+      <Box sx={{ p: 1 }}>
         <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           同步操作
         </Typography>
-        
+
         {/* 同步状态信息 */}
         <Box sx={{ mb: 2 }}>
           {backupStatus.lastBackupTime && (
@@ -345,7 +345,7 @@ const SyncOperations: React.FC<SyncOperationsProps> = ({ user, onLogout, toastRe
               </Typography>
             </Box>
           )}
-          
+
           {backupStatus.lastRestoreTime && (
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
               <Typography variant="body2" color="text.secondary">
@@ -354,155 +354,155 @@ const SyncOperations: React.FC<SyncOperationsProps> = ({ user, onLogout, toastRe
             </Box>
           )}
         </Box>
-        
+
         {/* 备份统计信息卡片 - 使用Fade包装实现平滑过渡 */}
         {/* 统一显示备份统计信息卡片结构，无论是否有备份数据 */}
         {isStatsLoading ? (
           <StatsSkeletonCard />
         ) : (
           <Fade in={true} timeout={500}>
-            <Card 
-              variant="outlined" 
-              sx={{ 
-                mb: 2, 
-                bgcolor: 'background.paper', 
+            <Box
+              sx={{
+                mb: 2,
+                bgcolor: 'transparent',
                 borderRadius: 1,
-                position: 'relative'
+                position: 'relative',
+                border: '1px solid rgba(255, 255, 255, 0.05)'
               }}
             >
-                {/* 卡片标题 */}
-                <CardHeader
-                  avatar={<AssessmentIcon color="primary" />}
-                  title="备份统计信息"
-                  titleTypographyProps={{ variant: 'subtitle1' }}
-                  action={
-                    <Tooltip title="刷新统计数据">
-                      <Box sx={{ display: 'inline-flex' }}>
-                        <IconButton 
-                          size="small" 
-                          onClick={handleRefreshStats}
-                          disabled={isStatsUpdating}
-                        >
-                          {isStatsUpdating ? (
-                            <CircularProgress size={18} />
-                          ) : (
-                            <RefreshIcon fontSize="small" />
-                          )}
-                        </IconButton>
-                      </Box>
-                    </Tooltip>
-                  }
-                  sx={{ pb: 0 }}
-                />
-                
-                {/* 统一有数据和无数据状态的卡片内容结构 */}
-                <CardContent sx={{ pt: 1 }}>
-                  <Grid container spacing={2}>
-                    {/* 备份数量区域 */}
-                    <Grid item xs={4}>
-                      <Box sx={{ 
-                        display: 'flex', 
-                        flexDirection: 'column', 
-                        alignItems: 'center', 
-                        p: 1
-                      }}>
-                        <StorageIcon color="primary" sx={{ mb: 0.5 }} />
-                        <Typography variant="h5" sx={{ fontWeight: 'medium' }}>
-                          {backupStatus.stats && (backupStatus.stats.totalBackups ?? 0) > 0 
-                            ? backupStatus.stats.totalBackups ?? 0 
-                            : '0'}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          总备份数量
-                        </Typography>
-                      </Box>
-                    </Grid>
-                    
-                    {/* 书签数量区域 */}
-                    <Grid item xs={4}>
-                      <Box sx={{ 
-                        display: 'flex', 
-                        flexDirection: 'column', 
-                        alignItems: 'center', 
-                        p: 1
-                      }}>
-                        <BookmarkIcon color="primary" sx={{ mb: 0.5 }} />
-                        <Typography variant="h5" sx={{ fontWeight: 'medium' }}>
-                          {backupStatus.stats && (backupStatus.stats.totalBackups ?? 0) > 0 
-                            ? backupStatus.stats.totalBookmarks ?? 0 
-                            : '0'}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          书签数量
-                        </Typography>
-                      </Box>
-                    </Grid>
-                    
-                    {/* 文件夹数量区域 */}
-                    <Grid item xs={4}>
-                      <Box sx={{ 
-                        display: 'flex', 
-                        flexDirection: 'column', 
-                        alignItems: 'center', 
-                        p: 1
-                      }}>
-                        <FolderIcon color="primary" sx={{ mb: 0.5 }} />
-                        <Typography variant="h5" sx={{ fontWeight: 'medium' }}>
-                          {backupStatus.stats && (backupStatus.stats.totalBackups ?? 0) > 0 
-                            ? backupStatus.stats.totalFolders ?? 0 
-                            : '0'}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          文件夹数量
-                        </Typography>
-                      </Box>
-                    </Grid>
-                    
-                    <Grid item xs={12}>
-                      <Divider sx={{ my: 0.5 }} />
-                    </Grid>
-                    
-                    {/* 文件大小或无数据提示 */}
-                    <Grid item xs={12}>
-                      {backupStatus.stats && backupStatus.stats.fileSize !== undefined && (backupStatus.stats.totalBackups ?? 0) > 0 ? (
-                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                          <Typography variant="body2" color="text.secondary">
-                            最新备份大小:
-                          </Typography>
-                          <Typography variant="body2" sx={{ ml: 0.5, fontWeight: 'medium' }}>
-                            {formatFileSize(backupStatus.stats.fileSize)}
-                          </Typography>
-                        </Box>
-                      ) : (
-                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                          <Typography variant="body2" color="text.secondary">
-                            备份状态:
-                          </Typography>
-                          <Typography variant="body2" sx={{ ml: 0.5, fontWeight: 'medium' }}>
-                            尚未创建备份
-                          </Typography>
-                        </Box>
-                      )}
-                    </Grid>
+              {/* 卡片标题 */}
+              <CardHeader
+                avatar={<AssessmentIcon color="primary" />}
+                title="备份统计信息"
+                titleTypographyProps={{ variant: 'subtitle1' }}
+                action={
+                  <Tooltip title="刷新统计数据">
+                    <Box sx={{ display: 'inline-flex' }}>
+                      <IconButton
+                        size="small"
+                        onClick={handleRefreshStats}
+                        disabled={isStatsUpdating}
+                      >
+                        {isStatsUpdating ? (
+                          <CircularProgress size={18} />
+                        ) : (
+                          <RefreshIcon fontSize="small" />
+                        )}
+                      </IconButton>
+                    </Box>
+                  </Tooltip>
+                }
+                sx={{ pb: 0 }}
+              />
+
+              {/* 统一有数据和无数据状态的卡片内容结构 */}
+              <Box sx={{ pt: 1 }}>
+                <Grid container spacing={2}>
+                  {/* 备份数量区域 */}
+                  <Grid item xs={4}>
+                    <Box sx={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      p: 1
+                    }}>
+                      <StorageIcon color="primary" sx={{ mb: 0.5 }} />
+                      <Typography variant="h5" sx={{ fontWeight: 'medium' }}>
+                        {backupStatus.stats && (backupStatus.stats.totalBackups ?? 0) > 0
+                          ? backupStatus.stats.totalBackups ?? 0
+                          : '0'}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        总备份数量
+                      </Typography>
+                    </Box>
                   </Grid>
-                </CardContent>
-              </Card>
-           </Fade>
-         )}
-        
+
+                  {/* 书签数量区域 */}
+                  <Grid item xs={4}>
+                    <Box sx={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      p: 1
+                    }}>
+                      <BookmarkIcon color="primary" sx={{ mb: 0.5 }} />
+                      <Typography variant="h5" sx={{ fontWeight: 'medium' }}>
+                        {backupStatus.stats && (backupStatus.stats.totalBackups ?? 0) > 0
+                          ? backupStatus.stats.totalBookmarks ?? 0
+                          : '0'}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        书签数量
+                      </Typography>
+                    </Box>
+                  </Grid>
+
+                  {/* 文件夹数量区域 */}
+                  <Grid item xs={4}>
+                    <Box sx={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      p: 1
+                    }}>
+                      <FolderIcon color="primary" sx={{ mb: 0.5 }} />
+                      <Typography variant="h5" sx={{ fontWeight: 'medium' }}>
+                        {backupStatus.stats && (backupStatus.stats.totalBackups ?? 0) > 0
+                          ? backupStatus.stats.totalFolders ?? 0
+                          : '0'}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        文件夹数量
+                      </Typography>
+                    </Box>
+                  </Grid>
+
+                  <Grid item xs={12}>
+                    <Divider sx={{ my: 0.5 }} />
+                  </Grid>
+
+                  {/* 文件大小或无数据提示 */}
+                  <Grid item xs={12}>
+                    {backupStatus.stats && backupStatus.stats.fileSize !== undefined && (backupStatus.stats.totalBackups ?? 0) > 0 ? (
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <Typography variant="body2" color="text.secondary">
+                          最新备份大小:
+                        </Typography>
+                        <Typography variant="body2" sx={{ ml: 0.5, fontWeight: 'medium' }}>
+                          {formatFileSize(backupStatus.stats.fileSize)}
+                        </Typography>
+                      </Box>
+                    ) : (
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <Typography variant="body2" color="text.secondary">
+                          备份状态:
+                        </Typography>
+                        <Typography variant="body2" sx={{ ml: 0.5, fontWeight: 'medium' }}>
+                          尚未创建备份
+                        </Typography>
+                      </Box>
+                    )}
+                  </Grid>
+                </Grid>
+              </Box>
+            </Box>
+          </Fade>
+        )}
+
         {/* 错误信息显示 */}
         {backupError && (
           <Alert severity="error" sx={{ mb: 2 }}>
             备份错误: {backupError}
           </Alert>
         )}
-        
+
         {restoreError && (
           <Alert severity="error" sx={{ mb: 2 }}>
             恢复错误: {restoreError}
           </Alert>
         )}
-        
+
         {/* 操作按钮 */}
         <Grid container spacing={2}>
           <Grid item xs={6}>
@@ -530,7 +530,7 @@ const SyncOperations: React.FC<SyncOperationsProps> = ({ user, onLogout, toastRe
             </Button>
           </Grid>
         </Grid>
-        
+
         {/* 备份文件链接 */}
         {backupStatus.backupFileUrl && (
           <Box sx={{ mt: 2, display: 'flex', justifyContent: 'center' }}>
@@ -548,8 +548,8 @@ const SyncOperations: React.FC<SyncOperationsProps> = ({ user, onLogout, toastRe
             </Button>
           </Box>
         )}
-      </CardContent>
-      
+      </Box>
+
       {/* 恢复确认对话框 */}
       <Dialog
         open={showRestoreConfirm}
@@ -580,7 +580,7 @@ const SyncOperations: React.FC<SyncOperationsProps> = ({ user, onLogout, toastRe
 
       {/* 备份选择对话框 */}
       {showBackupSelection && credentials && (
-        <BackupSelectionDialog 
+        <BackupSelectionDialog
           open={showBackupSelection}
           onClose={handleBackupSelectionClose}
           onSelect={handleBackupSelected}
@@ -590,7 +590,7 @@ const SyncOperations: React.FC<SyncOperationsProps> = ({ user, onLogout, toastRe
           onRefreshRef={backupSelectionRefreshRef}
         />
       )}
-    </Card>
+    </Box>
   );
 };
 

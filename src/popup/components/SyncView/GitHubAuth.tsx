@@ -33,34 +33,34 @@ const GitHubAuth: React.FC<GitHubAuthProps> = ({ onAuth, authStatus, errorMessag
     const errors = {
       token: ''
     };
-    
+
     if (!token.trim()) {
       errors.token = '访问令牌不能为空';
     } else if (token.length < 40) {
       errors.token = '访问令牌格式不正确';
     }
-    
+
     setFormErrors(errors);
     return !errors.token;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!validateForm()) {
       return;
     }
-    
+
     const credentials: GitHubCredentials = {
       token: token.trim()
     };
-    
+
     await onAuth(credentials);
   };
 
   return (
-    <Card variant="outlined" sx={{ m: 0 }}>
-      <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+    <Box sx={{ m: 0, backgroundColor: 'transparent', boxShadow: 'none' }}>
+      <Box sx={{ p: 1, '&:last-child': { pb: 1 } }}>
         <Box
           component="form"
           onSubmit={handleSubmit}
@@ -74,14 +74,14 @@ const GitHubAuth: React.FC<GitHubAuthProps> = ({ onAuth, authStatus, errorMessag
             <GitHubIcon sx={{ mr: 1, color: 'text.secondary', fontSize: '1.2rem' }} />
             <Typography variant="subtitle1" sx={{ fontWeight: 500 }}>GitHub认证</Typography>
           </Box>
-          
-          <Typography 
-            variant="body2" 
-            color="info.main" 
-            sx={{ 
-              display: 'flex', 
-              alignItems: 'flex-start', 
-              fontSize: '0.8rem', 
+
+          <Typography
+            variant="body2"
+            color="info.main"
+            sx={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              fontSize: '0.8rem',
               mb: 1,
               mt: 0.5
             }}
@@ -89,7 +89,7 @@ const GitHubAuth: React.FC<GitHubAuthProps> = ({ onAuth, authStatus, errorMessag
             <InfoIcon fontSize="small" sx={{ mr: 0.5, fontSize: '1rem', mt: 0.1 }} />
             请提供GitHub个人访问令牌以启用同步功能。系统将自动获取您的GitHub账户信息。
           </Typography>
-          
+
           <TextField
             label="个人访问令牌"
             variant="outlined"
@@ -104,7 +104,7 @@ const GitHubAuth: React.FC<GitHubAuthProps> = ({ onAuth, authStatus, errorMessag
             margin="dense"
             InputLabelProps={{ shrink: true }}
           />
-          
+
           <Button
             startIcon={<GitHubIcon fontSize="small" />}
             variant="text"
@@ -117,7 +117,7 @@ const GitHubAuth: React.FC<GitHubAuthProps> = ({ onAuth, authStatus, errorMessag
           >
             点击此处快速创建令牌
           </Button>
-          
+
           {errorMessage && (
             <Box sx={{ display: 'flex', alignItems: 'flex-start', mt: 0.5, mb: 0.5 }}>
               <ErrorIcon color="error" fontSize="small" sx={{ mr: 0.5, fontSize: '1rem', mt: 0.1 }} />
@@ -126,7 +126,7 @@ const GitHubAuth: React.FC<GitHubAuthProps> = ({ onAuth, authStatus, errorMessag
               </Typography>
             </Box>
           )}
-          
+
           <Button
             type="submit"
             variant="contained"
@@ -141,8 +141,8 @@ const GitHubAuth: React.FC<GitHubAuthProps> = ({ onAuth, authStatus, errorMessag
             ) : '连接GitHub'}
           </Button>
         </Box>
-      </CardContent>
-    </Card>
+      </Box>
+    </Box>
   );
 };
 

@@ -409,7 +409,7 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
           flexGrow: 1,
           overflowY: 'auto',
           overflowX: 'hidden',
-          px: 1,
+          px: 0.5,
           pt: 1,
           columnCount: 2,
           columnGap: '8px',
@@ -470,18 +470,21 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
         <MenuItem
           onClick={() => handleSortSelect('default')}
           selected={sortMethod === 'default'}
+          sx={{ minHeight: '32px', display: 'flex', alignItems: 'center', py: 0.5, px: 1.5, fontSize: '0.85rem' }}
         >
           默认排序
         </MenuItem>
         <MenuItem
           onClick={() => handleSortSelect('name')}
           selected={sortMethod === 'name'}
+          sx={{ minHeight: '32px', display: 'flex', alignItems: 'center', py: 0.5, px: 1.5, fontSize: '0.85rem' }}
         >
           按名称排序
         </MenuItem>
         <MenuItem
           onClick={() => handleSortSelect('dateAdded')}
           selected={sortMethod === 'dateAdded'}
+          sx={{ minHeight: '32px', display: 'flex', alignItems: 'center', py: 0.5, px: 1.5, fontSize: '0.85rem' }}
         >
           按添加日期排序
         </MenuItem>
