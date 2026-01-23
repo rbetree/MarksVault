@@ -204,15 +204,15 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
   const handleEditSubmit = async () => {
     if (currentBookmark && onEditBookmark) {
       const changes: { title?: string; url?: string } = {};
-      
+
       if (formTitle.trim() !== currentBookmark.title) {
         changes.title = formTitle.trim();
       }
-      
+
       if (!currentBookmark.isFolder && formUrl.trim() !== currentBookmark.url) {
         changes.url = formUrl.trim();
       }
-      
+
       if (Object.keys(changes).length > 0) {
         await onEditBookmark(currentBookmark.id, changes);
       }
@@ -257,16 +257,16 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
   // 处理列表区域放置，将项目移动到当前文件夹末尾
   const handleListDrop = async (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
-    
+
     // 确保是直接放在列表区域而不是某个特定书签上
     if (event.target === event.currentTarget) {
       try {
         const dragData = JSON.parse(event.dataTransfer.getData(DRAG_TYPE));
-        
+
         // 确定目标文件夹，如果是根目录则使用书签栏
         if (onMoveBookmark) {
           const targetParentId = parentFolder?.id;
-          
+
           // 只有当有目标父ID时才移动
           if (targetParentId) {
             // 移动到文件夹末尾（不指定索引）
@@ -298,12 +298,12 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
             }}
           >
             {isSearching ? (
-              <Typography 
-                variant="body2" 
-                noWrap 
-                sx={{ 
-                  ml: 0.5, 
-                  fontWeight: 400, 
+              <Typography
+                variant="body2"
+                noWrap
+                sx={{
+                  ml: 0.5,
+                  fontWeight: 400,
                   flex: 1,
                   fontSize: '0.9rem',
                   color: 'text.primary',
@@ -317,27 +317,27 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
                 <IconButton onClick={onNavigateBack} size="small" sx={{ p: 0.5 }}>
                   <ArrowBackIcon fontSize="small" />
                 </IconButton>
-                <Typography 
-                  variant="body2" 
-                  noWrap 
-                  sx={{ 
-                    ml: 0.5, 
-                    fontWeight: 400, 
+                <Typography
+                  variant="body2"
+                  noWrap
+                  sx={{
+                    ml: 0.5,
+                    fontWeight: 400,
                     flex: 1,
                     fontSize: '0.9rem',
-                    color: 'text.primary' 
+                    color: 'text.primary'
                   }}
                 >
                   {parentFolder.title}
                 </Typography>
               </>
             ) : (
-              <Typography 
-                variant="body2" 
-                noWrap 
-                sx={{ 
-                  ml: 0.5, 
-                  fontWeight: 400, 
+              <Typography
+                variant="body2"
+                noWrap
+                sx={{
+                  ml: 0.5,
+                  fontWeight: 400,
                   flex: 1,
                   fontSize: '0.9rem',
                   color: 'text.primary',
@@ -349,7 +349,7 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
             )}
           </Paper>
         </LeftColumn>
-        
+
         {/* 右侧：搜索框 */}
         <RightColumn>
           <Paper
@@ -365,9 +365,9 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
             }}
           >
             <InputBase
-              sx={{ 
-                pl: 1.5, 
-                flex: 1, 
+              sx={{
+                pl: 1.5,
+                flex: 1,
                 fontSize: '0.9rem',
                 fontWeight: 400,
                 fontFamily: 'inherit',
@@ -383,17 +383,17 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
               </IconButton>
             )}
             <Box sx={{ display: 'flex', alignItems: 'center', ml: 0.5 }}>
-              <IconButton 
-                sx={{ p: 0.5 }} 
-                aria-label="排序" 
+              <IconButton
+                sx={{ p: 0.5 }}
+                aria-label="排序"
                 onClick={handleSortClick}
                 title={`排序: ${getSortMethodName(sortMethod)}`}
               >
                 <SortIcon fontSize="small" color={sortMethod !== 'default' ? 'primary' : 'inherit'} />
               </IconButton>
-              <ViewToggleButton 
-                viewType={viewType} 
-                onChange={onViewTypeChange} 
+              <ViewToggleButton
+                viewType={viewType}
+                onChange={onViewTypeChange}
               />
             </Box>
           </Paper>
@@ -402,34 +402,45 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
 
       <Divider />
 
-      {/* 书签列表 - 添加拖拽支持 */}
-      <Box 
-        sx={{ flexGrow: 1, overflow: 'auto', px: 2 }}
+      {/* 书签列表 - 改为双栏垂直分栏布局 */}
+      <Box
+        sx={{
+          flexGrow: 1,
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          px: 1,
+          pt: 1,
+          columnCount: 2,
+          columnGap: '8px',
+          width: '100%',
+          boxSizing: 'border-box',
+          contain: 'layout', // 限制布局计算范围
+          '& > *': {
+            breakInside: 'avoid',
+            marginBottom: '4px'
+          }
+        }}
         onDragOver={handleListDragOver}
         onDrop={handleListDrop}
       >
         {bookmarks.length === 0 ? (
-          <Box sx={{ p: 3, textAlign: 'center' }}>
+          <Box sx={{ p: 3, textAlign: 'center', columnSpan: 'all' }}>
             <Typography color="text.secondary">
               {searchText ? '没有找到匹配的书签' : '没有书签'}
             </Typography>
           </Box>
         ) : (
-          <List disablePadding>
-            {bookmarks.map((bookmark) => (
-              <React.Fragment key={bookmark.id}>
-                <BookmarkItem
-                  bookmark={bookmark}
-                  onEdit={handleEdit}
-                  onDelete={handleDelete}
-                  onOpen={handleBookmarkOpen}
-                  onOpenFolder={handleFolderOpen}
-                  onMoveBookmark={onMoveBookmark}
-                />
-                <Divider variant="inset" component="li" />
-              </React.Fragment>
-            ))}
-          </List>
+          bookmarks.map((bookmark) => (
+            <BookmarkItem
+              key={bookmark.id}
+              bookmark={bookmark}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+              onOpen={handleBookmarkOpen}
+              onOpenFolder={handleFolderOpen}
+              onMoveBookmark={onMoveBookmark}
+            />
+          ))
         )}
       </Box>
 
@@ -439,19 +450,19 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
         open={isSortMenuOpen}
         onClose={handleSortClose}
       >
-        <MenuItem 
+        <MenuItem
           onClick={() => handleSortSelect('default')}
           selected={sortMethod === 'default'}
         >
           默认排序
         </MenuItem>
-        <MenuItem 
+        <MenuItem
           onClick={() => handleSortSelect('name')}
           selected={sortMethod === 'name'}
         >
           按名称排序
         </MenuItem>
-        <MenuItem 
+        <MenuItem
           onClick={() => handleSortSelect('dateAdded')}
           selected={sortMethod === 'dateAdded'}
         >

@@ -2,12 +2,10 @@ import React, { useState, useEffect } from 'react';
 import ListItem from '@mui/material/ListItem';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
-import IconButton from '@mui/material/IconButton';
 import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import ListItemButton from '@mui/material/ListItemButton';
 import FolderIcon from '@mui/icons-material/Folder';
-import MoreVertIcon from '@mui/icons-material/MoreVert';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
@@ -21,6 +19,11 @@ import { styled } from '@mui/material/styles';
 // 添加可拖放的文件夹样式
 const DropTargetFolder = styled(ListItemButton)(({ theme }) => ({
   transition: 'all 0.15s ease-in-out',
+  padding: theme.spacing(0.1, 0.5),
+  minHeight: '36px',
+  display: 'flex',
+  alignItems: 'center',
+  breakInside: 'avoid',
   '&[data-isover="true"]': {
     backgroundColor: theme.palette.action.selected,
     boxShadow: `inset 0 0 0 2px ${theme.palette.primary.main}`,
@@ -31,16 +34,6 @@ const DropTargetFolder = styled(ListItemButton)(({ theme }) => ({
       transition: 'transform 0.15s ease-in-out',
     },
   },
-}));
-
-// 添加位置指示器样式
-const PositionIndicator = styled('div')(({ theme }) => ({
-  position: 'absolute',
-  left: 0,
-  right: 0,
-  height: '2px',
-  backgroundColor: theme.palette.primary.main,
-  zIndex: 1,
 }));
 
 // 添加左侧位置指示器样式
@@ -76,6 +69,14 @@ type DropPosition = 'left' | 'right' | 'center';
 const ItemContainer = styled(ListItemButton)(({ theme }) => ({
   position: 'relative',
   transition: 'all 0.15s ease-in-out',
+  paddingTop: theme.spacing(0.1),
+  paddingBottom: theme.spacing(0.1),
+  paddingLeft: theme.spacing(0.5),
+  paddingRight: theme.spacing(0.5),
+  minHeight: '36px',
+  display: 'flex',
+  alignItems: 'center',
+  breakInside: 'avoid',
   '&[data-isover="true"]': {
     backgroundColor: theme.palette.action.hover,
   },
@@ -101,17 +102,17 @@ const BookmarkItem: React.FC<BookmarkItemProps> = ({
   onOpenFolder,
   onMoveBookmark
 }) => {
-  const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
+  const [menuAnchorPosition, setMenuAnchorPosition] = useState<{ top: number; left: number } | null>(null);
   const [iconUrl, setIconUrl] = useState<string>('');
   const [iconError, setIconError] = useState<boolean>(false);
   const [itemCount, setItemCount] = useState<number | null>(null);
   const [isOver, setIsOver] = useState<boolean>(false); // 拖拽悬停状态
   const [dropPosition, setDropPosition] = useState<DropPosition>('center'); // 拖拽位置
   const [interactionMode, setInteractionMode] = useState<InteractionMode>('move'); // 交互模式
-  const isMenuOpen = Boolean(menuAnchorEl);
+  const isMenuOpen = Boolean(menuAnchorPosition);
 
   // 定义拖拽区域边缘宽度（像素）
-  const EDGE_WIDTH = 40; // 列表视图需要更宽的边缘区域
+  const EDGE_WIDTH = 20;
 
   useEffect(() => {
     if (!bookmark.isFolder && bookmark.url) {
@@ -129,18 +130,22 @@ const BookmarkItem: React.FC<BookmarkItemProps> = ({
           setItemCount(result.data);
         }
       };
-      
+
       fetchItemCount();
     }
   }, [bookmark.id, bookmark.isFolder]);
 
-  const handleMenuClick = (event: React.MouseEvent<HTMLElement>) => {
+  const handleContextMenu = (event: React.MouseEvent) => {
+    event.preventDefault();
     event.stopPropagation();
-    setMenuAnchorEl(event.currentTarget);
+    setMenuAnchorPosition({
+      top: event.clientY,
+      left: event.clientX,
+    });
   };
 
   const handleMenuClose = () => {
-    setMenuAnchorEl(null);
+    setMenuAnchorPosition(null);
   };
 
   const handleItemClick = () => {
@@ -162,7 +167,7 @@ const BookmarkItem: React.FC<BookmarkItemProps> = ({
       parentId: bookmark.parentId,
       index: bookmark.index
     }));
-    
+
     // 设置拖拽效果
     event.dataTransfer.effectAllowed = 'move';
   };
@@ -172,7 +177,7 @@ const BookmarkItem: React.FC<BookmarkItemProps> = ({
     const rect = event.currentTarget.getBoundingClientRect();
     const mouseX = event.clientX - rect.left;
     const elementWidth = rect.width;
-    
+
     // 根据鼠标在元素上的水平位置判断
     if (mouseX < EDGE_WIDTH) {
       // 靠近左边缘，显示左侧指示器
@@ -196,10 +201,10 @@ const BookmarkItem: React.FC<BookmarkItemProps> = ({
     if (event.dataTransfer.types.includes(DRAG_TYPE)) {
       event.preventDefault(); // 允许放置
       event.dataTransfer.dropEffect = 'move';
-      
+
       // 确定拖拽位置和交互模式
       determineDropPositionAndMode(event);
-      
+
       // 更新悬停状态
       setIsOver(true);
     }
@@ -209,10 +214,10 @@ const BookmarkItem: React.FC<BookmarkItemProps> = ({
   const handleDragEnter = (event: React.DragEvent<HTMLDivElement>) => {
     if (event.dataTransfer.types.includes(DRAG_TYPE)) {
       event.preventDefault();
-      
+
       // 确定拖拽位置和交互模式
       determineDropPositionAndMode(event);
-      
+
       // 设置悬停状态为true
       setIsOver(true);
     }
@@ -230,15 +235,15 @@ const BookmarkItem: React.FC<BookmarkItemProps> = ({
     event.preventDefault();
     // 重置状态
     setIsOver(false);
-    
+
     try {
       const dragData = JSON.parse(event.dataTransfer.getData(DRAG_TYPE));
-      
+
       // 确保不是拖自身
       if (dragData.id === bookmark.id) {
         return;
       }
-      
+
       if (onMoveBookmark) {
         if (interactionMode === 'move' && bookmark.isFolder) {
           // 情况1: 移动模式 - 放置在文件夹中心，将项目移入文件夹
@@ -247,12 +252,12 @@ const BookmarkItem: React.FC<BookmarkItemProps> = ({
           // 情况2: 排序模式 - 放置在项目边缘，在同级项目之间重新排序
           // 计算目标索引
           let targetIndex = bookmark.index ?? 0;
-          
+
           // 如果放在右侧，则索引增加1
           if (dropPosition === 'right') {
             targetIndex += 1;
           }
-          
+
           await onMoveBookmark(dragData.id, bookmark.parentId, targetIndex);
         }
       }
@@ -292,7 +297,7 @@ const BookmarkItem: React.FC<BookmarkItemProps> = ({
   const handleOpenAllInNewTabs = async (event: React.MouseEvent<HTMLElement>) => {
     event.stopPropagation();
     handleMenuClose();
-    
+
     if (bookmark.isFolder) {
       // 获取文件夹中的所有书签
       const result = await bookmarkService.getBookmarksInFolder(bookmark.id);
@@ -310,7 +315,7 @@ const BookmarkItem: React.FC<BookmarkItemProps> = ({
   const handleExportFolder = (event: React.MouseEvent<HTMLElement>) => {
     event.stopPropagation();
     handleMenuClose();
-    
+
     if (bookmark.isFolder) {
       // 实现文件夹导出逻辑
       alert(`导出文件夹功能正在开发中...`);
@@ -324,20 +329,11 @@ const BookmarkItem: React.FC<BookmarkItemProps> = ({
   return (
     <ListItem
       disablePadding
-      secondaryAction={
-        <IconButton 
-          edge="end" 
-          aria-label="操作" 
-          onClick={handleMenuClick}
-          size="small"
-        >
-          <MoreVertIcon fontSize="small" />
-        </IconButton>
-      }
     >
       {bookmark.isFolder ? (
-        <DropTargetFolder 
+        <DropTargetFolder
           onClick={handleItemClick}
+          onContextMenu={handleContextMenu}
           data-isover={isOver && interactionMode === 'move'} // 使用data-*属性
           draggable={true} // 允许文件夹拖拽
           onDragStart={handleDragStart}
@@ -353,21 +349,28 @@ const BookmarkItem: React.FC<BookmarkItemProps> = ({
               {dropPosition === 'right' && <RightPositionIndicator />}
             </>
           )}
-          <ListItemIcon>
-            <FolderIcon color={isOver && interactionMode === 'move' ? "primary" : "primary"} />
+          <ListItemIcon sx={{ minWidth: '32px' }}>
+            <FolderIcon sx={{ fontSize: 24 }} color={isOver && interactionMode === 'move' ? "primary" : "primary"} />
           </ListItemIcon>
-          <ListItemText 
-            primary={bookmark.title} 
-            secondary={itemCount !== null ? `${itemCount} 项` : ''}
-            primaryTypographyProps={{ 
+          <ListItemText
+            primary={bookmark.title}
+            secondary={bookmark.isFolder ? (itemCount !== null ? `${itemCount} 项` : ' ') : ''}
+            primaryTypographyProps={{
               noWrap: true,
-              title: bookmark.title
+              title: bookmark.title,
+              variant: 'body2',
+              sx: { fontWeight: 500, lineHeight: 1.4 }
+            }}
+            secondaryTypographyProps={{
+              variant: 'caption',
+              sx: { lineHeight: 1.4, minHeight: '1.4em' } // 预留二级文本高度
             }}
           />
         </DropTargetFolder>
       ) : (
         <ItemContainer
           onClick={handleItemClick}
+          onContextMenu={handleContextMenu}
           draggable={true}
           onDragStart={handleDragStart}
           onDragOver={handleDragOver}
@@ -383,37 +386,42 @@ const BookmarkItem: React.FC<BookmarkItemProps> = ({
               {dropPosition === 'right' && <RightPositionIndicator />}
             </>
           )}
-          <ListItemIcon>
+          <ListItemIcon sx={{ minWidth: '32px' }}>
             {iconUrl && !iconError ? (
-              <img 
-                src={iconUrl} 
+              <img
+                src={iconUrl}
                 alt={bookmark.title}
                 style={{ width: '24px', height: '24px' }}
                 onError={handleIconError}
               />
             ) : (
-              <LinkIcon color="secondary" />
+              <LinkIcon sx={{ fontSize: 24 }} color="secondary" />
             )}
           </ListItemIcon>
-          <ListItemText 
-            primary={bookmark.title} 
+          <ListItemText
+            primary={bookmark.title}
             secondary={bookmark.url}
-            primaryTypographyProps={{ 
+            primaryTypographyProps={{
               noWrap: true,
-              title: bookmark.title
+              title: bookmark.title,
+              variant: 'body2',
+              sx: { fontWeight: 500, lineHeight: 1.4 }
             }}
-            secondaryTypographyProps={{ 
+            secondaryTypographyProps={{
               noWrap: true,
-              title: bookmark.url
+              title: bookmark.url,
+              variant: 'caption',
+              sx: { lineHeight: 1.3 }
             }}
           />
         </ItemContainer>
       )}
 
       <Menu
-        anchorEl={menuAnchorEl}
         open={isMenuOpen}
         onClose={handleMenuClose}
+        anchorReference="anchorPosition"
+        anchorPosition={menuAnchorPosition || undefined}
       >
         <MenuItem onClick={handleEdit}>
           <ListItemIcon>
@@ -456,4 +464,4 @@ const BookmarkItem: React.FC<BookmarkItemProps> = ({
   );
 };
 
-export default BookmarkItem; 
+export default BookmarkItem;

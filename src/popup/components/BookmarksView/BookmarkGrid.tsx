@@ -35,11 +35,11 @@ const DRAG_TYPE = 'application/marksvault-bookmark';
 const GridContainer = styled(Box)(({ theme }) => ({
   display: 'flex',
   flexWrap: 'wrap',
-  padding: theme.spacing(1, 2),
-  justifyContent: 'center',
+  padding: theme.spacing(0.5, 1),
+  justifyContent: 'flex-start',
   width: '100%',
   height: '100%',
-  gap: theme.spacing(1.5),
+  gap: '4px',
   alignContent: 'flex-start',
   overflowY: 'auto',
   backgroundColor: theme.palette.background.paper,
@@ -215,15 +215,15 @@ const BookmarkGrid: React.FC<BookmarkGridProps> = ({
   const handleEditSubmit = async () => {
     if (currentBookmark && onEditBookmark) {
       const changes: { title?: string; url?: string } = {};
-      
+
       if (formTitle.trim() !== currentBookmark.title) {
         changes.title = formTitle.trim();
       }
-      
+
       if (!currentBookmark.isFolder && formUrl.trim() !== currentBookmark.url) {
         changes.url = formUrl.trim();
       }
-      
+
       if (Object.keys(changes).length > 0) {
         await onEditBookmark(currentBookmark.id, changes);
       }
@@ -277,16 +277,16 @@ const BookmarkGrid: React.FC<BookmarkGridProps> = ({
   // 处理网格区域放置，将项目移动到当前文件夹末尾
   const handleGridDrop = async (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
-    
+
     // 确保是直接放在网格区域而不是某个特定书签上
     if (event.target === event.currentTarget) {
       try {
         const dragData = JSON.parse(event.dataTransfer.getData(DRAG_TYPE));
-        
+
         // 确定目标文件夹，如果是根目录则使用书签栏
         if (onMoveBookmark) {
           const targetParentId = parentFolder?.id;
-          
+
           // 只有当有目标父ID时才移动
           if (targetParentId) {
             // 移动到文件夹末尾（不指定索引）
@@ -318,12 +318,12 @@ const BookmarkGrid: React.FC<BookmarkGridProps> = ({
             }}
           >
             {isSearching ? (
-              <Typography 
-                variant="body2" 
-                noWrap 
-                sx={{ 
-                  ml: 0.5, 
-                  fontWeight: 400, 
+              <Typography
+                variant="body2"
+                noWrap
+                sx={{
+                  ml: 0.5,
+                  fontWeight: 400,
                   flex: 1,
                   fontSize: '0.9rem',
                   color: 'text.primary',
@@ -337,12 +337,12 @@ const BookmarkGrid: React.FC<BookmarkGridProps> = ({
                 <IconButton onClick={onNavigateBack} size="small" sx={{ p: 0.5 }}>
                   <ArrowBackIcon fontSize="small" />
                 </IconButton>
-                <Typography 
-                  variant="body2" 
-                  noWrap 
-                  sx={{ 
-                    ml: 0.5, 
-                    fontWeight: 400, 
+                <Typography
+                  variant="body2"
+                  noWrap
+                  sx={{
+                    ml: 0.5,
+                    fontWeight: 400,
                     flex: 1,
                     fontSize: '0.9rem',
                     color: 'text.primary'
@@ -352,12 +352,12 @@ const BookmarkGrid: React.FC<BookmarkGridProps> = ({
                 </Typography>
               </>
             ) : (
-              <Typography 
-                variant="body2" 
-                noWrap 
-                sx={{ 
-                  ml: 0.5, 
-                  fontWeight: 400, 
+              <Typography
+                variant="body2"
+                noWrap
+                sx={{
+                  ml: 0.5,
+                  fontWeight: 400,
                   flex: 1,
                   fontSize: '0.9rem',
                   color: 'text.primary',
@@ -369,7 +369,7 @@ const BookmarkGrid: React.FC<BookmarkGridProps> = ({
             )}
           </Paper>
         </LeftColumn>
-        
+
         {/* 右侧：搜索栏 */}
         <RightColumn>
           <Paper
@@ -385,9 +385,9 @@ const BookmarkGrid: React.FC<BookmarkGridProps> = ({
             }}
           >
             <InputBase
-              sx={{ 
-                pl: 1.5, 
-                flex: 1, 
+              sx={{
+                pl: 1.5,
+                flex: 1,
                 fontSize: '0.9rem',
                 fontWeight: 400,
                 fontFamily: 'inherit'
@@ -402,17 +402,17 @@ const BookmarkGrid: React.FC<BookmarkGridProps> = ({
               </IconButton>
             )}
             <Box sx={{ display: 'flex', alignItems: 'center', ml: 0.5 }}>
-              <IconButton 
-                sx={{ p: 0.5 }} 
-                aria-label="排序" 
+              <IconButton
+                sx={{ p: 0.5 }}
+                aria-label="排序"
                 onClick={handleSortClick}
                 title={`排序: ${getSortMethodName(sortMethod)}`}
               >
                 <SortIcon fontSize="small" color={sortMethod !== 'default' ? 'primary' : 'inherit'} />
               </IconButton>
-              <ViewToggleButton 
-                viewType={viewType} 
-                onChange={onViewTypeChange} 
+              <ViewToggleButton
+                viewType={viewType}
+                onChange={onViewTypeChange}
               />
             </Box>
           </Paper>
@@ -463,19 +463,19 @@ const BookmarkGrid: React.FC<BookmarkGridProps> = ({
         open={isSortMenuOpen}
         onClose={handleSortClose}
       >
-        <MenuItem 
+        <MenuItem
           onClick={() => handleSortSelect('default')}
           selected={sortMethod === 'default'}
         >
           默认排序
         </MenuItem>
-        <MenuItem 
+        <MenuItem
           onClick={() => handleSortSelect('name')}
           selected={sortMethod === 'name'}
         >
           按名称排序
         </MenuItem>
-        <MenuItem 
+        <MenuItem
           onClick={() => handleSortSelect('dateAdded')}
           selected={sortMethod === 'dateAdded'}
         >
@@ -490,7 +490,7 @@ const BookmarkGrid: React.FC<BookmarkGridProps> = ({
           <DialogContentText>
             请输入{isFolder ? '文件夹' : '书签'}的详细信息。
           </DialogContentText>
-          
+
           <FormControlLabel
             control={
               <Switch
@@ -502,7 +502,7 @@ const BookmarkGrid: React.FC<BookmarkGridProps> = ({
             label="这是一个文件夹"
             sx={{ my: 2 }}
           />
-          
+
           <TextField
             autoFocus
             margin="dense"
@@ -513,7 +513,7 @@ const BookmarkGrid: React.FC<BookmarkGridProps> = ({
             value={formTitle}
             onChange={(e) => setFormTitle(e.target.value)}
           />
-          
+
           {!isFolder && (
             <TextField
               margin="dense"
@@ -550,7 +550,7 @@ const BookmarkGrid: React.FC<BookmarkGridProps> = ({
             value={formTitle}
             onChange={(e) => setFormTitle(e.target.value)}
           />
-          
+
           {currentBookmark && !currentBookmark.isFolder && (
             <TextField
               margin="dense"
@@ -567,9 +567,9 @@ const BookmarkGrid: React.FC<BookmarkGridProps> = ({
           <Button onClick={handleEditDialogClose} color="primary">
             取消
           </Button>
-          <Button 
-            onClick={handleEditSubmit} 
-            color="primary" 
+          <Button
+            onClick={handleEditSubmit}
+            color="primary"
             disabled={formTitle.trim() === '' || (!!currentBookmark && !currentBookmark.isFolder && formUrl.trim() === '')}
           >
             保存
@@ -582,8 +582,8 @@ const BookmarkGrid: React.FC<BookmarkGridProps> = ({
         <DialogTitle>确认删除</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            {currentBookmark?.isFolder 
-              ? `确定要删除文件夹 "${currentBookmark?.title}" 及其所有内容吗？` 
+            {currentBookmark?.isFolder
+              ? `确定要删除文件夹 "${currentBookmark?.title}" 及其所有内容吗？`
               : `确定要删除书签 "${currentBookmark?.title}" 吗？`}
           </DialogContentText>
         </DialogContent>

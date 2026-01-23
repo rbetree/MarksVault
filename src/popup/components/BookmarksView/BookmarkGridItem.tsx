@@ -1,13 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
-import IconButton from '@mui/material/IconButton';
 import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
 import FolderIcon from '@mui/icons-material/Folder';
-import MoreHorizIcon from '@mui/icons-material/MoreHoriz';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
@@ -23,22 +21,22 @@ const DRAG_TYPE = 'application/marksvault-bookmark';
 
 // 样式化组件
 const GridItemContainer = styled(Box)(({ theme }) => ({
-  width: '80px',
-  minHeight: '90px',
+  width: '60px',
+  minHeight: '72px',
   display: 'flex',
   flexDirection: 'column',
   alignItems: 'center',
   justifyContent: 'flex-start',
   borderRadius: theme.shape.borderRadius,
-  padding: theme.spacing(1),
-  margin: theme.spacing(0.5, 0),
+  padding: theme.spacing(0.25, 0.25),
+  margin: theme.spacing(0.1, 0),
   cursor: 'pointer',
   textAlign: 'center',
   transition: 'all 0.15s ease-in-out',
   position: 'relative',
   '&:hover': {
     backgroundColor: theme.palette.action.hover,
-    transform: 'translateY(-2px)',
+    transform: 'translateY(-1px)',
   },
   '&[data-isover="true"][data-isfolder="true"]': {
     backgroundColor: theme.palette.action.selected,
@@ -53,49 +51,31 @@ const GridItemContainer = styled(Box)(({ theme }) => ({
 }));
 
 const IconContainer = styled(Box)(({ theme }) => ({
-  width: '48px',
-  height: '48px',
+  width: '40px',
+  height: '40px',
   display: 'flex',
   justifyContent: 'center',
   alignItems: 'center',
-  marginBottom: theme.spacing(1),
+  marginBottom: theme.spacing(0.2),
   overflow: 'hidden',
 }));
 
 const ItemTitle = styled(Typography)(({ theme }) => ({
-  fontSize: '12px',
+  fontSize: '11px',
   fontWeight: 400,
-  maxWidth: '80px',
+  maxWidth: '60px',
   overflow: 'hidden',
   textOverflow: 'ellipsis',
   whiteSpace: 'nowrap',
-  marginTop: theme.spacing(0.5),
-  lineHeight: 1.2,
+  marginTop: theme.spacing(0.1),
+  lineHeight: 1.4, // 确保 g 显示完整
 }));
 
 const ItemCount = styled(Typography)(({ theme }) => ({
   fontSize: '10px',
   color: theme.palette.text.secondary,
-  marginTop: theme.spacing(0.2),
-  marginRight: theme.spacing(0.5),
-}));
-
-// 修改按钮样式，移除绝对定位
-const MenuButton = styled(IconButton)(({ theme }) => ({
-  padding: 1,
-  fontSize: '1rem',
-  color: theme.palette.text.secondary,
-  '&:hover': {
-    backgroundColor: theme.palette.action.hover,
-  }
-}));
-
-// 添加一个容器用于包装计数和菜单按钮
-const InfoContainer = styled(Box)(({ theme }) => ({
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  marginTop: theme.spacing(0.2),
+  marginTop: theme.spacing(0.1),
+  lineHeight: 1.4,
 }));
 
 // 添加左侧位置指示器样式
@@ -144,14 +124,14 @@ const BookmarkGridItem: React.FC<BookmarkGridItemProps> = ({
   onOpenFolder,
   onMoveBookmark
 }) => {
-  const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
+  const [menuAnchorPosition, setMenuAnchorPosition] = useState<{ top: number; left: number } | null>(null);
   const [iconUrl, setIconUrl] = useState<string>('');
   const [iconError, setIconError] = useState<boolean>(false);
   const [itemCount, setItemCount] = useState<number | null>(null);
   const [isOver, setIsOver] = useState<boolean>(false); // 拖拽悬停状态
   const [dropPosition, setDropPosition] = useState<DropPosition>('center'); // 拖拽位置
   const [interactionMode, setInteractionMode] = useState<InteractionMode>('move'); // 交互模式
-  const isMenuOpen = Boolean(menuAnchorEl);
+  const isMenuOpen = Boolean(menuAnchorPosition);
 
   // 定义拖拽区域边缘宽度（像素）
   const EDGE_WIDTH = 20;
@@ -173,18 +153,22 @@ const BookmarkGridItem: React.FC<BookmarkGridItemProps> = ({
           setItemCount(result.data);
         }
       };
-      
+
       fetchItemCount();
     }
   }, [bookmark.id, bookmark.isFolder]);
 
-  const handleMenuClick = (event: React.MouseEvent<HTMLElement>) => {
+  const handleContextMenu = (event: React.MouseEvent) => {
+    event.preventDefault();
     event.stopPropagation();
-    setMenuAnchorEl(event.currentTarget);
+    setMenuAnchorPosition({
+      top: event.clientY,
+      left: event.clientX,
+    });
   };
 
   const handleMenuClose = () => {
-    setMenuAnchorEl(null);
+    setMenuAnchorPosition(null);
   };
 
   const handleItemClick = () => {
@@ -206,7 +190,7 @@ const BookmarkGridItem: React.FC<BookmarkGridItemProps> = ({
       parentId: bookmark.parentId,
       index: bookmark.index
     }));
-    
+
     // 设置拖拽效果
     event.dataTransfer.effectAllowed = 'move';
   };
@@ -216,7 +200,7 @@ const BookmarkGridItem: React.FC<BookmarkGridItemProps> = ({
     const rect = event.currentTarget.getBoundingClientRect();
     const mouseX = event.clientX - rect.left;
     const elementWidth = rect.width;
-    
+
     // 根据鼠标在元素上的水平位置判断
     if (mouseX < EDGE_WIDTH) {
       // 靠近左边缘，显示左侧指示器
@@ -240,10 +224,10 @@ const BookmarkGridItem: React.FC<BookmarkGridItemProps> = ({
     if (event.dataTransfer.types.includes(DRAG_TYPE)) {
       event.preventDefault(); // 允许放置
       event.dataTransfer.dropEffect = 'move';
-      
+
       // 确定拖拽位置和交互模式
       determineDropPositionAndMode(event);
-      
+
       // 更新悬停状态
       setIsOver(true);
     }
@@ -253,10 +237,10 @@ const BookmarkGridItem: React.FC<BookmarkGridItemProps> = ({
   const handleDragEnter = (event: React.DragEvent<HTMLDivElement>) => {
     if (event.dataTransfer.types.includes(DRAG_TYPE)) {
       event.preventDefault();
-      
+
       // 确定拖拽位置和交互模式
       determineDropPositionAndMode(event);
-      
+
       // 设置悬停状态为true
       setIsOver(true);
     }
@@ -274,15 +258,15 @@ const BookmarkGridItem: React.FC<BookmarkGridItemProps> = ({
     event.preventDefault();
     // 重置状态
     setIsOver(false);
-    
+
     try {
       const dragData = JSON.parse(event.dataTransfer.getData(DRAG_TYPE));
-      
+
       // 确保不是拖自身
       if (dragData.id === bookmark.id) {
         return;
       }
-      
+
       if (onMoveBookmark) {
         if (interactionMode === 'move' && bookmark.isFolder) {
           // 情况1: 移动模式 - 放置在文件夹中心，将项目移入文件夹
@@ -291,12 +275,12 @@ const BookmarkGridItem: React.FC<BookmarkGridItemProps> = ({
           // 情况2: 排序模式 - 放置在项目边缘，在同级项目之间重新排序
           // 计算目标索引
           let targetIndex = bookmark.index ?? 0;
-          
+
           // 如果放在右侧，则索引增加1
           if (dropPosition === 'right') {
             targetIndex += 1;
           }
-          
+
           await onMoveBookmark(dragData.id, bookmark.parentId, targetIndex);
         }
       }
@@ -336,7 +320,7 @@ const BookmarkGridItem: React.FC<BookmarkGridItemProps> = ({
   const handleOpenAllInNewTabs = async (event: React.MouseEvent<HTMLElement>) => {
     event.stopPropagation();
     handleMenuClose();
-    
+
     if (bookmark.isFolder) {
       // 获取文件夹中的所有书签
       const result = await bookmarkService.getBookmarksInFolder(bookmark.id);
@@ -354,7 +338,7 @@ const BookmarkGridItem: React.FC<BookmarkGridItemProps> = ({
   const handleExportFolder = (event: React.MouseEvent<HTMLElement>) => {
     event.stopPropagation();
     handleMenuClose();
-    
+
     if (bookmark.isFolder) {
       // 实现文件夹导出逻辑
       alert(`导出文件夹功能正在开发中...`);
@@ -367,7 +351,7 @@ const BookmarkGridItem: React.FC<BookmarkGridItemProps> = ({
   };
 
   return (
-    <GridItemContainer 
+    <GridItemContainer
       onClick={handleItemClick}
       draggable={true} // 所有项目都可拖拽，包括文件夹
       onDragStart={handleDragStart}
@@ -375,6 +359,7 @@ const BookmarkGridItem: React.FC<BookmarkGridItemProps> = ({
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
+      onContextMenu={handleContextMenu}
       data-isover={isOver && interactionMode === 'move'} // 使用data-*属性
       data-isfolder={bookmark.isFolder} // 使用data-*属性
     >
@@ -385,20 +370,20 @@ const BookmarkGridItem: React.FC<BookmarkGridItemProps> = ({
           {dropPosition === 'right' && <RightPositionIndicator />}
         </>
       )}
-      
+
       <IconContainer>
         {bookmark.isFolder ? (
-          <FolderIcon sx={{ fontSize: 48, color: isOver && interactionMode === 'move' ? 'primary.main' : 'primary.main' }} />
+          <FolderIcon sx={{ fontSize: 40, color: isOver && interactionMode === 'move' ? 'primary.main' : 'primary.main' }} />
         ) : (
           iconUrl && !iconError ? (
-            <img 
-              src={iconUrl} 
-              alt={bookmark.title} 
-              style={{ maxWidth: '100%', maxHeight: '100%' }} 
+            <img
+              src={iconUrl}
+              alt={bookmark.title}
+              style={{ maxWidth: '100%', maxHeight: '100%' }}
               onError={handleIconError}
             />
           ) : (
-            <LinkIcon sx={{ fontSize: 48, color: 'secondary.main' }} />
+            <LinkIcon sx={{ fontSize: 40, color: 'secondary.main' }} />
           )
         )}
       </IconContainer>
@@ -407,22 +392,17 @@ const BookmarkGridItem: React.FC<BookmarkGridItemProps> = ({
         {bookmark.title}
       </ItemTitle>
 
-      <InfoContainer>
-        {bookmark.isFolder && itemCount !== null && (
-          <ItemCount>{itemCount} 项</ItemCount>
-        )}
-        <MenuButton 
-          size="small" 
-          onClick={handleMenuClick}
-        >
-          <MoreHorizIcon fontSize="small" />
-        </MenuButton>
-      </InfoContainer>
+      {bookmark.isFolder && (
+        <ItemCount sx={{ minHeight: '1.2em' }}>
+          {itemCount !== null ? `${itemCount} 项` : ' '}
+        </ItemCount>
+      )}
 
       <Menu
-        anchorEl={menuAnchorEl}
         open={isMenuOpen}
         onClose={handleMenuClose}
+        anchorReference="anchorPosition"
+        anchorPosition={menuAnchorPosition || undefined}
       >
         <MenuItem onClick={handleEdit}>
           <ListItemIcon>
@@ -465,4 +445,4 @@ const BookmarkGridItem: React.FC<BookmarkGridItemProps> = ({
   );
 };
 
-export default BookmarkGridItem; 
+export default BookmarkGridItem;
