@@ -686,11 +686,6 @@ class TaskExecutor {
     console.log(`执行选择性推送任务: ${task.id}`);
     const selectivePushAction = task.action as SelectivePushAction;
 
-    // 调试日志
-    console.log('选择性推送 action:', JSON.stringify(task.action, null, 2));
-    console.log('selections:', selectivePushAction.options.selections);
-    console.log('selections length:', selectivePushAction.options.selections?.length);
-
     try {
       // 1. 验证selections不为空
       if (!selectivePushAction.options.selections || selectivePushAction.options.selections.length === 0) {

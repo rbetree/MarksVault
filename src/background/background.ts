@@ -120,15 +120,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           },
         };
 
-        // 调试日志
-        console.log('taskWithSelections.action.options:', taskWithSelections.action.options);
-        console.log('taskWithSelections selections count:', (taskWithSelections.action as any).options.selections?.length);
-
         // 使用executeTaskWithData执行，直接传入包含selections的任务对象
         const result = await taskExecutor.executeTaskWithData(taskWithSelections);
 
         if (result.success) {
-          console.log('选择性推送成功');
           sendResponse({ success: true });
         } else {
           console.error('选择性推送失败:', result.error);

@@ -19,7 +19,8 @@ const TASKS_STORAGE_KEY = 'tasks_data';
  */
 class TaskService {
   private static instance: TaskService;
-  private cachedTasks: TaskStorage | null = null;
+  // 注意：不使用内存缓存，因为 Service Worker 和页面是不同的执行上下文
+  // 每次操作都直接从 chrome.storage 读取，确保数据一致性
 
   /**
    * 私有构造函数，防止直接实例化
@@ -54,17 +55,11 @@ class TaskService {
 
   /**
    * 获取所有任务
+   * 每次直接从 chrome.storage 读取，确保跨上下文数据一致
    * @returns 包含所有任务的TaskStorage对象
    */
   public async getTasks(): Promise<StorageResult> {
     try {
-      if (this.cachedTasks) {
-        return {
-          success: true,
-          data: this.cachedTasks
-        };
-      }
-
       const result = await storageService.getStorageData(TASKS_STORAGE_KEY);
 
       if (result.success) {
@@ -72,14 +67,11 @@ class TaskService {
         if (!result.data) {
           const defaultTaskStorage = createDefaultTaskStorage();
           await this.saveTasks(defaultTaskStorage);
-          this.cachedTasks = defaultTaskStorage;
           return {
             success: true,
             data: defaultTaskStorage
           };
         }
-
-        this.cachedTasks = result.data as TaskStorage;
         return result;
       }
 
@@ -100,10 +92,6 @@ class TaskService {
    */
   public async getTaskById(taskId: string): Promise<StorageResult> {
     try {
-      // 清除缓存，强制从 storage 重新加载
-      // 因为任务可能在其他上下文（popup, taskconfig 页面）中被创建/修改
-      this.cachedTasks = null;
-
       const result = await this.getTasks();
 
       if (!result.success) {
@@ -446,30 +434,14 @@ class TaskService {
    */
   private async saveTasks(taskStorage: TaskStorage): Promise<StorageResult> {
     try {
-      console.log(`开始保存任务数据，任务数量: ${Object.keys(taskStorage.tasks).length}, 时间戳: ${new Date().toISOString()}`);
-
-      // 更新缓存
-      this.cachedTasks = taskStorage;
-
-      // 保存到持久化存储
-      const startTime = performance.now();
+      // 直接保存到 chrome.storage，不使用内存缓存
       await storageService.setStorageData(TASKS_STORAGE_KEY, taskStorage);
-      const duration = performance.now() - startTime;
-
-      console.log(`完成任务数据保存，耗时: ${duration.toFixed(2)}ms`);
 
       return {
         success: true
       };
     } catch (error) {
-      // 详细记录错误信息，便于排查问题
       console.error('保存任务失败:', error);
-      console.error(`错误详情: ${error instanceof Error ? error.stack : '无堆栈信息'}`);
-      console.error(`触发错误时的任务数据概要: 任务数量=${taskStorage ? Object.keys(taskStorage.tasks).length : '未知'
-        }, 最后更新=${taskStorage ? new Date(taskStorage.lastUpdated).toISOString() : '未知'
-        }`);
-
-      this.cachedTasks = null; // 清除缓存，强制下次重新加载
       return {
         success: false,
         error: '保存任务失败: ' + (error instanceof Error ? error.message : String(error))
