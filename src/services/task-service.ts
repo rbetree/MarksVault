@@ -1,7 +1,7 @@
-import { 
-  Task, 
-  TaskStatus, 
-  TaskStorage, 
+import {
+  Task,
+  TaskStatus,
+  TaskStorage,
   TaskExecutionResult,
   createDefaultTask,
   createDefaultTaskStorage
@@ -20,12 +20,12 @@ const TASKS_STORAGE_KEY = 'tasks_data';
 class TaskService {
   private static instance: TaskService;
   private cachedTasks: TaskStorage | null = null;
-  
+
   /**
    * 私有构造函数，防止直接实例化
    */
-  private constructor() {}
-  
+  private constructor() { }
+
   /**
    * 获取TaskService实例
    * @returns TaskService单例
@@ -36,7 +36,7 @@ class TaskService {
     }
     return TaskService.instance;
   }
-  
+
   /**
    * 初始化任务存储
    * 在扩展启动时调用
@@ -51,7 +51,7 @@ class TaskService {
       console.error('初始化任务存储时发生错误:', error);
     }
   }
-  
+
   /**
    * 获取所有任务
    * @returns 包含所有任务的TaskStorage对象
@@ -64,9 +64,9 @@ class TaskService {
           data: this.cachedTasks
         };
       }
-      
+
       const result = await storageService.getStorageData(TASKS_STORAGE_KEY);
-      
+
       if (result.success) {
         // 如果storage中没有数据，则初始化一个默认的任务存储
         if (!result.data) {
@@ -78,11 +78,11 @@ class TaskService {
             data: defaultTaskStorage
           };
         }
-        
+
         this.cachedTasks = result.data as TaskStorage;
         return result;
       }
-      
+
       return result;
     } catch (error) {
       console.error('获取任务失败:', error);
@@ -92,7 +92,7 @@ class TaskService {
       };
     }
   }
-  
+
   /**
    * 根据ID获取特定任务
    * @param taskId 任务ID
@@ -100,22 +100,26 @@ class TaskService {
    */
   public async getTaskById(taskId: string): Promise<StorageResult> {
     try {
+      // 清除缓存，强制从 storage 重新加载
+      // 因为任务可能在其他上下文（popup, taskconfig 页面）中被创建/修改
+      this.cachedTasks = null;
+
       const result = await this.getTasks();
-      
+
       if (!result.success) {
         return result;
       }
-      
+
       const taskStorage = result.data as TaskStorage;
       const task = taskStorage.tasks[taskId];
-      
+
       if (!task) {
         return {
           success: false,
           error: `未找到ID为 ${taskId} 的任务`
         };
       }
-      
+
       return {
         success: true,
         data: task
@@ -128,7 +132,7 @@ class TaskService {
       };
     }
   }
-  
+
   /**
    * 根据状态获取任务列表
    * @param status 任务状态，不提供则返回所有任务
@@ -137,13 +141,13 @@ class TaskService {
   public async getTasksByStatus(status?: TaskStatus): Promise<StorageResult> {
     try {
       const result = await this.getTasks();
-      
+
       if (!result.success) {
         return result;
       }
-      
+
       const taskStorage = result.data as TaskStorage;
-      
+
       if (!status) {
         // 返回所有任务的数组
         return {
@@ -151,12 +155,12 @@ class TaskService {
           data: Object.values(taskStorage.tasks)
         };
       }
-      
+
       // 根据状态过滤任务
       const filteredTasks = Object.values(taskStorage.tasks).filter(
         task => task.status === status
       );
-      
+
       return {
         success: true,
         data: filteredTasks
@@ -169,7 +173,7 @@ class TaskService {
       };
     }
   }
-  
+
   /**
    * 创建新任务
    * @param taskData 可选的任务数据，不提供则创建默认任务
@@ -178,27 +182,27 @@ class TaskService {
   public async createTask(taskData?: Partial<Task>): Promise<StorageResult> {
     try {
       const result = await this.getTasks();
-      
+
       if (!result.success) {
         return result;
       }
-      
+
       const taskStorage = result.data as TaskStorage;
-      const newTask = taskData 
+      const newTask = taskData
         ? { ...createDefaultTask(), ...taskData, id: `task_${Date.now()}` }
         : createDefaultTask();
-      
+
       // 更新存储
       taskStorage.tasks[newTask.id] = newTask;
       taskStorage.lastUpdated = Date.now();
-      
+
       // 保存到存储
       const saveResult = await this.saveTasks(taskStorage);
-      
+
       if (!saveResult.success) {
         return saveResult;
       }
-      
+
       return {
         success: true,
         data: newTask
@@ -211,7 +215,7 @@ class TaskService {
       };
     }
   }
-  
+
   /**
    * 更新现有任务
    * @param taskId 任务ID
@@ -221,13 +225,13 @@ class TaskService {
   public async updateTask(taskId: string, taskData: Partial<Task>): Promise<StorageResult> {
     try {
       const result = await this.getTasks();
-      
+
       if (!result.success) {
         return result;
       }
-      
+
       const taskStorage = result.data as TaskStorage;
-      
+
       if (!taskStorage.tasks[taskId]) {
         return {
           success: false,
@@ -237,23 +241,23 @@ class TaskService {
 
       // 记录旧状态，用于检测状态变化
       const oldStatus = taskStorage.tasks[taskId].status;
-      
+
       // 更新任务数据
       Object.assign(taskStorage.tasks[taskId], taskData);
-      
+
       // 确保ID不变，更新更新时间
       taskStorage.tasks[taskId].id = taskId;
       taskStorage.tasks[taskId].updatedAt = Date.now();
-      
+
       taskStorage.lastUpdated = Date.now();
-      
+
       // 保存到存储
       const saveResult = await this.saveTasks(taskStorage);
-      
+
       if (!saveResult.success) {
         return saveResult;
       }
-      
+
       return {
         success: true,
         data: taskStorage.tasks[taskId]
@@ -266,7 +270,7 @@ class TaskService {
       };
     }
   }
-  
+
   /**
    * 删除任务
    * @param taskId 任务ID
@@ -275,31 +279,31 @@ class TaskService {
   public async deleteTask(taskId: string): Promise<StorageResult> {
     try {
       const result = await this.getTasks();
-      
+
       if (!result.success) {
         return result;
       }
-      
+
       const taskStorage = result.data as TaskStorage;
-      
+
       if (!taskStorage.tasks[taskId]) {
         return {
           success: false,
           error: `未找到ID为 ${taskId} 的任务`
         };
       }
-      
+
       // 删除任务
       delete taskStorage.tasks[taskId];
       taskStorage.lastUpdated = Date.now();
-      
+
       // 保存到存储
       const saveResult = await this.saveTasks(taskStorage);
-      
+
       if (!saveResult.success) {
         return saveResult;
       }
-      
+
       return {
         success: true
       };
@@ -311,7 +315,7 @@ class TaskService {
       };
     }
   }
-  
+
   /**
    * 启用任务
    * @param taskId 任务ID
@@ -320,7 +324,7 @@ class TaskService {
   public async enableTask(taskId: string): Promise<StorageResult> {
     return await this.setTaskStatus(taskId, TaskStatus.ENABLED);
   }
-  
+
   /**
    * 禁用任务
    * @param taskId 任务ID
@@ -329,7 +333,7 @@ class TaskService {
   public async disableTask(taskId: string): Promise<StorageResult> {
     return await this.setTaskStatus(taskId, TaskStatus.DISABLED);
   }
-  
+
   /**
    * 设置任务状态
    * @param taskId 任务ID
@@ -339,7 +343,7 @@ class TaskService {
   public async setTaskStatus(taskId: string, status: TaskStatus): Promise<StorageResult> {
     return await this.updateTask(taskId, { status });
   }
-  
+
   /**
    * 更新任务执行历史
    * @param taskId 任务ID
@@ -347,28 +351,28 @@ class TaskService {
    * @returns 操作结果
    */
   public async updateTaskExecutionHistory(
-    taskId: string, 
+    taskId: string,
     executionResult: TaskExecutionResult
   ): Promise<StorageResult> {
     try {
       const result = await this.getTaskById(taskId);
-      
+
       if (!result.success) {
         return result;
       }
-      
+
       const task = result.data as Task;
-      
+
       // 限制执行历史记录条数，保留最近的20条
       const MAX_HISTORY_ITEMS = 20;
       const executions = [
         executionResult,
         ...task.history.executions.slice(0, MAX_HISTORY_ITEMS - 1)
       ];
-      
+
       // 确定任务状态
       let newStatus = task.status;
-      
+
       if (executionResult.success) {
         // 成功执行的情况，回到启用状态
         newStatus = TaskStatus.ENABLED;
@@ -376,19 +380,19 @@ class TaskService {
       } else {
         // 失败执行的处理
         newStatus = TaskStatus.FAILED;
-        
+
         // 特殊处理：检查是否为GitHub凭据相关错误
         const isCredentialError = executionResult.error && (
-          executionResult.error.includes('GitHub凭据') || 
+          executionResult.error.includes('GitHub凭据') ||
           executionResult.error.includes('未找到GitHub凭据') ||
           executionResult.error.includes('凭据无效或已过期')
         );
-        
+
         if (isCredentialError) {
           console.warn(`任务 ${taskId} 因GitHub凭据问题失败，需要用户在同步页面重新授权`);
         }
       }
-      
+
       // 更新任务历史
       return this.updateTask(taskId, {
         history: {
@@ -405,7 +409,7 @@ class TaskService {
       };
     }
   }
-  
+
   /**
    * 清除所有任务
    * 主要用于测试和重置
@@ -414,14 +418,14 @@ class TaskService {
   public async clearAllTasks(): Promise<StorageResult> {
     try {
       const emptyTaskStorage = createDefaultTaskStorage();
-      
+
       // 保存到存储
       const saveResult = await this.saveTasks(emptyTaskStorage);
-      
+
       if (!saveResult.success) {
         return saveResult;
       }
-      
+
       return {
         success: true
       };
@@ -433,7 +437,7 @@ class TaskService {
       };
     }
   }
-  
+
   /**
    * 保存任务数据到存储
    * @param taskStorage 任务存储对象
@@ -443,17 +447,17 @@ class TaskService {
   private async saveTasks(taskStorage: TaskStorage): Promise<StorageResult> {
     try {
       console.log(`开始保存任务数据，任务数量: ${Object.keys(taskStorage.tasks).length}, 时间戳: ${new Date().toISOString()}`);
-      
+
       // 更新缓存
       this.cachedTasks = taskStorage;
-      
+
       // 保存到持久化存储
       const startTime = performance.now();
       await storageService.setStorageData(TASKS_STORAGE_KEY, taskStorage);
       const duration = performance.now() - startTime;
-      
+
       console.log(`完成任务数据保存，耗时: ${duration.toFixed(2)}ms`);
-      
+
       return {
         success: true
       };
@@ -461,12 +465,10 @@ class TaskService {
       // 详细记录错误信息，便于排查问题
       console.error('保存任务失败:', error);
       console.error(`错误详情: ${error instanceof Error ? error.stack : '无堆栈信息'}`);
-      console.error(`触发错误时的任务数据概要: 任务数量=${
-        taskStorage ? Object.keys(taskStorage.tasks).length : '未知'
-      }, 最后更新=${
-        taskStorage ? new Date(taskStorage.lastUpdated).toISOString() : '未知'
-      }`);
-      
+      console.error(`触发错误时的任务数据概要: 任务数量=${taskStorage ? Object.keys(taskStorage.tasks).length : '未知'
+        }, 最后更新=${taskStorage ? new Date(taskStorage.lastUpdated).toISOString() : '未知'
+        }`);
+
       this.cachedTasks = null; // 清除缓存，强制下次重新加载
       return {
         success: false,

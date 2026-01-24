@@ -124,6 +124,7 @@ const TaskFormContainer: React.FC<TaskFormContainerProps> = ({
             <TaskTriggerForm
               trigger={taskData.trigger}
               onChange={handleTriggerChange}
+              currentActionType={taskData.action.type}
             />
           </Paper>
 

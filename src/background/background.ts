@@ -11,19 +11,19 @@ import { createDefaultTaskStorage, EventType } from '../types/task';
 async function initializeServices() {
   try {
     console.log('正在初始化 MarksVault 服务...');
-    
+
     // 初始化任务服务
     await taskService.init();
     console.log('任务服务初始化完成');
-    
+
     // 初始化任务执行引擎
     await taskExecutor.init();
     console.log('任务执行引擎初始化完成');
-    
+
     // 初始化触发器服务
     await triggerService.init();
     console.log('触发器服务初始化完成');
-    
+
     console.log('MarksVault 服务初始化完成');
   } catch (error) {
     console.error('服务初始化失败:', error);
@@ -49,7 +49,7 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   } else if (details.reason === 'update') {
     console.log('MarksVault 扩展已更新到版本 ' + chrome.runtime.getManifest().version);
   }
-  
+
   // 使用统一的服务初始化函数
   await initializeServices();
 });
@@ -57,10 +57,10 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 // 监听浏览器启动事件
 chrome.runtime.onStartup.addListener(async () => {
   console.log('浏览器启动，初始化 MarksVault 服务...');
-  
+
   // 使用统一的服务初始化函数
   await initializeServices();
-  
+
   // 触发浏览器启动事件
   await triggerService.handleEventTrigger(EventType.BROWSER_STARTUP);
 });
@@ -93,21 +93,21 @@ chrome.bookmarks.onMoved.addListener(async (id, moveInfo) => {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'EXECUTE_SELECTIVE_PUSH') {
     const { taskId, selections } = message.payload;
-    
+
     // 异步执行选择性推送
     (async () => {
       try {
         console.log('收到选择性推送请求:', { taskId, selectionsCount: selections.length });
-        
+
         // 加载任务数据
         const taskResult = await taskService.getTaskById(taskId);
         if (!taskResult.success || !taskResult.data) {
           sendResponse({ success: false, error: '任务不存在' });
           return;
         }
-        
+
         const task = taskResult.data;
-        
+
         // 创建带有selections的临时任务对象
         const taskWithSelections = {
           ...task,
@@ -119,10 +119,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             },
           },
         };
-        
-        // 使用executeTask执行（它会调用内部的executeSelectivePush）
-        const result = await taskExecutor.executeTask(taskWithSelections.id);
-        
+
+        // 调试日志
+        console.log('taskWithSelections.action.options:', taskWithSelections.action.options);
+        console.log('taskWithSelections selections count:', (taskWithSelections.action as any).options.selections?.length);
+
+        // 使用executeTaskWithData执行，直接传入包含selections的任务对象
+        const result = await taskExecutor.executeTaskWithData(taskWithSelections);
+
         if (result.success) {
           console.log('选择性推送成功');
           sendResponse({ success: true });
@@ -138,10 +142,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         });
       }
     })();
-    
+
     // 返回true表示将异步发送响应
     return true;
   }
 });
 
-export {};
+export { };

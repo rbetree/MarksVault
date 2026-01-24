@@ -46,7 +46,7 @@ class TaskExecutor {
   private static instance: TaskExecutor;
   private config: TaskExecutionConfig;
   private executingTasks: Set<string> = new Set(); // 记录正在执行的任务ID
-  
+
   /**
    * 私有构造函数，防止直接实例化
    */
@@ -54,7 +54,7 @@ class TaskExecutor {
     this.config = { ...DEFAULT_CONFIG };
     console.log('任务执行引擎已初始化');
   }
-  
+
   /**
    * 获取TaskExecutor实例
    * @returns TaskExecutor单例
@@ -74,7 +74,7 @@ class TaskExecutor {
     this.config = { ...this.config, ...config };
     console.log('任务执行引擎配置已更新:', this.config);
   }
-  
+
   /**
    * 初始化任务执行引擎
    */
@@ -86,7 +86,7 @@ class TaskExecutor {
       if (runningTasksResult.success && runningTasksResult.data.length > 0) {
         const runningTasks = runningTasksResult.data as Task[];
         console.log(`发现 ${runningTasks.length} 个处于RUNNING状态的任务，正在恢复状态...`);
-        
+
         for (const task of runningTasks) {
           // 创建失败的执行记录
           const executionResult: TaskExecutionResult = {
@@ -95,21 +95,21 @@ class TaskExecutor {
             error: '任务执行被中断(可能是由于浏览器关闭或扩展重新加载)',
             details: '自动恢复状态为FAILED'
           };
-          
+
           // 更新任务历史记录
           await taskService.updateTaskExecutionHistory(task.id, executionResult);
-          
+
           // 将任务状态设置为FAILED
           await taskService.setTaskStatus(task.id, TaskStatus.FAILED);
         }
       }
-      
+
       console.log('任务执行引擎初始化完成');
     } catch (error) {
       console.error('任务执行引擎初始化失败:', error);
     }
   }
-  
+
   /**
    * 执行任务
    * @param taskId 要执行的任务ID
@@ -123,53 +123,53 @@ class TaskExecutor {
       timestamp: Date.now(),
       details: ''
     };
-    
+
     // 检查任务是否已在执行中
     if (this.executingTasks.has(taskId)) {
       console.warn(`任务 ${taskId} 正在执行中，跳过...`);
       executionResult.error = '任务正在执行中';
       return executionResult;
     }
-    
+
     // 将任务添加到执行中集合
     this.executingTasks.add(taskId);
-    
+
     const executionStartTime = new Date();
     console.log(`[${executionStartTime.toLocaleString()}] 开始执行任务: ${taskId}${retryCount > 0 ? ` (重试 ${retryCount}/${this.config.maxRetries})` : ''}`);
-    
+
     try {
       // 获取任务详情
       const taskResult = await taskService.getTaskById(taskId);
-      
+
       // 如果找不到任务，返回失败
       if (!taskResult.success) {
         executionResult.error = `获取任务失败: ${taskResult.error}`;
         executionResult.timestamp = Date.now();
         return executionResult;
       }
-      
+
       const task = taskResult.data as Task;
-      
+
       // 任务执行前更新任务状态为RUNNING
       await taskService.setTaskStatus(taskId, TaskStatus.RUNNING);
-      
+
       // 开始计时
       const startTime = Date.now();
-      
+
       // 设置初始执行结果
       executionResult = {
         success: false,
         timestamp: startTime,
         details: ''
       };
-      
+
       // 创建超时Promise
       const timeoutPromise = new Promise<TaskExecutionResult>((_, reject) => {
         setTimeout(() => {
           reject(new Error(`任务执行超时(${this.config.timeout / 1000}秒)`));
         }, this.config.timeout);
       });
-      
+
       // 创建执行Promise
       const executePromise = (async () => {
         // 根据任务类型执行不同的操作
@@ -186,21 +186,21 @@ class TaskExecutor {
             throw new Error(`不支持的任务类型: ${(task.action as any).type}`);
         }
       })();
-      
+
       // 竞争模式，哪个先完成就用哪个结果
       executionResult = await Promise.race([executePromise, timeoutPromise]);
-      
+
       // 添加执行持续时间
       executionResult.duration = Date.now() - startTime;
-      
+
       // 更新任务执行历史记录
       console.log(`更新任务 ${taskId} 执行历史记录...`);
       await taskService.updateTaskExecutionHistory(taskId, executionResult);
-      
+
       // 恢复任务状态为启用
       console.log(`恢复任务 ${taskId} 状态为 ENABLED`);
       await taskService.setTaskStatus(taskId, TaskStatus.ENABLED);
-      
+
       const executionEndTime = new Date();
       const executionTimeMessage = `开始: ${executionStartTime.toLocaleString()}, 结束: ${executionEndTime.toLocaleString()}, 耗时: ${Math.round((executionEndTime.getTime() - executionStartTime.getTime()) / 1000)}秒`;
       console.log(`任务 ${taskId} 执行完成, 结果: ${executionResult.success ? '成功' : '失败'}, ${executionTimeMessage}`);
@@ -209,38 +209,38 @@ class TaskExecutor {
       // 处理错误，判断是否需要重试
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.error(`任务 ${taskId} 执行出错:`, errorMessage);
-      
+
       // 确保startTime变量存在（在try块中可能未定义）
       const startTime = executionResult.timestamp || Date.now();
-      
+
       // 如果错误是由于超时或可重试的原因，尝试重试
       if (retryCount < this.config.maxRetries && this.isRetryableError(error)) {
-        console.log(`将在 ${this.config.retryDelay/1000} 秒后重试任务 ${taskId}`);
-        
+        console.log(`将在 ${this.config.retryDelay / 1000} 秒后重试任务 ${taskId}`);
+
         // 从执行中任务集合中移除
         this.executingTasks.delete(taskId);
-        
+
         // 等待重试延迟
         await new Promise(resolve => setTimeout(resolve, this.config.retryDelay));
-        
+
         // 重试任务
         return this.executeTask(taskId, retryCount + 1);
       }
-      
+
       // 记录错误信息
       executionResult.success = false;
       executionResult.error = errorMessage;
       executionResult.details = `执行失败${retryCount > 0 ? `，已重试 ${retryCount} 次` : ''}`;
       executionResult.duration = Date.now() - startTime;
-      
+
       // 更新任务历史记录
       console.log(`更新任务 ${taskId} 执行历史(失败)...`);
       await taskService.updateTaskExecutionHistory(taskId, executionResult);
-      
+
       // 将任务状态设置为失败
       console.log(`更新任务 ${taskId} 状态为 FAILED`);
       await taskService.setTaskStatus(taskId, TaskStatus.FAILED);
-      
+
       const executionEndTime = new Date();
       const executionTimeMessage = `开始: ${executionStartTime.toLocaleString()}, 结束: ${executionEndTime.toLocaleString()}, 耗时: ${Math.round((executionEndTime.getTime() - executionStartTime.getTime()) / 1000)}秒`;
       console.error(`任务 ${taskId} 执行失败: ${errorMessage}, ${executionTimeMessage}`);
@@ -249,10 +249,134 @@ class TaskExecutor {
       this.executingTasks.delete(taskId);
       console.log(`任务 ${taskId} 已从执行队列移除`);
     }
-    
+
     return executionResult;
   }
-  
+
+  /**
+   * 使用提供的任务数据直接执行任务（不从存储重新加载）
+   * 主要用于选择性推送等需要运行时数据的任务
+   * @param task 完整的任务对象（包含运行时数据如 selections）
+   * @param retryCount 当前重试次数，默认为0
+   * @returns 执行结果
+   */
+  public async executeTaskWithData(task: Task, retryCount: number = 0): Promise<TaskExecutionResult> {
+    const taskId = task.id;
+
+    // 创建初始执行结果对象
+    let executionResult: TaskExecutionResult = {
+      success: false,
+      timestamp: Date.now(),
+      details: ''
+    };
+
+    // 检查任务是否已在执行中
+    if (this.executingTasks.has(taskId)) {
+      console.warn(`任务 ${taskId} 正在执行中，跳过...`);
+      executionResult.error = '任务正在执行中';
+      return executionResult;
+    }
+
+    // 将任务添加到执行中集合
+    this.executingTasks.add(taskId);
+
+    const executionStartTime = new Date();
+    console.log(`[${executionStartTime.toLocaleString()}] 开始执行任务(带数据): ${taskId}${retryCount > 0 ? ` (重试 ${retryCount}/${this.config.maxRetries})` : ''}`);
+
+    try {
+      // 任务执行前更新任务状态为RUNNING
+      await taskService.setTaskStatus(taskId, TaskStatus.RUNNING);
+
+      // 开始计时
+      const startTime = Date.now();
+
+      // 设置初始执行结果
+      executionResult = {
+        success: false,
+        timestamp: startTime,
+        details: ''
+      };
+
+      // 创建超时Promise
+      const timeoutPromise = new Promise<TaskExecutionResult>((_, reject) => {
+        setTimeout(() => {
+          reject(new Error(`任务执行超时(${this.config.timeout / 1000}秒)`));
+        }, this.config.timeout);
+      });
+
+      // 创建执行Promise - 直接使用传入的 task 对象
+      const executePromise = (async () => {
+        switch (task.action.type) {
+          case ActionType.BACKUP:
+            return await this.executeBackupAction(task);
+          case ActionType.ORGANIZE:
+            return await this.executeOrganizeAction(task);
+          case ActionType.PUSH:
+            return await this.executePushAction(task);
+          case ActionType.SELECTIVE_PUSH:
+            return await this.executeSelectivePush(task);
+          default:
+            throw new Error(`不支持的任务类型: ${(task.action as any).type}`);
+        }
+      })();
+
+      // 竞争模式
+      executionResult = await Promise.race([executePromise, timeoutPromise]);
+
+      // 添加执行持续时间
+      executionResult.duration = Date.now() - startTime;
+
+      // 更新任务执行历史记录
+      console.log(`更新任务 ${taskId} 执行历史记录...`);
+      await taskService.updateTaskExecutionHistory(taskId, executionResult);
+
+      // 恢复任务状态为启用
+      console.log(`恢复任务 ${taskId} 状态为 ENABLED`);
+      await taskService.setTaskStatus(taskId, TaskStatus.ENABLED);
+
+      const executionEndTime = new Date();
+      const executionTimeMessage = `开始: ${executionStartTime.toLocaleString()}, 结束: ${executionEndTime.toLocaleString()}, 耗时: ${Math.round((executionEndTime.getTime() - executionStartTime.getTime()) / 1000)}秒`;
+      console.log(`任务 ${taskId} 执行完成, 结果: ${executionResult.success ? '成功' : '失败'}, ${executionTimeMessage}`);
+      return executionResult;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error(`任务 ${taskId} 执行出错:`, errorMessage);
+
+      const startTime = executionResult.timestamp || Date.now();
+
+      // 如果错误可重试，尝试重试
+      if (retryCount < this.config.maxRetries && this.isRetryableError(error)) {
+        console.log(`将在 ${this.config.retryDelay / 1000} 秒后重试任务 ${taskId}`);
+        this.executingTasks.delete(taskId);
+        await new Promise(resolve => setTimeout(resolve, this.config.retryDelay));
+        return this.executeTaskWithData(task, retryCount + 1);
+      }
+
+      // 记录错误信息
+      executionResult.success = false;
+      executionResult.error = errorMessage;
+      executionResult.details = `执行失败${retryCount > 0 ? `，已重试 ${retryCount} 次` : ''}`;
+      executionResult.duration = Date.now() - startTime;
+
+      // 更新任务历史记录
+      console.log(`更新任务 ${taskId} 执行历史(失败)...`);
+      await taskService.updateTaskExecutionHistory(taskId, executionResult);
+
+      // 将任务状态设置为失败
+      console.log(`更新任务 ${taskId} 状态为 FAILED`);
+      await taskService.setTaskStatus(taskId, TaskStatus.FAILED);
+
+      const executionEndTime = new Date();
+      const executionTimeMessage = `开始: ${executionStartTime.toLocaleString()}, 结束: ${executionEndTime.toLocaleString()}, 耗时: ${Math.round((executionEndTime.getTime() - executionStartTime.getTime()) / 1000)}秒`;
+      console.error(`任务 ${taskId} 执行失败: ${errorMessage}, ${executionTimeMessage}`);
+    } finally {
+      this.executingTasks.delete(taskId);
+      console.log(`任务 ${taskId} 已从执行队列移除`);
+    }
+
+    return executionResult;
+  }
+
   /**
    * 检查错误是否可重试
    * @param error 错误对象
@@ -260,7 +384,7 @@ class TaskExecutor {
    */
   private isRetryableError(error: any): boolean {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    
+
     // 不可重试的错误类型
     const nonRetryableErrors = [
       '任务当前未启用',
@@ -268,14 +392,14 @@ class TaskExecutor {
       '不支持的任务类型',
       '未找到GitHub凭据'
     ];
-    
+
     // 检查是否包含不可重试的错误信息
     for (const pattern of nonRetryableErrors) {
       if (errorMessage.includes(pattern)) {
         return false;
       }
     }
-    
+
     // 可重试的错误通常是网络或临时性错误
     const retryableErrors = [
       'timeout',
@@ -287,18 +411,18 @@ class TaskExecutor {
       'busy',
       'overloaded'
     ];
-    
+
     // 检查是否包含可重试的错误信息
     for (const pattern of retryableErrors) {
       if (errorMessage.toLowerCase().includes(pattern)) {
         return true;
       }
     }
-    
+
     // 默认情况下，认为大多数错误都是不可重试的
     return false;
   }
-  
+
   /**
    * 执行备份操作
    * @param task 任务对象
@@ -307,11 +431,11 @@ class TaskExecutor {
   private async executeBackupAction(task: Task): Promise<TaskExecutionResult> {
     console.log(`执行备份任务: ${task.id}, 操作类型: ${(task.action as BackupAction).operation || 'backup'}`);
     const backupAction = task.action as BackupAction;
-    
+
     try {
       // 获取GitHub凭据
       const credentialsResult = await storageService.getGitHubCredentials();
-      
+
       if (!credentialsResult.success || !credentialsResult.data) {
         console.error(`任务${task.id}执行失败: 未找到GitHub凭据`);
         return {
@@ -321,9 +445,9 @@ class TaskExecutor {
           details: '请打开扩展的同步页面，完成GitHub账号授权后再执行此任务'
         };
       }
-      
+
       const credentials = credentialsResult.data;
-      
+
       // 获取GitHub用户名并验证凭据有效性
       let username = 'user'; // 默认占位符
       try {
@@ -340,7 +464,7 @@ class TaskExecutor {
           details: '请重新登录GitHub账号，更新授权信息后再执行此任务'
         };
       }
-      
+
       // 根据操作类型执行不同的操作
       if (backupAction.operation === 'backup' || !backupAction.operation) {
         // 执行备份操作 (上传)
@@ -349,7 +473,7 @@ class TaskExecutor {
           credentials,
           username
         );
-        
+
         if (!backupResult.success) {
           console.error(`GitHub备份失败:`, backupResult.error);
           return {
@@ -359,30 +483,29 @@ class TaskExecutor {
             details: '备份过程中发生错误，请检查网络连接和GitHub仓库权限'
           };
         }
-        
+
         console.log(`备份成功完成，书签数:`, backupResult.data?.bookmarksCount);
         return {
           success: true,
           timestamp: Date.now(),
-          details: `成功备份书签到GitHub: ${backupResult.data?.fileUrl || '无文件URL'}${
-            backupResult.data?.bookmarksCount ? `，包含 ${backupResult.data.bookmarksCount} 个书签` : ''
-          }`
+          details: `成功备份书签到GitHub: ${backupResult.data?.fileUrl || '无文件URL'}${backupResult.data?.bookmarksCount ? `，包含 ${backupResult.data.bookmarksCount} 个书签` : ''
+            }`
         };
       } else if (backupAction.operation === 'restore') {
         // 执行恢复操作 (下载)
         const useTimestampedFile = !!backupAction.options?.backupFilePath;
         const timestampedFilePath = backupAction.options?.backupFilePath;
-        
-        console.log(`开始执行恢复操作，从GitHub下载书签`, 
+
+        console.log(`开始执行恢复操作，从GitHub下载书签`,
           useTimestampedFile ? `，使用指定文件: ${timestampedFilePath}` : '，使用最新文件');
-          
+
         const restoreResult = await backupService.restoreFromGitHub(
           credentials,
           username,
           useTimestampedFile,
           timestampedFilePath
         );
-        
+
         if (!restoreResult.success) {
           console.error(`从GitHub恢复失败:`, restoreResult.error);
           return {
@@ -392,14 +515,13 @@ class TaskExecutor {
             details: '恢复过程中发生错误，请检查备份文件是否存在和有效'
           };
         }
-        
+
         console.log(`恢复成功完成，书签数:`, restoreResult.data?.bookmarksCount);
         return {
           success: true,
           timestamp: Date.now(),
-          details: `成功从GitHub恢复书签${
-            restoreResult.data?.bookmarksCount ? `，恢复了 ${restoreResult.data.bookmarksCount} 个书签` : ''
-          }`
+          details: `成功从GitHub恢复书签${restoreResult.data?.bookmarksCount ? `，恢复了 ${restoreResult.data.bookmarksCount} 个书签` : ''
+            }`
         };
       } else {
         console.error(`不支持的备份操作: ${backupAction.operation}`);
@@ -413,7 +535,7 @@ class TaskExecutor {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.error(`备份/恢复任务执行异常:`, errorMessage);
-      
+
       return {
         success: false,
         timestamp: Date.now(),
@@ -422,7 +544,7 @@ class TaskExecutor {
       };
     }
   }
-  
+
   /**
    * 执行整理操作
    * @param task 任务对象
@@ -431,22 +553,22 @@ class TaskExecutor {
   private async executeOrganizeAction(task: Task): Promise<TaskExecutionResult> {
     console.log(`执行整理任务: ${task.id}`);
     const organizeAction = task.action as OrganizeAction;
-    
+
     try {
       // 验证操作数组是否有效
       if (!organizeAction.operations || !Array.isArray(organizeAction.operations) || organizeAction.operations.length === 0) {
         throw new Error('整理操作数组为空或无效');
       }
-      
+
       // 使用organizeService执行书签整理操作
       const results = await organizeService.organizeBookmarks(organizeAction.operations);
-      
+
       // 汇总处理结果
       let successCount = 0;
       let failureCount = 0;
       let processedBookmarksCount = 0;
       let details: string[] = [];
-      
+
       results.forEach(result => {
         if (result.success) {
           successCount++;
@@ -456,7 +578,7 @@ class TaskExecutor {
         processedBookmarksCount += result.processedCount;
         details.push(result.details);
       });
-      
+
       // 生成总结果
       const allOperationsSucceeded = failureCount === 0;
       return {
@@ -473,7 +595,7 @@ class TaskExecutor {
       };
     }
   }
-  
+
   /**
    * 执行推送书签操作
    * @param task 任务对象
@@ -482,11 +604,11 @@ class TaskExecutor {
   private async executePushAction(task: Task): Promise<TaskExecutionResult> {
     console.log(`执行推送书签任务: ${task.id}`);
     const pushAction = task.action as PushAction;
-    
+
     try {
       // 获取GitHub凭据
       const credentialsResult = await storageService.getGitHubCredentials();
-      
+
       if (!credentialsResult.success || !credentialsResult.data) {
         console.error(`任务${task.id}执行失败: 未找到GitHub凭据`);
         return {
@@ -496,9 +618,9 @@ class TaskExecutor {
           details: '请打开扩展的同步页面，完成GitHub账号授权后再执行此任务'
         };
       }
-      
+
       const credentials = credentialsResult.data;
-      
+
       // 获取GitHub用户名并验证凭据有效性
       let username = 'user'; // 默认占位符
       try {
@@ -515,7 +637,7 @@ class TaskExecutor {
           details: '请重新登录GitHub账号，更新授权信息后再执行此任务'
         };
       }
-      
+
       // 执行推送书签操作
       console.log(`开始执行推送书签操作，目标仓库: ${pushAction.options.repoName}/${pushAction.options.folderPath}...`);
       const pushResult = await backupService.pushBookmarksToGitHub(
@@ -525,7 +647,7 @@ class TaskExecutor {
         pushAction.options.folderPath,
         pushAction.options.commitMessage
       );
-      
+
       if (!pushResult.success) {
         console.error(`推送书签失败:`, pushResult.error);
         return {
@@ -535,7 +657,7 @@ class TaskExecutor {
           details: '推送过程中发生错误，请检查网络连接和GitHub仓库权限'
         };
       }
-      
+
       console.log(`推送书签成功完成，文件URL:`, pushResult.data?.fileUrl);
       return {
         success: true,
@@ -545,7 +667,7 @@ class TaskExecutor {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.error(`推送书签任务执行异常:`, errorMessage);
-      
+
       return {
         success: false,
         timestamp: Date.now(),
@@ -563,7 +685,12 @@ class TaskExecutor {
   private async executeSelectivePush(task: Task): Promise<TaskExecutionResult> {
     console.log(`执行选择性推送任务: ${task.id}`);
     const selectivePushAction = task.action as SelectivePushAction;
-    
+
+    // 调试日志
+    console.log('选择性推送 action:', JSON.stringify(task.action, null, 2));
+    console.log('selections:', selectivePushAction.options.selections);
+    console.log('selections length:', selectivePushAction.options.selections?.length);
+
     try {
       // 1. 验证selections不为空
       if (!selectivePushAction.options.selections || selectivePushAction.options.selections.length === 0) {
@@ -574,10 +701,10 @@ class TaskExecutor {
           details: '请在任务配置中选择至少一个书签或文件夹'
         };
       }
-      
+
       // 2. 获取GitHub凭据
       const credentialsResult = await storageService.getGitHubCredentials();
-      
+
       if (!credentialsResult.success || !credentialsResult.data) {
         console.error(`任务${task.id}执行失败: 未找到GitHub凭据`);
         return {
@@ -587,9 +714,9 @@ class TaskExecutor {
           details: '请打开扩展的同步页面，完成GitHub账号授权后再执行此任务'
         };
       }
-      
+
       const credentials = credentialsResult.data;
-      
+
       // 3. 验证GitHub凭据
       let username = 'user'; // 默认占位符
       try {
@@ -606,20 +733,20 @@ class TaskExecutor {
           details: '请重新登录GitHub账号，更新授权信息后再执行此任务'
         };
       }
-      
+
       // 4. 使用BackupService生成HTML
       console.log(`生成选择性书签HTML，选中数量: ${selectivePushAction.options.selections.length}...`);
       const html = await backupService.generateSelectiveHtml(selectivePushAction.options.selections);
-      
+
       // 5. 生成文件名(使用时间戳)
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
       const filename = `selective-bookmarks-${timestamp}.html`;
-      
+
       // 6. 使用GitHubService上传
       const folderPath = selectivePushAction.options.folderPath || '';
       const filePath = folderPath ? `${folderPath}/${filename}` : filename;
       const commitMessage = selectivePushAction.options.commitMessage || '选择性推送书签';
-      
+
       console.log(`开始上传到GitHub，目标路径: ${filePath}...`);
       const uploadResult = await githubService.createOrUpdateFile(
         credentials,
@@ -629,7 +756,7 @@ class TaskExecutor {
         html,
         commitMessage
       );
-      
+
       console.log(`选择性推送完成:`, filePath);
       return {
         success: true,
@@ -639,7 +766,7 @@ class TaskExecutor {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.error(`选择性推送任务执行异常:`, errorMessage);
-      
+
       return {
         success: false,
         timestamp: Date.now(),
@@ -656,7 +783,7 @@ class TaskExecutor {
    */
   private async executeTaskAction(task: Task): Promise<TaskExecutionResult> {
     console.log(`执行任务操作: ${task.id}, 类型: ${task.action.type}`);
-    
+
     try {
       switch (task.action.type) {
         case ActionType.BACKUP:
