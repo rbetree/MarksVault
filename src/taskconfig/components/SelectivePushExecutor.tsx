@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
+import IconButton from '@mui/material/IconButton';
 import Typography from '@mui/material/Typography';
 import Paper from '@mui/material/Paper';
 import CircularProgress from '@mui/material/CircularProgress';
 import Alert from '@mui/material/Alert';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import BookmarkSelector from '../../popup/components/shared/BookmarkSelector';
 import { BookmarkSelection, Task, SelectivePushAction } from '../../types/task';
 
@@ -81,13 +83,23 @@ const SelectivePushExecutor: React.FC<SelectivePushExecutorProps> = ({
       >
         {/* 标题 */}
         <Box sx={{ mb: 3 }}>
-          <Typography variant="h5" sx={{ fontWeight: 600, mb: 1 }}>
-            选择要推送的书签
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+            <IconButton
+              onClick={onCancel}
+              size="small"
+              sx={{ ml: -1 }}
+              title="返回"
+            >
+              <ArrowBackIcon />
+            </IconButton>
+            <Typography variant="h5" sx={{ fontWeight: 600 }}>
+              选择要推送的书签
+            </Typography>
+          </Box>
+          <Typography variant="body2" color="text.secondary" sx={{ ml: 4 }}>
             任务: {task.name}
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" color="text.secondary" sx={{ ml: 4 }}>
             仓库: {action.options.repoName}
           </Typography>
         </Box>
@@ -102,7 +114,15 @@ const SelectivePushExecutor: React.FC<SelectivePushExecutorProps> = ({
         {/* 成功提示 */}
         {success && (
           <Alert severity="success" sx={{ mb: 2 }}>
-            推送成功！即将关闭...
+            <Typography variant="body2" sx={{ fontWeight: 500 }}>
+              ✅ 推送成功！
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+              已推送 {selections.length} 个书签到 {action.options.repoName}/{action.options.folderPath || 'bookmarks'}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              页面即将关闭...
+            </Typography>
           </Alert>
         )}
 
@@ -137,7 +157,7 @@ const SelectivePushExecutor: React.FC<SelectivePushExecutorProps> = ({
         {/* 选择提示 */}
         <Box sx={{ mt: 2, p: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
           <Typography variant="body2" color="text.secondary">
-            💡 提示: 
+            💡 提示:
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
             • 可以选择单个书签或整个文件夹

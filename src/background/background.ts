@@ -97,6 +97,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // 异步执行选择性推送
     (async () => {
       try {
+        // 数据校验
+        if (!taskId || typeof taskId !== 'string') {
+          sendResponse({ success: false, error: '无效的任务ID' });
+          return;
+        }
+        if (!Array.isArray(selections) || selections.length === 0) {
+          sendResponse({ success: false, error: '未选择任何书签' });
+          return;
+        }
+
         console.log('收到选择性推送请求:', { taskId, selectionsCount: selections.length });
 
         // 加载任务数据
