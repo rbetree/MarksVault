@@ -436,10 +436,11 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
             </Typography>
           </Box>
         ) : (
-          bookmarks.map((bookmark) => (
+          bookmarks.map((bookmark, index) => (
             <BookmarkItem
               key={bookmark.id}
               bookmark={bookmark}
+              index={index}
               onEdit={handleEdit}
               onDelete={handleDelete}
               onOpen={handleBookmarkOpen}

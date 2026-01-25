@@ -437,10 +437,11 @@ const BookmarkGrid: React.FC<BookmarkGridProps> = ({
             </Typography>
           </EmptyState>
         ) : (
-          bookmarks.map((bookmark) => (
+          bookmarks.map((bookmark, index) => (
             <BookmarkGridItem
               key={bookmark.id}
               bookmark={bookmark}
+              index={index}
               onOpen={handleBookmarkOpen}
               onOpenFolder={handleFolderOpen}
               onEdit={handleEdit}
