@@ -249,8 +249,8 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
     let items: BookmarkItem[] = [];
 
     if (!currentFolderId) {
-      // 根级书签，通常是书签栏文件夹
-      const bookmarkBar = bookmarks[0].children?.find(b => b.title === "书签栏")
+      // 根级书签：优先使用稳定的 Chrome 根节点 id（通常 "1" 为书签栏），避免依赖标题文案（语言/用户改名会变化）
+      const bookmarkBar = bookmarks[0].children?.find(b => b.id === '1')
         || bookmarks[0].children?.[0];
 
       if (bookmarkBar && bookmarkBar.children) {
