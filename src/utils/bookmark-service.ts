@@ -41,6 +41,54 @@ class BookmarkService {
   }
 
   /**
+   * 获取指定文件夹的一层子节点（轻量 API：不拉整棵树）
+   * @param folderId 文件夹ID（根节点通常为 "0"）
+   */
+  async getFolderChildren(folderId: string): Promise<BookmarkResult> {
+    try {
+      const children = await chrome.bookmarks.getChildren(folderId);
+      return {
+        success: true,
+        data: this.transformBookmarkTree(children)
+      };
+    } catch (error) {
+      console.error('获取文件夹子项失败:', error);
+      return {
+        success: false,
+        error: '获取文件夹子项失败: ' + (error instanceof Error ? error.message : String(error))
+      };
+    }
+  }
+
+  /**
+   * 获取单个书签/文件夹节点信息（不包含其 children）
+   * @param id 书签或文件夹ID
+   */
+  async getBookmarkById(id: string): Promise<BookmarkResult> {
+    try {
+      const nodes = await chrome.bookmarks.get(id);
+      if (!nodes || nodes.length === 0) {
+        return {
+          success: false,
+          error: '未找到书签节点'
+        };
+      }
+
+      const transformed = this.transformBookmarkTree(nodes);
+      return {
+        success: true,
+        data: transformed[0]
+      };
+    } catch (error) {
+      console.error('获取书签节点失败:', error);
+      return {
+        success: false,
+        error: '获取书签节点失败: ' + (error instanceof Error ? error.message : String(error))
+      };
+    }
+  }
+
+  /**
    * 转换Chrome书签树到应用所需格式
    */
   private transformBookmarkTree(bookmarkNodes: chrome.bookmarks.BookmarkTreeNode[]): BookmarkItem[] {
