@@ -125,6 +125,7 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
         if (!isUnmountedRef.current) {
           setBookmarkBarId(bookmarkBar.id);
           // currentFolderId 仍用 null 表示“根视图”，实际展示为 bookmarkBarId 的 children
+          persistViewState(bookmarkBar.id);
           void restoreLastFolder(bookmarkBar.id);
         }
       } catch (error) {
@@ -138,10 +139,7 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
 
     // 记录 popup 最后一次停留的目录（用于下次启动恢复）
     const saveViewState = () => {
-      const data: BookmarksViewStateCache = {
-        lastFolderId: currentFolderIdRef.current,
-      };
-      void storageService.setStorageData(BOOKMARKS_VIEW_STATE_KEY, data);
+      persistViewState(currentFolderIdRef.current);
     };
 
     const handleVisibilityChange = () => {
@@ -503,6 +501,13 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
     }
   }, [upsertBookmarkInMap]);
 
+  // 持久化 popup 最后一次停留目录（避免仅在 unload/hidden 时写入导致丢失）
+  const persistViewState = useCallback((folderId: string | null) => {
+    const lastFolderId = folderId ?? bookmarkBarIdRef.current ?? null;
+    const data: BookmarksViewStateCache = { lastFolderId };
+    void storageService.setStorageData(BOOKMARKS_VIEW_STATE_KEY, data);
+  }, []);
+
   // 按需加载当前目录一层 children（优先使用已构建的 bookmarksMap，否则走轻量 getChildren）
   const refreshCurrentFolderChildren = useCallback(async (options?: { silent?: boolean }) => {
     const folderId = currentFolderId ?? bookmarkBarId;
@@ -839,8 +844,9 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
       upsertBookmarkInMap(folder);
       setFolderStack(prev => [...prev, folder]);
       setCurrentFolderId(folderId);
+      persistViewState(folderId);
     }
-  }, [clearSearch, currentBookmarks, isSearching, searchResults, upsertBookmarkInMap]);
+  }, [clearSearch, currentBookmarks, isSearching, persistViewState, searchResults, upsertBookmarkInMap]);
 
   // 导航返回上级文件夹
   const navigateBack = useCallback(() => {
@@ -853,15 +859,11 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
 
       setFolderStack(newStack);
 
-      if (newStack.length > 0) {
-        // 设置为上一级文件夹
-        setCurrentFolderId(newStack[newStack.length - 1].id);
-      } else {
-        // 回到根级
-        setCurrentFolderId(null);
-      }
+      const newFolderId = newStack.length > 0 ? newStack[newStack.length - 1].id : null;
+      setCurrentFolderId(newFolderId);
+      persistViewState(newFolderId);
     }
-  }, [clearSearch, folderStack.length]);
+  }, [clearSearch, folderStack, persistViewState]);
 
   // 处理结果并显示提示
   const handleResult = (result: BookmarkResult, successMessage: string) => {
