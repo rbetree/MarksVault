@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import ListItem from '@mui/material/ListItem';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
@@ -11,9 +11,8 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import LinkIcon from '@mui/icons-material/Link';
-import { BookmarkItem as BookmarkItemType } from '../../../utils/bookmark-service';
+import bookmarkService, { BookmarkItem as BookmarkItemType } from '../../../utils/bookmark-service';
 import { getFaviconUrl } from '../../../utils/favicon-service';
-import bookmarkService from '../../../utils/bookmark-service';
 import { styled } from '@mui/material/styles';
 import { useBookmarkDragDrop } from './useBookmarkDragDrop';
 
@@ -99,8 +98,12 @@ const BookmarkItem: React.FC<BookmarkItemProps> = ({
   const [menuAnchorPosition, setMenuAnchorPosition] = useState<{ top: number; left: number } | null>(null);
   const [iconUrl, setIconUrl] = useState<string>('');
   const [iconError, setIconError] = useState<boolean>(false);
-  const [itemCount, setItemCount] = useState<number | null>(null);
   const isMenuOpen = Boolean(menuAnchorPosition);
+
+  // 文件夹子项数量：优先使用已加载树上的 children.length（禁止在 item 级别额外打 API）
+  const folderItemCount = bookmark.isFolder && Array.isArray(bookmark.children)
+    ? bookmark.children.length
+    : null;
 
   // 使用自定义 Hook 处理拖拽逻辑
   const {
@@ -126,19 +129,6 @@ const BookmarkItem: React.FC<BookmarkItemProps> = ({
     }
   }, [bookmark.url, bookmark.isFolder]);
 
-  // 当组件挂载或书签ID变化时，获取文件夹项目计数
-  useEffect(() => {
-    if (bookmark.isFolder) {
-      const fetchItemCount = async () => {
-        const result = await bookmarkService.getFolderItemCount(bookmark.id);
-        if (result.success) {
-          setItemCount(result.data);
-        }
-      };
-
-      fetchItemCount();
-    }
-  }, [bookmark.id, bookmark.isFolder]);
 
   const handleContextMenu = (event: React.MouseEvent) => {
     event.preventDefault();
@@ -245,7 +235,7 @@ const BookmarkItem: React.FC<BookmarkItemProps> = ({
           </ListItemIcon>
           <ListItemText
             primary={bookmark.title}
-            secondary={bookmark.isFolder ? (itemCount !== null ? `${itemCount} 项` : ' ') : ''}
+            secondary={bookmark.isFolder ? (folderItemCount !== null ? `${folderItemCount} 项` : ' ') : ''}
             primaryTypographyProps={{
               noWrap: true,
               title: bookmark.title,
@@ -370,4 +360,4 @@ const BookmarkItem: React.FC<BookmarkItemProps> = ({
   );
 };
 
-export default BookmarkItem;
+export default React.memo(BookmarkItem);

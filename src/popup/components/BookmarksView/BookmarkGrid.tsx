@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Box from '@mui/material/Box';
 import LoadingIndicator from '../shared/LoadingIndicator';
 import Typography from '@mui/material/Typography';
@@ -126,12 +126,62 @@ const BookmarkGrid: React.FC<BookmarkGridProps> = ({
   const [sortMenuAnchorEl, setSortMenuAnchorEl] = useState<null | HTMLElement>(null);
   const isSortMenuOpen = Boolean(sortMenuAnchorEl);
 
-  // 处理搜索
+  // 处理搜索：本地受控 inputValue + IME 合成阶段仅更新 inputValue，不触发搜索
+  const isComposingRef = useRef(false);
+  const [inputValue, setInputValue] = useState(searchText);
+
+  // 父组件可能会清空/外部更新 searchText，需要同步到输入框（但避免打断合成）
+  useEffect(() => {
+    if (!isComposingRef.current) {
+      setInputValue(searchText);
+    }
+  }, [searchText]);
+
+  const handleCompositionStart = (e: React.CompositionEvent<HTMLInputElement>) => {
+    isComposingRef.current = true;
+    console.debug('[BookmarkGrid] compositionstart', {
+      value: e.currentTarget.value,
+    });
+  };
+
+  const handleCompositionEnd = (e: React.CompositionEvent<HTMLInputElement>) => {
+    isComposingRef.current = false;
+
+    // MUI InputBase 的 composition 事件 currentTarget 可能不是 <input>，用 target 更可靠
+    const value = ((e.target as HTMLInputElement | null)?.value ?? '') as string;
+
+    console.debug('[BookmarkGrid] compositionend', { value });
+    setInputValue(value);
+    onSearch(value);
+  };
+
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    onSearch(e.target.value);
+    const value = (e.target.value ?? '') as string;
+    const nativeIsComposing = (e.nativeEvent as any)?.isComposing;
+
+    // 记录：验证是否“卡在 composing=true 导致永远不触发 onSearch”
+    console.debug('[BookmarkGrid] change', {
+      value,
+      refIsComposing: isComposingRef.current,
+      nativeIsComposing,
+    });
+
+    setInputValue(value);
+
+    // 合成阶段不触发搜索，但要允许输入回显
+    if (isComposingRef.current || nativeIsComposing) return;
+    onSearch(value);
+  };
+
+  const handleSearchBlur = () => {
+    // 兜底：如果某些场景 compositionend 没有触发，blur 时也要解除 composing 状态
+    console.debug('[BookmarkGrid] blur');
+    isComposingRef.current = false;
   };
 
   const clearSearch = () => {
+    console.debug('[BookmarkGrid] clearSearch');
+    setInputValue('');
     onClearSearch();
   };
 
@@ -184,27 +234,27 @@ const BookmarkGrid: React.FC<BookmarkGridProps> = ({
   };
 
   // 处理书签点击
-  const handleBookmarkOpen = (bookmark: BookmarkItemType) => {
+  const handleBookmarkOpen = useCallback((bookmark: BookmarkItemType) => {
     if (bookmark.url) {
       chrome.tabs.create({ url: bookmark.url });
     }
-  };
+  }, []);
 
   // 处理文件夹点击
-  const handleFolderOpen = (bookmark: BookmarkItemType) => {
+  const handleFolderOpen = useCallback((bookmark: BookmarkItemType) => {
     if (onNavigateToFolder) {
       onNavigateToFolder(bookmark.id);
     }
-  };
+  }, [onNavigateToFolder]);
 
   // 处理编辑
-  const handleEdit = (bookmark: BookmarkItemType) => {
+  const handleEdit = useCallback((bookmark: BookmarkItemType) => {
     setCurrentBookmark(bookmark);
     setIsFolder(bookmark.isFolder);
     setFormTitle(bookmark.title);
     setFormUrl(bookmark.url || '');
     setEditDialogOpen(true);
-  };
+  }, []);
 
   // 关闭编辑对话框
   const handleEditDialogClose = () => {
@@ -234,10 +284,10 @@ const BookmarkGrid: React.FC<BookmarkGridProps> = ({
   };
 
   // 处理删除
-  const handleDelete = (bookmark: BookmarkItemType) => {
+  const handleDelete = useCallback((bookmark: BookmarkItemType) => {
     setCurrentBookmark(bookmark);
     setConfirmDeleteOpen(true);
-  };
+  }, []);
 
   // 关闭确认删除对话框
   const handleConfirmDeleteClose = () => {
@@ -394,10 +444,13 @@ const BookmarkGrid: React.FC<BookmarkGridProps> = ({
                 fontFamily: 'inherit'
               }}
               placeholder="搜索书签..."
-              value={searchText}
+              value={inputValue}
               onChange={handleSearchChange}
+              onCompositionStart={handleCompositionStart}
+              onCompositionEnd={handleCompositionEnd}
+              onBlur={handleSearchBlur}
             />
-            {searchText && (
+            {inputValue && (
               <IconButton sx={{ p: 0.5 }} aria-label="清除" onClick={clearSearch}>
                 <ClearIcon fontSize="small" />
               </IconButton>

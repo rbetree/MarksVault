@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useTransition, useMemo } from 'react';
 import Box from '@mui/material/Box';
 import BookmarkGrid from './BookmarkGrid';
 import BookmarkList from './BookmarkList';
@@ -7,6 +7,24 @@ import ViewToggleButton from './ViewToggleButton';
 import { ToastRef } from '../shared/Toast';
 import bookmarkService, { BookmarkItem, BookmarkResult } from '../../../utils/bookmark-service';
 import storageService, { UserSettings } from '../../../utils/storage-service';
+
+function sortBookmarks(bookmarks: BookmarkItem[], method: 'default' | 'name' | 'dateAdded'): BookmarkItem[] {
+  if (method === 'default') return bookmarks;
+
+  return [...bookmarks].sort((a, b) => {
+    // 确保文件夹始终排在前面
+    if (a.isFolder && !b.isFolder) return -1;
+    if (!a.isFolder && b.isFolder) return 1;
+
+    // 然后根据排序方法排序
+    if (method === 'name') {
+      return a.title.localeCompare(b.title);
+    } else if (method === 'dateAdded') {
+      return (b.dateAdded || 0) - (a.dateAdded || 0);
+    }
+    return 0;
+  });
+}
 
 interface BookmarksViewProps {
   toastRef: React.RefObject<ToastRef>;
@@ -22,6 +40,12 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
   const [bookmarkBarId, setBookmarkBarId] = useState<string | null>(null); // 添加书签栏ID状态变量
   const [sortMethod, setSortMethod] = useState<'default' | 'name' | 'dateAdded'>('default');
   const bookmarksMap = useRef<Map<string, BookmarkItem>>(new Map());
+
+  // 搜索：debounce + 竞态控制（last-write-wins）+ 低优先级更新（startTransition）
+  const searchDebounceTimerRef = useRef<number | null>(null);
+  const searchRequestSeqRef = useRef(0);
+  const [, startTransition] = useTransition();
+
   // 添加搜索相关状态
   const [searchText, setSearchText] = useState('');
   const [searchResults, setSearchResults] = useState<BookmarkItem[]>([]);
@@ -31,12 +55,30 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
   useEffect(() => {
     loadBookmarks();
     loadUserSettings();
+
+    return () => {
+      if (searchDebounceTimerRef.current) {
+        clearTimeout(searchDebounceTimerRef.current);
+        searchDebounceTimerRef.current = null;
+      }
+      // 失效所有进行中的搜索请求
+      searchRequestSeqRef.current += 1;
+    };
   }, []);
 
   // 当文件夹变化时更新当前显示的书签
   useEffect(() => {
     updateCurrentBookmarks();
   }, [currentFolderId, bookmarks, sortMethod]);
+
+  // 排序方式变化时：如果处于搜索态，需要同步对 searchResults 重排（不必等下一次搜索）
+  useEffect(() => {
+    if (!isSearching) return;
+
+    startTransition(() => {
+      setSearchResults(prev => sortBookmarks(prev, sortMethod));
+    });
+  }, [isSearching, sortMethod, startTransition]);
 
   // 加载用户设置
   const loadUserSettings = async () => {
@@ -62,70 +104,108 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
   };
 
   // 处理视图类型切换
-  const handleViewTypeChange = (type: 'list' | 'grid') => {
+  const handleViewTypeChange = useCallback((type: 'list' | 'grid') => {
     setViewType(type);
     saveViewTypeSetting(type);
-  };
+  }, []);
 
   // 处理排序方法变更
-  const handleSortChange = (method: 'default' | 'name' | 'dateAdded') => {
+  const handleSortChange = useCallback((method: 'default' | 'name' | 'dateAdded') => {
     setSortMethod(method);
-  };
+  }, []);
 
-  // 排序书签列表
-  const sortBookmarks = (bookmarks: BookmarkItem[], method: 'default' | 'name' | 'dateAdded'): BookmarkItem[] => {
-    if (method === 'default') return bookmarks;
 
-    return [...bookmarks].sort((a, b) => {
-      // 确保文件夹始终排在前面
-      if (a.isFolder && !b.isFolder) return -1;
-      if (!a.isFolder && b.isFolder) return 1;
-
-      // 然后根据排序方法排序
-      if (method === 'name') {
-        return a.title.localeCompare(b.title);
-      } else if (method === 'dateAdded') {
-        return (b.dateAdded || 0) - (a.dateAdded || 0);
-      }
-      return 0;
-    });
-  };
-
-  // 处理搜索
-  const handleSearch = async (query: string) => {
-    setSearchText(query);
-
-    if (!query.trim()) {
-      setIsSearching(false);
-      setSearchResults([]);
-      return;
-    }
-
-    setIsSearching(true);
+  const performSearch = useCallback(async (query: string, requestSeq: number) => {
     try {
       const result = await bookmarkService.searchBookmarks(query);
+
+      // last-write-wins：只接受最新一次请求的结果
+      if (requestSeq !== searchRequestSeqRef.current) {
+        return;
+      }
+
       if (result.success && result.data) {
-        // 对搜索结果应用同样的排序
-        setSearchResults(sortBookmarks(result.data, sortMethod));
+        // 回填文件夹的 children（用于展示 children.length），避免 item 级别额外 API 调用
+        const enriched: BookmarkItem[] = result.data.map((item: BookmarkItem) => {
+          if (!item.isFolder) return item;
+          const fullNode = bookmarksMap.current.get(item.id);
+          return fullNode?.children
+            ? { ...item, children: fullNode.children }
+            : item;
+        });
+
+        const sorted = sortBookmarks(enriched, sortMethod);
+        startTransition(() => {
+          setSearchResults(sorted);
+        });
       } else {
-        setSearchResults([]);
+        startTransition(() => {
+          setSearchResults([]);
+        });
         if (result.error) {
           toastRef.current?.showToast('搜索书签失败: ' + result.error, 'error');
         }
       }
     } catch (error) {
+      if (requestSeq !== searchRequestSeqRef.current) {
+        return;
+      }
       console.error('搜索书签错误:', error);
-      setSearchResults([]);
+      startTransition(() => {
+        setSearchResults([]);
+      });
       toastRef.current?.showToast('搜索书签时发生错误', 'error');
     }
-  };
+  }, [sortMethod, startTransition, toastRef]);
+
+  // 处理搜索（仅负责：更新输入值 + debounce 调度）
+  const handleSearch = useCallback((query: string) => {
+    // 防御：IME / 事件目标异常时，避免 query 变成 undefined 导致崩溃
+    const safeQuery = typeof query === 'string' ? query : '';
+
+    setSearchText(safeQuery);
+
+    // 取消上一次的 debounce
+    if (searchDebounceTimerRef.current) {
+      clearTimeout(searchDebounceTimerRef.current);
+      searchDebounceTimerRef.current = null;
+    }
+
+    if (!safeQuery.trim()) {
+      // 失效所有进行中的搜索请求
+      searchRequestSeqRef.current += 1;
+      setIsSearching(false);
+      startTransition(() => {
+        setSearchResults([]);
+      });
+      return;
+    }
+
+    setIsSearching(true);
+
+    const requestSeq = ++searchRequestSeqRef.current;
+    searchDebounceTimerRef.current = window.setTimeout(() => {
+      performSearch(safeQuery, requestSeq);
+    }, 250);
+  }, [isSearching, performSearch, startTransition]);
 
   // 清除搜索
-  const clearSearch = () => {
+  const clearSearch = useCallback(() => {
     setSearchText('');
     setIsSearching(false);
-    setSearchResults([]);
-  };
+
+    if (searchDebounceTimerRef.current) {
+      clearTimeout(searchDebounceTimerRef.current);
+      searchDebounceTimerRef.current = null;
+    }
+
+    // 失效所有进行中的搜索请求
+    searchRequestSeqRef.current += 1;
+
+    startTransition(() => {
+      setSearchResults([]);
+    });
+  }, [startTransition]);
 
   // 加载书签树
   const loadBookmarks = async () => {
@@ -190,7 +270,7 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
   };
 
   // 导航到指定文件夹
-  const navigateToFolder = (folderId: string) => {
+  const navigateToFolder = useCallback((folderId: string) => {
     // 导航到新文件夹时清除搜索状态
     clearSearch();
 
@@ -199,10 +279,10 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
       setFolderStack(prev => [...prev, folder]);
       setCurrentFolderId(folderId);
     }
-  };
+  }, [clearSearch]);
 
   // 导航返回上级文件夹
-  const navigateBack = () => {
+  const navigateBack = useCallback(() => {
     // 导航返回时清除搜索状态
     clearSearch();
 
@@ -220,7 +300,7 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
         setCurrentFolderId(null);
       }
     }
-  };
+  }, [clearSearch, folderStack.length]);
 
   // 处理结果并显示提示
   const handleResult = (result: BookmarkResult, successMessage: string) => {
@@ -236,45 +316,45 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
   };
 
   // 添加书签
-  const handleAddBookmark = async (bookmark: { parentId?: string; title: string; url: string }) => {
+  const handleAddBookmark = useCallback(async (bookmark: { parentId?: string; title: string; url: string }) => {
     // 如果没有指定parentId且当前在根级别，使用书签栏ID
     if (!bookmark.parentId && !currentFolderId && bookmarkBarId) {
       bookmark.parentId = bookmarkBarId;
     }
     const result = await bookmarkService.createBookmark(bookmark);
     handleResult(result, '书签已添加');
-  };
+  }, [bookmarkBarId, currentFolderId]);
 
   // 添加文件夹
-  const handleAddFolder = async (folder: { parentId?: string; title: string }) => {
+  const handleAddFolder = useCallback(async (folder: { parentId?: string; title: string }) => {
     // 如果没有指定parentId且当前在根级别，使用书签栏ID
     if (!folder.parentId && !currentFolderId && bookmarkBarId) {
       folder.parentId = bookmarkBarId;
     }
     const result = await bookmarkService.createFolder(folder);
     handleResult(result, '文件夹已创建');
-  };
+  }, [bookmarkBarId, currentFolderId]);
 
   // 编辑书签
-  const handleEditBookmark = async (id: string, changes: { title?: string; url?: string }) => {
+  const handleEditBookmark = useCallback(async (id: string, changes: { title?: string; url?: string }) => {
     const result = await bookmarkService.updateBookmark(id, changes);
     handleResult(result, '书签已更新');
-  };
+  }, []);
 
   // 删除书签
-  const handleDeleteBookmark = async (id: string) => {
+  const handleDeleteBookmark = useCallback(async (id: string) => {
     const result = await bookmarkService.removeBookmark(id);
     handleResult(result, '书签已删除');
-  };
+  }, []);
 
   // 删除文件夹
-  const handleDeleteFolder = async (id: string) => {
+  const handleDeleteFolder = useCallback(async (id: string) => {
     const result = await bookmarkService.removeBookmarkTree(id);
     handleResult(result, '文件夹已删除');
-  };
+  }, []);
 
   // 添加书签移动处理方法
-  const handleMoveBookmark = async (bookmarkId: string, destinationFolderId: string, index?: number) => {
+  const handleMoveBookmark = useCallback(async (bookmarkId: string, destinationFolderId: string, index?: number) => {
     try {
       // 获取当前书签信息以确认是否是文件夹
       const bookmarkItem = bookmarksMap.current.get(bookmarkId);
@@ -303,7 +383,7 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
       toastRef.current?.showToast('移动书签时发生错误', 'error');
       return false;
     }
-  };
+  }, [toastRef]);
 
   // 检查是否是子文件夹的辅助函数
   const isSubfolder = (folderId: string, possibleSubfolderId: string): boolean => {
@@ -322,36 +402,56 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
     return false;
   };
 
+  const displayedBookmarks = isSearching ? searchResults : currentBookmarks;
+  const parentFolder = folderStack.length > 0 ? folderStack[folderStack.length - 1] : undefined;
+
+  const commonProps = useMemo(() => ({
+    bookmarks: displayedBookmarks,
+    parentFolder,
+    isLoading,
+    onAddBookmark: handleAddBookmark,
+    onAddFolder: handleAddFolder,
+    onEditBookmark: handleEditBookmark,
+    onDeleteBookmark: handleDeleteBookmark,
+    onDeleteFolder: handleDeleteFolder,
+    onNavigateToFolder: navigateToFolder,
+    onNavigateBack: navigateBack,
+    onMoveBookmark: handleMoveBookmark,
+    viewType,
+    onViewTypeChange: handleViewTypeChange,
+    sortMethod,
+    onSortChange: handleSortChange,
+    searchText,
+    isSearching,
+    onSearch: handleSearch,
+    onClearSearch: clearSearch
+  }), [
+    displayedBookmarks,
+    parentFolder,
+    isLoading,
+    handleAddBookmark,
+    handleAddFolder,
+    handleEditBookmark,
+    handleDeleteBookmark,
+    handleDeleteFolder,
+    navigateToFolder,
+    navigateBack,
+    handleMoveBookmark,
+    viewType,
+    handleViewTypeChange,
+    sortMethod,
+    handleSortChange,
+    searchText,
+    isSearching,
+    handleSearch,
+    clearSearch
+  ]);
+
   // 渲染书签视图
   const renderBookmarkView = () => {
-    // 不再在加载时直接返回 LoadingIndicator，以便组件外壳（头部等）能立即渲染
-
-    const commonProps = {
-      bookmarks: isSearching ? searchResults : currentBookmarks,
-      parentFolder: folderStack.length > 0 ? folderStack[folderStack.length - 1] : undefined,
-      isLoading: isLoading,
-      onAddBookmark: handleAddBookmark,
-      onAddFolder: handleAddFolder,
-      onEditBookmark: handleEditBookmark,
-      onDeleteBookmark: handleDeleteBookmark,
-      onDeleteFolder: handleDeleteFolder,
-      onNavigateToFolder: navigateToFolder,
-      onNavigateBack: navigateBack,
-      onMoveBookmark: handleMoveBookmark,
-      viewType: viewType,
-      onViewTypeChange: handleViewTypeChange,
-      sortMethod: sortMethod,
-      onSortChange: handleSortChange,
-      // 添加搜索相关属性
-      searchText: searchText,
-      isSearching: isSearching,
-      onSearch: handleSearch,
-      onClearSearch: clearSearch
-    };
-
-    return viewType === 'grid' ?
-      <BookmarkGrid {...commonProps} /> :
-      <BookmarkList {...commonProps} />;
+    return viewType === 'grid'
+      ? <BookmarkGrid {...commonProps} />
+      : <BookmarkList {...commonProps} />;
   };
 
   return (

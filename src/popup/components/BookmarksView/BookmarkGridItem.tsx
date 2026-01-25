@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Menu from '@mui/material/Menu';
@@ -12,9 +12,8 @@ import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import LinkIcon from '@mui/icons-material/Link';
 import { styled } from '@mui/material/styles';
-import { BookmarkItem as BookmarkItemType } from '../../../utils/bookmark-service';
+import bookmarkService, { BookmarkItem as BookmarkItemType } from '../../../utils/bookmark-service';
 import { getFaviconUrl } from '../../../utils/favicon-service';
-import bookmarkService from '../../../utils/bookmark-service';
 import { useBookmarkDragDrop } from './useBookmarkDragDrop';
 
 // 样式化组件
@@ -115,8 +114,12 @@ const BookmarkGridItem: React.FC<BookmarkGridItemProps> = ({
   const [menuAnchorPosition, setMenuAnchorPosition] = useState<{ top: number; left: number } | null>(null);
   const [iconUrl, setIconUrl] = useState<string>('');
   const [iconError, setIconError] = useState<boolean>(false);
-  const [itemCount, setItemCount] = useState<number | null>(null);
   const isMenuOpen = Boolean(menuAnchorPosition);
+
+  // 文件夹子项数量：优先使用已加载树上的 children.length（禁止在 item 级别额外打 API）
+  const folderItemCount = bookmark.isFolder && Array.isArray(bookmark.children)
+    ? bookmark.children.length
+    : null;
 
   // 使用自定义 Hook 处理拖拽逻辑
   const {
@@ -143,19 +146,6 @@ const BookmarkGridItem: React.FC<BookmarkGridItemProps> = ({
     }
   }, [bookmark.url, bookmark.isFolder]);
 
-  // 当组件挂载或书签ID变化时，获取文件夹项目计数
-  useEffect(() => {
-    if (bookmark.isFolder) {
-      const fetchItemCount = async () => {
-        const result = await bookmarkService.getFolderItemCount(bookmark.id);
-        if (result.success) {
-          setItemCount(result.data);
-        }
-      };
-
-      fetchItemCount();
-    }
-  }, [bookmark.id, bookmark.isFolder]);
 
   const handleContextMenu = (event: React.MouseEvent) => {
     event.preventDefault();
@@ -339,4 +329,4 @@ const BookmarkGridItem: React.FC<BookmarkGridItemProps> = ({
   );
 };
 
-export default BookmarkGridItem;
+export default React.memo(BookmarkGridItem);

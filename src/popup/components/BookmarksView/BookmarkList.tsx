@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import List from '@mui/material/List';
 import Typography from '@mui/material/Typography';
 import Divider from '@mui/material/Divider';
@@ -107,12 +107,50 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
   const [sortMenuAnchorEl, setSortMenuAnchorEl] = useState<null | HTMLElement>(null);
   const isSortMenuOpen = Boolean(sortMenuAnchorEl);
 
-  // 处理搜索
+  // 处理搜索：本地受控 inputValue + IME 合成阶段仅更新 inputValue，不触发搜索
+  const isComposingRef = useRef(false);
+  const [inputValue, setInputValue] = useState(searchText);
+
+  // 父组件可能会清空/外部更新 searchText，需要同步到输入框（但避免打断合成）
+  useEffect(() => {
+    if (!isComposingRef.current) {
+      setInputValue(searchText);
+    }
+  }, [searchText]);
+
+  const handleCompositionStart = (e: React.CompositionEvent<HTMLInputElement>) => {
+    isComposingRef.current = true;
+  };
+
+  const handleCompositionEnd = (e: React.CompositionEvent<HTMLInputElement>) => {
+    isComposingRef.current = false;
+
+    // MUI InputBase 的 composition 事件 currentTarget 可能不是 <input>，用 target 更可靠
+    const value = ((e.target as HTMLInputElement | null)?.value ?? '') as string;
+
+    setInputValue(value);
+    onSearch(value);
+  };
+
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    onSearch(e.target.value);
+    const value = (e.target.value ?? '') as string;
+    const nativeIsComposing = (e.nativeEvent as any)?.isComposing;
+
+
+    setInputValue(value);
+
+    // 合成阶段不触发搜索，但要允许输入回显
+    if (isComposingRef.current || nativeIsComposing) return;
+    onSearch(value);
+  };
+
+  const handleSearchBlur = () => {
+    // 兜底：如果某些场景 compositionend 没有触发，blur 时也要解除 composing 状态
+    isComposingRef.current = false;
   };
 
   const clearSearch = () => {
+    setInputValue('');
     onClearSearch();
   };
 
@@ -174,27 +212,27 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
   };
 
   // 处理书签点击
-  const handleBookmarkOpen = (bookmark: BookmarkItemType) => {
+  const handleBookmarkOpen = useCallback((bookmark: BookmarkItemType) => {
     if (bookmark.url) {
       chrome.tabs.create({ url: bookmark.url });
     }
-  };
+  }, []);
 
   // 处理文件夹点击
-  const handleFolderOpen = (bookmark: BookmarkItemType) => {
+  const handleFolderOpen = useCallback((bookmark: BookmarkItemType) => {
     if (onNavigateToFolder) {
       onNavigateToFolder(bookmark.id);
     }
-  };
+  }, [onNavigateToFolder]);
 
   // 处理编辑
-  const handleEdit = (bookmark: BookmarkItemType) => {
+  const handleEdit = useCallback((bookmark: BookmarkItemType) => {
     setCurrentBookmark(bookmark);
     setIsFolder(bookmark.isFolder);
     setFormTitle(bookmark.title);
     setFormUrl(bookmark.url || '');
     setEditDialogOpen(true);
-  };
+  }, []);
 
   // 关闭编辑对话框
   const handleEditDialogClose = () => {
@@ -224,10 +262,10 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
   };
 
   // 处理删除
-  const handleDelete = (bookmark: BookmarkItemType) => {
+  const handleDelete = useCallback((bookmark: BookmarkItemType) => {
     setCurrentBookmark(bookmark);
     setConfirmDeleteOpen(true);
-  };
+  }, []);
 
   // 关闭确认删除对话框
   const handleConfirmDeleteClose = () => {
@@ -376,10 +414,13 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
                 color: 'text.primary'
               }}
               placeholder="搜索书签..."
-              value={searchText}
+              value={inputValue}
               onChange={handleSearchChange}
+              onCompositionStart={handleCompositionStart}
+              onCompositionEnd={handleCompositionEnd}
+              onBlur={handleSearchBlur}
             />
-            {searchText && (
+            {inputValue && (
               <IconButton sx={{ p: 0.5 }} aria-label="清除" onClick={clearSearch}>
                 <ClearIcon fontSize="small" />
               </IconButton>
