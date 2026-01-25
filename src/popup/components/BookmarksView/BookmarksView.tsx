@@ -39,6 +39,16 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
   const [bookmarkBarId, setBookmarkBarId] = useState<string | null>(null); // 添加书签栏ID状态变量
   const [sortMethod, setSortMethod] = useState<'default' | 'name' | 'dateAdded'>('default');
   const bookmarksMap = useRef<Map<string, BookmarkItem>>(new Map());
+  const fullIndexBuiltRef = useRef(false);
+  const isBuildingFullIndexRef = useRef(false);
+
+  // 事件回调需要拿到最新状态，避免闭包过期
+  const currentFolderIdRef = useRef<string | null>(null);
+  const bookmarkBarIdRef = useRef<string | null>(null);
+  const folderStackRef = useRef<BookmarkItem[]>([]);
+  const currentFolderItemsRef = useRef<BookmarkItem[]>([]);
+  const isSearchingRef = useRef(false);
+  const refreshCurrentFolderChildrenRef = useRef<(options?: { silent?: boolean }) => Promise<void>>(async () => { });
 
   // 当前文件夹的一层 children（原始顺序）；展示层通过 sortMethod 做派生排序
   const [currentFolderItems, setCurrentFolderItems] = useState<BookmarkItem[]>([]);
@@ -61,6 +71,26 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
   const [searchResults, setSearchResults] = useState<BookmarkItem[]>([]);
   const [isSearching, setIsSearching] = useState(false);
 
+  useEffect(() => {
+    currentFolderIdRef.current = currentFolderId;
+  }, [currentFolderId]);
+
+  useEffect(() => {
+    bookmarkBarIdRef.current = bookmarkBarId;
+  }, [bookmarkBarId]);
+
+  useEffect(() => {
+    folderStackRef.current = folderStack;
+  }, [folderStack]);
+
+  useEffect(() => {
+    currentFolderItemsRef.current = currentFolderItems;
+  }, [currentFolderItems]);
+
+  useEffect(() => {
+    isSearchingRef.current = isSearching;
+  }, [isSearching]);
+
   // 两阶段启动：
   // - 阶段1（首屏）：仅获取根节点一层 children，确定“书签栏 folderId”，再按需 getChildren(folderId) 渲染
   // - 阶段2（空闲期）：再拉全量 getTree 并构建 bookmarksMap（用于搜索 enrich / 拖拽校验等）
@@ -80,6 +110,10 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
 
         // 根节点 children 通常为："1"(书签栏) / "2"(其他书签) / "3"(移动设备书签)
         const roots = rootsResult.data as BookmarkItem[];
+        // 先把根节点信息写入索引（此时仍是“部分索引”，不会阻止后续空闲期构建全量索引）
+        roots.forEach(root => {
+          upsertBookmarkInMap(root);
+        });
         const bookmarkBar = roots.find(r => r.id === '1') ?? roots[0];
         if (!isUnmountedRef.current) {
           setBookmarkBarId(bookmarkBar.id);
@@ -276,6 +310,7 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
         setBookmarks(result.data);
         // 构建书签映射，便于快速查找
         buildBookmarkMap(result.data);
+        fullIndexBuiltRef.current = true;
         // 重新加载后需要刷新当前目录展示（否则不会自动更新）
         await refreshCurrentFolderChildren({ silent: true });
       } else {
@@ -313,6 +348,58 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
     });
   }, []);
 
+  // 写入/合并单个节点到 bookmarksMap（尽量保留已缓存的 children）
+  const upsertBookmarkInMap = useCallback((item: BookmarkItem): BookmarkItem => {
+    const existing = bookmarksMap.current.get(item.id);
+
+    const merged: BookmarkItem = {
+      ...existing,
+      ...item,
+      parentId: item.parentId ?? existing?.parentId,
+      url: item.url !== undefined ? item.url : existing?.url,
+      children: item.children !== undefined ? item.children : existing?.children,
+    };
+
+    bookmarksMap.current.set(item.id, merged);
+    return merged;
+  }, []);
+
+  // 将某个文件夹的 children 写入索引（同时 upsert children 本身）
+  const setFolderChildrenInMap = useCallback((folderId: string, children: BookmarkItem[]) => {
+    const normalizedChildren = children.map(child => upsertBookmarkInMap(child));
+    const existingFolder = bookmarksMap.current.get(folderId);
+    upsertBookmarkInMap({
+      id: folderId,
+      parentId: existingFolder?.parentId,
+      title: existingFolder?.title ?? '',
+      url: undefined,
+      isFolder: true,
+      children: normalizedChildren,
+      dateAdded: existingFolder?.dateAdded,
+      dateGroupModified: existingFolder?.dateGroupModified,
+      index: existingFolder?.index,
+    });
+  }, [upsertBookmarkInMap]);
+
+  // 在列表中按 index 插入（若已存在同 id，则先去重）
+  const insertAtIndexDedup = useCallback((list: BookmarkItem[], item: BookmarkItem, index?: number): BookmarkItem[] => {
+    const without = list.filter(x => x.id !== item.id);
+    const safeIndex = typeof index === 'number' && index >= 0
+      ? Math.min(index, without.length)
+      : without.length;
+    return [...without.slice(0, safeIndex), item, ...without.slice(safeIndex)];
+  }, []);
+
+  // 在列表中移动某个元素到目标 index（若不存在则原样返回）
+  const moveInList = useCallback((list: BookmarkItem[], itemId: string, newIndex: number): BookmarkItem[] => {
+    const fromIndex = list.findIndex(x => x.id === itemId);
+    if (fromIndex < 0) return list;
+    const item = list[fromIndex];
+    const without = [...list.slice(0, fromIndex), ...list.slice(fromIndex + 1)];
+    const safeIndex = Math.max(0, Math.min(newIndex, without.length));
+    return [...without.slice(0, safeIndex), item, ...without.slice(safeIndex)];
+  }, []);
+
   // 按需加载当前目录一层 children（优先使用已构建的 bookmarksMap，否则走轻量 getChildren）
   const refreshCurrentFolderChildren = useCallback(async (options?: { silent?: boolean }) => {
     const folderId = currentFolderId ?? bookmarkBarId;
@@ -326,7 +413,9 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
       const cachedFolder = bookmarksMap.current.get(folderId);
       if (cachedFolder?.children) {
         if (!isUnmountedRef.current) {
-          setCurrentFolderItems(enrichItemsFromMap(cachedFolder.children));
+          const enriched = enrichItemsFromMap(cachedFolder.children);
+          setCurrentFolderItems(enriched);
+          setFolderChildrenInMap(folderId, enriched);
         }
         return;
       }
@@ -335,7 +424,9 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
       if (isUnmountedRef.current) return;
 
       if (result.success && Array.isArray(result.data)) {
-        setCurrentFolderItems(enrichItemsFromMap(result.data as BookmarkItem[]));
+        const enriched = enrichItemsFromMap(result.data as BookmarkItem[]);
+        setCurrentFolderItems(enriched);
+        setFolderChildrenInMap(folderId, enriched);
       } else {
         toastRef.current?.showToast(result.error || '获取书签失败', 'error');
         setCurrentFolderItems([]);
@@ -350,12 +441,14 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
         setIsLoading(false);
       }
     }
-  }, [bookmarkBarId, currentFolderId, enrichItemsFromMap, toastRef]);
+  }, [bookmarkBarId, currentFolderId, enrichItemsFromMap, setFolderChildrenInMap, toastRef]);
+  refreshCurrentFolderChildrenRef.current = refreshCurrentFolderChildren;
 
   // 阶段2：空闲期构建全量索引（不影响首屏交互）
   const buildBookmarksIndexInBackground = useCallback(async () => {
-    // 已有索引则不重复构建
-    if (bookmarksMap.current.size > 0) return;
+    // 注意：首屏可能已经构建了“部分索引”，不能用 map.size 来判断是否完成全量索引
+    if (fullIndexBuiltRef.current || isBuildingFullIndexRef.current) return;
+    isBuildingFullIndexRef.current = true;
 
     try {
       const result = await bookmarkService.getAllBookmarks();
@@ -364,6 +457,7 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
       if (result.success && result.data) {
         setBookmarks(result.data);
         buildBookmarkMap(result.data);
+        fullIndexBuiltRef.current = true;
 
         // 尽可能用索引补齐当前目录 items 的 children 信息（用于展示 children.length）
         setCurrentFolderItems(prev => enrichItemsFromMap(prev));
@@ -371,8 +465,252 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
     } catch (error) {
       // 背景索引失败不打扰用户，只记录日志；显式 reload 时仍会走 loadBookmarks()
       console.warn('后台构建书签索引失败:', error);
+    } finally {
+      isBuildingFullIndexRef.current = false;
     }
   }, [enrichItemsFromMap]);
+
+  // 监听 chrome.bookmarks 事件：增量更新索引与当前视图，避免每次操作后全量 reload
+  useEffect(() => {
+    if (!chrome?.bookmarks) return;
+    const getEffectiveCurrentFolderId = () => currentFolderIdRef.current ?? bookmarkBarIdRef.current;
+
+    const handleCreated = (_id: string, node: chrome.bookmarks.BookmarkTreeNode) => {
+      const item: BookmarkItem = {
+        id: node.id,
+        parentId: node.parentId,
+        title: node.title,
+        url: node.url,
+        dateAdded: node.dateAdded,
+        dateGroupModified: node.dateGroupModified,
+        index: node.index,
+        isFolder: !node.url,
+        // 新建文件夹默认 children 为空数组，避免 UI 端 folderItemCount 为空
+        children: node.url ? undefined : [],
+      };
+
+      upsertBookmarkInMap(item);
+
+      // 父节点 children 已缓存时，直接增量插入
+      if (item.parentId) {
+        const parent = bookmarksMap.current.get(item.parentId);
+        if (parent?.children) {
+          const nextChildren = insertAtIndexDedup(parent.children, item, node.index);
+          setFolderChildrenInMap(item.parentId, nextChildren);
+        }
+      }
+
+      // 如果新建发生在当前视图目录下，直接更新当前列表
+      const currentFolderId = getEffectiveCurrentFolderId();
+      if (currentFolderId && item.parentId === currentFolderId) {
+        const nextItems = insertAtIndexDedup(currentFolderItemsRef.current, item, node.index);
+        setCurrentFolderItems(nextItems);
+        setFolderChildrenInMap(currentFolderId, nextItems);
+      }
+    };
+
+    const handleChanged = (id: string, changeInfo: chrome.bookmarks.BookmarkChangeInfo) => {
+      const existing = bookmarksMap.current.get(id);
+
+      const updated: BookmarkItem = {
+        id,
+        parentId: existing?.parentId,
+        title: changeInfo.title ?? existing?.title ?? '',
+        url: changeInfo.url !== undefined ? changeInfo.url : existing?.url,
+        dateAdded: existing?.dateAdded,
+        dateGroupModified: existing?.dateGroupModified,
+        index: existing?.index,
+        isFolder: existing?.isFolder ?? false,
+        children: existing?.children,
+      };
+
+      // changeInfo.url 只有在 url 变化时才会出现；否则不能据此推断 isFolder
+      if (changeInfo.url !== undefined) {
+        updated.isFolder = !changeInfo.url;
+      }
+
+      upsertBookmarkInMap(updated);
+
+      const updateList = (list: BookmarkItem[]): BookmarkItem[] => {
+        let changed = false;
+        const next = list.map(item => {
+          if (item.id !== id) return item;
+          changed = true;
+          return {
+            ...item,
+            title: updated.title,
+            url: updated.url,
+            isFolder: updated.isFolder,
+          };
+        });
+        return changed ? next : list;
+      };
+
+      const currentFolderId = getEffectiveCurrentFolderId();
+      if (currentFolderId) {
+        const nextItems = updateList(currentFolderItemsRef.current);
+        if (nextItems !== currentFolderItemsRef.current) {
+          setCurrentFolderItems(nextItems);
+          setFolderChildrenInMap(currentFolderId, nextItems);
+        }
+      }
+
+      if (isSearchingRef.current) {
+        startTransition(() => {
+          setSearchResults(prev => updateList(prev));
+        });
+      }
+
+      // breadcrumb / folderStack 中的标题也要同步
+      setFolderStack(prev => prev.map(f => (f.id === id ? { ...f, title: updated.title } : f)));
+    };
+
+    const handleRemoved = (id: string, removeInfo: chrome.bookmarks.BookmarkRemoveInfo) => {
+      // removeInfo.node 对于文件夹包含完整子树，可用于清理索引
+      const removedIds: string[] = [];
+      const stack: chrome.bookmarks.BookmarkTreeNode[] = [removeInfo.node];
+      while (stack.length > 0) {
+        const cur = stack.pop();
+        if (!cur) break;
+        removedIds.push(cur.id);
+        if (cur.children) {
+          for (const child of cur.children) {
+            stack.push(child);
+          }
+        }
+      }
+      const removedSet = new Set(removedIds);
+      removedSet.forEach(rid => bookmarksMap.current.delete(rid));
+
+      // 父节点 children 已缓存时，直接增量删除
+      if (removeInfo.parentId) {
+        const parent = bookmarksMap.current.get(removeInfo.parentId);
+        if (parent?.children) {
+          const nextChildren = parent.children.filter(ch => ch.id !== id);
+          setFolderChildrenInMap(removeInfo.parentId, nextChildren);
+        }
+      }
+
+      // 当前视图目录下的 item 被删
+      const currentFolderId = getEffectiveCurrentFolderId();
+      if (currentFolderId && removeInfo.parentId === currentFolderId) {
+        const nextItems = currentFolderItemsRef.current.filter(item => item.id !== id);
+        if (nextItems.length !== currentFolderItemsRef.current.length) {
+          setCurrentFolderItems(nextItems);
+          setFolderChildrenInMap(currentFolderId, nextItems);
+        }
+      }
+
+      // 搜索结果中如果包含被删节点，也要剔除
+      if (isSearchingRef.current) {
+        startTransition(() => {
+          setSearchResults(prev => prev.filter(item => !removedSet.has(item.id)));
+        });
+      }
+
+      // 如果当前处于被删目录（或其子目录），需要回退到可用目录
+      const currentId = currentFolderIdRef.current;
+      if (currentId && removedSet.has(currentId)) {
+        clearSearch();
+        const newStack = folderStackRef.current.filter(f => !removedSet.has(f.id));
+        setFolderStack(newStack);
+        setCurrentFolderId(newStack.length > 0 ? newStack[newStack.length - 1].id : null);
+      } else if (folderStackRef.current.some(f => removedSet.has(f.id))) {
+        // breadcrumb 中某一级目录被删，裁剪 stack
+        clearSearch();
+        const newStack = folderStackRef.current.filter(f => !removedSet.has(f.id));
+        setFolderStack(newStack);
+      }
+    };
+
+    const handleMoved = (id: string, moveInfo: chrome.bookmarks.BookmarkMoveInfo) => {
+      void (async () => {
+        const oldParentId = moveInfo.oldParentId;
+        const newParentId = moveInfo.parentId;
+        const newIndex = moveInfo.index;
+
+        let moved = bookmarksMap.current.get(id);
+        if (!moved) {
+          const result = await bookmarkService.getBookmarkById(id);
+          if (!result.success || !result.data) {
+            // 数据不足时，至少刷新当前目录，避免 UI 卡死
+            const currentFolderId = getEffectiveCurrentFolderId();
+            if (currentFolderId && (currentFolderId === oldParentId || currentFolderId === newParentId)) {
+              await refreshCurrentFolderChildrenRef.current({ silent: true });
+            }
+            return;
+          }
+          moved = result.data as BookmarkItem;
+        }
+
+        const updated: BookmarkItem = { ...moved, parentId: newParentId, index: newIndex };
+        upsertBookmarkInMap(updated);
+
+        // oldParent/newParent children 已缓存时，直接增量更新
+        const oldParent = bookmarksMap.current.get(oldParentId);
+        if (oldParent?.children) {
+          const nextChildren = oldParentId === newParentId
+            ? moveInList(oldParent.children, id, newIndex)
+            : oldParent.children.filter(ch => ch.id !== id);
+          setFolderChildrenInMap(oldParentId, nextChildren);
+        }
+
+        if (oldParentId !== newParentId) {
+          const newParent = bookmarksMap.current.get(newParentId);
+          if (newParent?.children) {
+            const nextChildren = insertAtIndexDedup(newParent.children, updated, newIndex);
+            setFolderChildrenInMap(newParentId, nextChildren);
+          }
+        }
+
+        // 当前视图目录下的移动/排序
+        const currentFolderId = getEffectiveCurrentFolderId();
+        if (!currentFolderId) return;
+
+        if (oldParentId === newParentId && currentFolderId === newParentId) {
+          const nextItems = moveInList(currentFolderItemsRef.current, id, newIndex);
+          if (nextItems !== currentFolderItemsRef.current) {
+            setCurrentFolderItems(nextItems);
+            setFolderChildrenInMap(currentFolderId, nextItems);
+          }
+          return;
+        }
+
+        if (currentFolderId === oldParentId) {
+          const nextItems = currentFolderItemsRef.current.filter(ch => ch.id !== id);
+          if (nextItems.length !== currentFolderItemsRef.current.length) {
+            setCurrentFolderItems(nextItems);
+            setFolderChildrenInMap(currentFolderId, nextItems);
+          }
+        }
+
+        if (currentFolderId === newParentId) {
+          const nextItems = insertAtIndexDedup(currentFolderItemsRef.current, updated, newIndex);
+          setCurrentFolderItems(nextItems);
+          setFolderChildrenInMap(currentFolderId, nextItems);
+        }
+      })();
+    };
+
+    chrome.bookmarks.onCreated.addListener(handleCreated);
+    chrome.bookmarks.onChanged.addListener(handleChanged);
+    chrome.bookmarks.onRemoved.addListener(handleRemoved);
+    chrome.bookmarks.onMoved.addListener(handleMoved);
+
+    return () => {
+      chrome.bookmarks.onCreated.removeListener(handleCreated);
+      chrome.bookmarks.onChanged.removeListener(handleChanged);
+      chrome.bookmarks.onRemoved.removeListener(handleRemoved);
+      chrome.bookmarks.onMoved.removeListener(handleMoved);
+    };
+  }, [
+    clearSearch,
+    insertAtIndexDedup,
+    moveInList,
+    setFolderChildrenInMap,
+    startTransition,
+    upsertBookmarkInMap,
+  ]);
 
   // 导航到指定文件夹
   const navigateToFolder = useCallback(async (folderId: string) => {
@@ -391,10 +729,11 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
     }
 
     if (folder) {
+      upsertBookmarkInMap(folder);
       setFolderStack(prev => [...prev, folder]);
       setCurrentFolderId(folderId);
     }
-  }, [clearSearch, currentBookmarks, isSearching, searchResults]);
+  }, [clearSearch, currentBookmarks, isSearching, searchResults, upsertBookmarkInMap]);
 
   // 导航返回上级文件夹
   const navigateBack = useCallback(() => {
@@ -421,8 +760,7 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
   const handleResult = (result: BookmarkResult, successMessage: string) => {
     if (result.success) {
       toastRef.current?.showToast(successMessage, 'success');
-      // 重新加载书签以反映更改
-      loadBookmarks();
+      // 由 chrome.bookmarks 事件驱动增量更新（避免全量 reload）
       return true;
     } else {
       toastRef.current?.showToast(result.error || '操作失败', 'error');
