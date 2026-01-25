@@ -30,6 +30,12 @@ interface BookmarksViewProps {
   toastRef: React.RefObject<ToastRef>;
 }
 
+interface BookmarksViewStateCache {
+  lastFolderId: string | null;
+}
+
+const BOOKMARKS_VIEW_STATE_KEY = 'bookmarksViewState';
+
 const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [bookmarks, setBookmarks] = useState<BookmarkItem[]>([]);
@@ -118,6 +124,7 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
         if (!isUnmountedRef.current) {
           setBookmarkBarId(bookmarkBar.id);
           // currentFolderId 仍用 null 表示“根视图”，实际展示为 bookmarkBarId 的 children
+          void restoreLastFolder(bookmarkBar.id);
         }
       } catch (error) {
         console.error('初始化书签根目录错误:', error);
@@ -127,6 +134,21 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
     };
 
     void initQuickStart();
+
+    // 记录 popup 最后一次停留的目录（用于下次启动恢复）
+    const saveViewState = () => {
+      const data: BookmarksViewStateCache = {
+        lastFolderId: currentFolderIdRef.current,
+      };
+      void storageService.setStorageData(BOOKMARKS_VIEW_STATE_KEY, data);
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        saveViewState();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     // 空闲期构建全量索引：不阻塞首屏
     const w = window as any;
@@ -141,6 +163,8 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
 
     return () => {
       isUnmountedRef.current = true;
+      saveViewState();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       if (searchDebounceTimerRef.current) {
         clearTimeout(searchDebounceTimerRef.current);
         searchDebounceTimerRef.current = null;
@@ -399,6 +423,57 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
     const safeIndex = Math.max(0, Math.min(newIndex, without.length));
     return [...without.slice(0, safeIndex), item, ...without.slice(safeIndex)];
   }, []);
+
+  // 恢复上次打开目录（用于两阶段启动的“优先上次 folderId”）
+  const restoreLastFolder = useCallback(async (rootFolderId: string) => {
+    try {
+      const result = await storageService.getStorageData(BOOKMARKS_VIEW_STATE_KEY);
+      if (!result.success || !result.data) return;
+
+      const cache = result.data as Partial<BookmarksViewStateCache>;
+      const lastFolderId = typeof cache.lastFolderId === 'string' ? cache.lastFolderId : null;
+      if (!lastFolderId) return;
+
+      // 兼容：如果存的是书签栏根目录，直接回到根视图
+      if (lastFolderId === rootFolderId) {
+        setFolderStack([]);
+        setCurrentFolderId(null);
+        return;
+      }
+
+      const targetResult = await bookmarkService.getBookmarkById(lastFolderId);
+      if (!targetResult.success || !targetResult.data) return;
+
+      const target = targetResult.data as BookmarkItem;
+      if (!target.isFolder) return;
+
+      // 构造 folderStack：从 rootFolderId 的子目录开始到目标目录（不包含 rootFolderId 自身）
+      const chain: BookmarkItem[] = [];
+      chain.push(target);
+      upsertBookmarkInMap(target);
+
+      let cursor: BookmarkItem = target;
+      for (let depth = 0; depth < 64; depth++) {
+        const parentId = cursor.parentId;
+        if (!parentId || parentId === rootFolderId) break;
+
+        const parentResult = await bookmarkService.getBookmarkById(parentId);
+        if (!parentResult.success || !parentResult.data) break;
+
+        const parent = parentResult.data as BookmarkItem;
+        if (!parent.isFolder) break;
+        chain.push(parent);
+        upsertBookmarkInMap(parent);
+        cursor = parent;
+      }
+
+      const stack = chain.reverse();
+      setFolderStack(stack);
+      setCurrentFolderId(lastFolderId);
+    } catch (error) {
+      console.warn('恢复上次打开目录失败:', error);
+    }
+  }, [upsertBookmarkInMap]);
 
   // 按需加载当前目录一层 children（优先使用已构建的 bookmarksMap，否则走轻量 getChildren）
   const refreshCurrentFolderChildren = useCallback(async (options?: { silent?: boolean }) => {
