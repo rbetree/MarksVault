@@ -22,7 +22,7 @@ interface ThemeProviderProps {
 // 主题提供者组件
 export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
   // 默认使用暗色模式和默认蓝色
-  const [themeColor, setThemeColor] = useState<string>('#4285F4');
+  const [themeColor, setThemeColor] = useState<string>('#667B9D');
   // 根据颜色创建暗色主题
   const [theme, setTheme] = useState<Theme>(createAppTheme(themeColor));
   // 加载状态
@@ -32,7 +32,7 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
   const changeThemeColor = async (color: string) => {
     setThemeColor(color);
     setTheme(createAppTheme(color));
-    
+
     // 保存到存储
     await storageService.updateSettings({
       themeColor: color
@@ -45,10 +45,10 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
       setLoading(true);
       try {
         const result = await storageService.getSettings();
-        
+
         if (result.success && result.data) {
           const { themeColor: storedThemeColor } = result.data;
-          
+
           if (storedThemeColor) {
             setThemeColor(storedThemeColor);
             setTheme(createAppTheme(storedThemeColor));
@@ -60,7 +60,7 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
         setLoading(false);
       }
     };
-    
+
     loadThemeSettings();
   }, []);
 

@@ -112,12 +112,12 @@ const SettingGroup: React.FC<SettingGroupProps> = ({ title, icon, children }) =>
 
 // 预定义主题颜色选项
 const THEME_COLORS = [
-  { value: '#4285F4', label: '默认蓝色' },
-  { value: '#34A853', label: '绿色' },
-  { value: '#EA4335', label: '红色' },
-  { value: '#FBBC05', label: '黄色' },
-  { value: '#9C27B0', label: '紫色' },
-  { value: '#FF5722', label: '橙色' },
+  { value: '#667B9D', label: '默认灰蓝' },
+  { value: '#769481', label: '柔和绿' },
+  { value: '#B57B77', label: '柔和粉' },
+  { value: '#B5A077', label: '柔和金' },
+  { value: '#8A77B5', label: '柔和紫' },
+  { value: '#B58D77', label: '柔和橘' },
 ];
 
 /**
@@ -138,7 +138,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ toastRef }) => {
     isDarkMode: true,
     syncEnabled: false,
     viewType: 'grid',
-    themeColor: '#4285F4',
+    themeColor: '#667B9D',
     notifications: defaultNotifications
   });
   const [loading, setLoading] = useState(true);
@@ -353,7 +353,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ toastRef }) => {
                 ))}
                 <input
                   type="color"
-                  value={settings.themeColor || '#4285F4'}
+                  value={settings.themeColor || '#667B9D'}
                   onChange={handleThemeColorChange}
                   style={{ width: 24, height: 24, padding: 0 }}
                   title="自定义颜色"

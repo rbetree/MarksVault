@@ -22,7 +22,7 @@ const brightenColor = (color: string): string => {
 };
 
 // 创建暗色主题函数
-export const createAppTheme = (themeColor: string = '#4285F4') => {
+export const createAppTheme = (themeColor: string = '#667B9D') => {
   const themeOptions: ThemeOptions = {
     typography: {
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif',
@@ -105,5 +105,5 @@ export const createAppTheme = (themeColor: string = '#4285F4') => {
 };
 
 // 默认导出暗色主题
-const theme = createAppTheme('#4285F4');
+const theme = createAppTheme('#667B9D');
 export default theme;

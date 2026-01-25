@@ -72,25 +72,25 @@ class StorageService {
           maxBackupsPerType: 10 // 默认每种类型最多保留10个备份
         }
       };
-      
+
       // 如果存储中有设置，与默认设置合并
-      const settings = result.settings 
+      const settings = result.settings
         ? {
-            ...defaultSettings,
-            ...result.settings,
-            // 确保notifications对象完整
-            notifications: {
-              ...defaultSettings.notifications,
-              ...(result.settings.notifications || {})
-            },
-            // 确保backup对象完整
-            backup: {
-              ...defaultSettings.backup,
-              ...(result.settings.backup || {})
-            }
+          ...defaultSettings,
+          ...result.settings,
+          // 确保notifications对象完整
+          notifications: {
+            ...defaultSettings.notifications,
+            ...(result.settings.notifications || {})
+          },
+          // 确保backup对象完整
+          backup: {
+            ...defaultSettings.backup,
+            ...(result.settings.backup || {})
           }
+        }
         : defaultSettings;
-      
+
       return {
         success: true,
         data: settings
@@ -163,7 +163,7 @@ class StorageService {
         lastUpdated: null,
         customData: {}
       };
-      
+
       return {
         success: true,
         data: bookmarkData
@@ -190,7 +190,7 @@ class StorageService {
           lastUpdated: Date.now()
         }
       });
-      
+
       return {
         success: true
       };
@@ -217,7 +217,7 @@ class StorageService {
       }
 
       const currentData = result.data as BookmarkCustomData;
-      
+
       const updatedData: BookmarkCustomData = {
         ...currentData,
         customData: {
@@ -305,13 +305,13 @@ class StorageService {
       // 先获取当前状态
       const currentResult = await this.getBackupStatus();
       const currentStatus = currentResult.success ? currentResult.data : {};
-      
+
       // 合并现有状态和新状态
       const mergedStatus = {
         ...currentStatus,
         ...status
       };
-      
+
       await chrome.storage.local.set({ 'backup_status': mergedStatus });
       return {
         success: true
@@ -324,7 +324,7 @@ class StorageService {
       };
     }
   }
-  
+
   /**
    * 获取备份状态信息
    * @returns Promise<StorageResult>
@@ -376,7 +376,7 @@ class StorageService {
         data: statsData,
         timestamp: Date.now()
       };
-      
+
       await chrome.storage.local.set({ 'backup_stats_cache': cacheData });
       return {
         success: true
@@ -399,10 +399,10 @@ class StorageService {
     if (!cacheData || !cacheData.timestamp) {
       return false;
     }
-    
+
     const now = Date.now();
     const cacheAge = now - cacheData.timestamp;
-    
+
     return cacheAge < this.BACKUP_STATS_CACHE_TTL;
   }
 
@@ -437,24 +437,24 @@ class StorageService {
     const maxRetries = 3; // 最大重试次数
     let retryCount = 0;
     let lastError: any = null;
-    
+
     while (retryCount < maxRetries) {
       try {
         await chrome.storage.local.set({ [key]: data });
-        
+
         if (retryCount > 0) {
           console.log(`保存数据到 ${key} 成功，在第 ${retryCount + 1} 次尝试后`);
         }
-        
+
         return {
           success: true
         };
       } catch (error) {
         lastError = error;
         retryCount++;
-        
+
         console.warn(`保存数据到 ${key} 失败 (尝试 ${retryCount}/${maxRetries}):`, error);
-        
+
         if (retryCount < maxRetries) {
           // 使用指数退避策略，增加重试间隔
           const delayMs = Math.min(100 * Math.pow(2, retryCount), 1000);
@@ -463,12 +463,12 @@ class StorageService {
         }
       }
     }
-    
+
     // 所有重试都失败
     console.error(`保存数据到 ${key} 最终失败，已重试 ${maxRetries} 次:`, lastError);
     return {
       success: false,
-      error: `保存数据失败 (已重试 ${maxRetries} 次): ` + 
+      error: `保存数据失败 (已重试 ${maxRetries} 次): ` +
         (lastError instanceof Error ? lastError.message : String(lastError))
     };
   }
@@ -483,7 +483,7 @@ class StorageService {
         chrome.storage.local.clear(),
         chrome.storage.sync.clear()
       ]);
-      
+
       return {
         success: true
       };
