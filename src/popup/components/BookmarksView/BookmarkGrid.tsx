@@ -91,6 +91,7 @@ interface BookmarkGridProps {
   onSortChange: (method: 'default' | 'name' | 'dateAdded') => void;
   searchText: string;
   isSearching: boolean;
+  resolveBookmarkPath?: (bookmarkId: string) => Promise<string>;
   onSearch: (query: string) => void;
   onClearSearch: () => void;
 }
@@ -113,6 +114,7 @@ const BookmarkGrid: React.FC<BookmarkGridProps> = ({
   onSortChange,
   searchText,
   isSearching,
+  resolveBookmarkPath,
   onSearch,
   onClearSearch
 }) => {
@@ -495,6 +497,8 @@ const BookmarkGrid: React.FC<BookmarkGridProps> = ({
               key={bookmark.id}
               bookmark={bookmark}
               index={index}
+              isSearching={isSearching}
+              resolveBookmarkPath={resolveBookmarkPath}
               onOpen={handleBookmarkOpen}
               onOpenFolder={handleFolderOpen}
               onEdit={handleEdit}

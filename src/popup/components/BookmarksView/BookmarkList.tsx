@@ -72,6 +72,7 @@ interface BookmarkListProps {
   onSortChange: (method: 'default' | 'name' | 'dateAdded') => void;
   searchText: string;
   isSearching: boolean;
+  resolveBookmarkPath?: (bookmarkId: string) => Promise<string>;
   onSearch: (query: string) => void;
   onClearSearch: () => void;
 }
@@ -94,6 +95,7 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
   onSortChange,
   searchText,
   isSearching,
+  resolveBookmarkPath,
   onSearch,
   onClearSearch
 }) => {
@@ -482,6 +484,8 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
               key={bookmark.id}
               bookmark={bookmark}
               index={index}
+              isSearching={isSearching}
+              resolveBookmarkPath={resolveBookmarkPath}
               onEdit={handleEdit}
               onDelete={handleDelete}
               onOpen={handleBookmarkOpen}

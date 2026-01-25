@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Menu from '@mui/material/Menu';
@@ -95,6 +95,8 @@ const RightPositionIndicator = styled('div')(({ theme }) => ({
 interface BookmarkGridItemProps {
   bookmark: BookmarkItemType;
   index: number; // Visual index
+  isSearching?: boolean;
+  resolveBookmarkPath?: (bookmarkId: string) => Promise<string>;
   onEdit?: (bookmark: BookmarkItemType) => void;
   onDelete?: (bookmark: BookmarkItemType) => void;
   onOpen?: (bookmark: BookmarkItemType) => void;
@@ -105,6 +107,8 @@ interface BookmarkGridItemProps {
 const BookmarkGridItem: React.FC<BookmarkGridItemProps> = ({
   bookmark,
   index,
+  isSearching = false,
+  resolveBookmarkPath,
   onEdit,
   onDelete,
   onOpen,
@@ -115,11 +119,36 @@ const BookmarkGridItem: React.FC<BookmarkGridItemProps> = ({
   const [iconUrl, setIconUrl] = useState<string>('');
   const [iconError, setIconError] = useState<boolean>(false);
   const isMenuOpen = Boolean(menuAnchorPosition);
+  const [pathTitle, setPathTitle] = useState<string>('');
+  const resolvingPathRef = useRef(false);
 
   // 文件夹子项数量：优先使用已加载树上的 children.length（禁止在 item 级别额外打 API）
   const folderItemCount = bookmark.isFolder && Array.isArray(bookmark.children)
     ? bookmark.children.length
     : null;
+
+  // 搜索态：hover 时懒计算路径并写入 title tooltip
+  useEffect(() => {
+    setPathTitle('');
+    resolvingPathRef.current = false;
+  }, [bookmark.id, bookmark.title, bookmark.parentId, isSearching]);
+
+  const handleMouseEnter = () => {
+    if (!isSearching || !resolveBookmarkPath) return;
+    if (pathTitle || resolvingPathRef.current) return;
+    resolvingPathRef.current = true;
+
+    resolveBookmarkPath(bookmark.id)
+      .then(path => {
+        if (path) setPathTitle(path);
+      })
+      .catch(() => {
+        // ignore
+      })
+      .finally(() => {
+        resolvingPathRef.current = false;
+      });
+  };
 
   // 使用自定义 Hook 处理拖拽逻辑
   const {
@@ -228,6 +257,7 @@ const BookmarkGridItem: React.FC<BookmarkGridItemProps> = ({
   return (
     <GridItemContainer
       onClick={handleItemClick}
+      onMouseEnter={handleMouseEnter}
       draggable={true} // 所有项目都可拖拽，包括文件夹
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
@@ -263,7 +293,7 @@ const BookmarkGridItem: React.FC<BookmarkGridItemProps> = ({
         )}
       </IconContainer>
 
-      <ItemTitle title={bookmark.title}>
+      <ItemTitle title={isSearching && pathTitle ? pathTitle : bookmark.title}>
         {bookmark.title}
       </ItemTitle>
 

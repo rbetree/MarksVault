@@ -55,6 +55,7 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
   const currentFolderItemsRef = useRef<BookmarkItem[]>([]);
   const isSearchingRef = useRef(false);
   const refreshCurrentFolderChildrenRef = useRef<(options?: { silent?: boolean }) => Promise<void>>(async () => { });
+  const pathCacheRef = useRef<Map<string, string>>(new Map());
 
   // 当前文件夹的一层 children（原始顺序）；展示层通过 sortMethod 做派生排序
   const [currentFolderItems, setCurrentFolderItems] = useState<BookmarkItem[]>([]);
@@ -405,6 +406,33 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
     });
   }, [upsertBookmarkInMap]);
 
+  // 搜索结果 hover 时需要展示书签路径：按需计算并缓存（避免对每条结果做全量计算）
+  const resolveBookmarkPath = useCallback(async (bookmarkId: string): Promise<string> => {
+    const cached = pathCacheRef.current.get(bookmarkId);
+    if (cached) return cached;
+
+    const titles: string[] = [];
+    let currentId: string | undefined = bookmarkId;
+
+    for (let depth = 0; depth < 64 && currentId; depth++) {
+      let node = bookmarksMap.current.get(currentId);
+      if (!node) {
+        const result = await bookmarkService.getBookmarkById(currentId);
+        if (!result.success || !result.data) break;
+        node = result.data as BookmarkItem;
+        upsertBookmarkInMap(node);
+      }
+
+      if (node.title) titles.push(node.title);
+      currentId = node.parentId;
+      if (!currentId || currentId === '0') break;
+    }
+
+    const path = titles.reverse().join(' / ');
+    pathCacheRef.current.set(bookmarkId, path);
+    return path;
+  }, [upsertBookmarkInMap]);
+
   // 在列表中按 index 插入（若已存在同 id，则先去重）
   const insertAtIndexDedup = useCallback((list: BookmarkItem[], item: BookmarkItem, index?: number): BookmarkItem[] => {
     const without = list.filter(x => x.id !== item.id);
@@ -551,6 +579,7 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
     const getEffectiveCurrentFolderId = () => currentFolderIdRef.current ?? bookmarkBarIdRef.current;
 
     const handleCreated = (_id: string, node: chrome.bookmarks.BookmarkTreeNode) => {
+      pathCacheRef.current.clear();
       const item: BookmarkItem = {
         id: node.id,
         parentId: node.parentId,
@@ -585,6 +614,7 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
     };
 
     const handleChanged = (id: string, changeInfo: chrome.bookmarks.BookmarkChangeInfo) => {
+      pathCacheRef.current.clear();
       const existing = bookmarksMap.current.get(id);
 
       const updated: BookmarkItem = {
@@ -641,6 +671,7 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
     };
 
     const handleRemoved = (id: string, removeInfo: chrome.bookmarks.BookmarkRemoveInfo) => {
+      pathCacheRef.current.clear();
       // removeInfo.node 对于文件夹包含完整子树，可用于清理索引
       const removedIds: string[] = [];
       const stack: chrome.bookmarks.BookmarkTreeNode[] = [removeInfo.node];
@@ -699,6 +730,7 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
     };
 
     const handleMoved = (id: string, moveInfo: chrome.bookmarks.BookmarkMoveInfo) => {
+      pathCacheRef.current.clear();
       void (async () => {
         const oldParentId = moveInfo.oldParentId;
         const newParentId = moveInfo.parentId;
@@ -970,6 +1002,7 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
     onSortChange: handleSortChange,
     searchText,
     isSearching,
+    resolveBookmarkPath,
     onSearch: handleSearch,
     onClearSearch: clearSearch
   }), [
@@ -990,6 +1023,7 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
     handleSortChange,
     searchText,
     isSearching,
+    resolveBookmarkPath,
     handleSearch,
     clearSearch
   ]);

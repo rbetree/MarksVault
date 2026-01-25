@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import ListItem from '@mui/material/ListItem';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
@@ -79,6 +79,8 @@ const ItemContainer = styled(ListItemButton)(({ theme }) => ({
 interface BookmarkItemProps {
   bookmark: BookmarkItemType;
   index: number;
+  isSearching?: boolean;
+  resolveBookmarkPath?: (bookmarkId: string) => Promise<string>;
   onEdit?: (bookmark: BookmarkItemType) => void;
   onDelete?: (bookmark: BookmarkItemType) => void;
   onOpen?: (bookmark: BookmarkItemType) => void;
@@ -89,6 +91,8 @@ interface BookmarkItemProps {
 const BookmarkItem: React.FC<BookmarkItemProps> = ({
   bookmark,
   index,
+  isSearching = false,
+  resolveBookmarkPath,
   onEdit,
   onDelete,
   onOpen,
@@ -99,11 +103,36 @@ const BookmarkItem: React.FC<BookmarkItemProps> = ({
   const [iconUrl, setIconUrl] = useState<string>('');
   const [iconError, setIconError] = useState<boolean>(false);
   const isMenuOpen = Boolean(menuAnchorPosition);
+  const [pathTitle, setPathTitle] = useState<string>('');
+  const resolvingPathRef = useRef(false);
 
   // 文件夹子项数量：优先使用已加载树上的 children.length（禁止在 item 级别额外打 API）
   const folderItemCount = bookmark.isFolder && Array.isArray(bookmark.children)
     ? bookmark.children.length
     : null;
+
+  // 搜索态：hover 时懒计算路径并写入 title tooltip
+  useEffect(() => {
+    setPathTitle('');
+    resolvingPathRef.current = false;
+  }, [bookmark.id, bookmark.title, bookmark.parentId, isSearching]);
+
+  const handleMouseEnter = () => {
+    if (!isSearching || !resolveBookmarkPath) return;
+    if (pathTitle || resolvingPathRef.current) return;
+    resolvingPathRef.current = true;
+
+    resolveBookmarkPath(bookmark.id)
+      .then(path => {
+        if (path) setPathTitle(path);
+      })
+      .catch(() => {
+        // ignore
+      })
+      .finally(() => {
+        resolvingPathRef.current = false;
+      });
+  };
 
   // 使用自定义 Hook 处理拖拽逻辑
   const {
@@ -214,6 +243,7 @@ const BookmarkItem: React.FC<BookmarkItemProps> = ({
       {bookmark.isFolder ? (
         <DropTargetFolder
           onClick={handleItemClick}
+          onMouseEnter={handleMouseEnter}
           onContextMenu={handleContextMenu}
           data-isover={isOver && interactionMode === 'move'} // 使用data-*属性
           draggable={true} // 允许文件夹拖拽
@@ -238,7 +268,7 @@ const BookmarkItem: React.FC<BookmarkItemProps> = ({
             secondary={bookmark.isFolder ? (folderItemCount !== null ? `${folderItemCount} 项` : ' ') : ''}
             primaryTypographyProps={{
               noWrap: true,
-              title: bookmark.title,
+              title: isSearching && pathTitle ? pathTitle : bookmark.title,
               variant: 'body2',
               sx: { fontWeight: 500, lineHeight: 1.4, fontSize: '12px' }
             }}
@@ -251,6 +281,7 @@ const BookmarkItem: React.FC<BookmarkItemProps> = ({
       ) : (
         <ItemContainer
           onClick={handleItemClick}
+          onMouseEnter={handleMouseEnter}
           onContextMenu={handleContextMenu}
           draggable={true}
           onDragStart={handleDragStart}
@@ -284,7 +315,7 @@ const BookmarkItem: React.FC<BookmarkItemProps> = ({
             secondary={bookmark.url}
             primaryTypographyProps={{
               noWrap: true,
-              title: bookmark.title,
+              title: isSearching && pathTitle ? pathTitle : bookmark.title,
               variant: 'body2',
               sx: { fontWeight: 500, lineHeight: 1.4, fontSize: '12px' }
             }}
