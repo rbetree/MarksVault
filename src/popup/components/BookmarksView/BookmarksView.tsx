@@ -125,7 +125,6 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
         if (!isUnmountedRef.current) {
           setBookmarkBarId(bookmarkBar.id);
           // currentFolderId 仍用 null 表示“根视图”，实际展示为 bookmarkBarId 的 children
-          persistViewState(bookmarkBar.id);
           void restoreLastFolder(bookmarkBar.id);
         }
       } catch (error) {
@@ -504,6 +503,8 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
   // 持久化 popup 最后一次停留目录（避免仅在 unload/hidden 时写入导致丢失）
   const persistViewState = useCallback((folderId: string | null) => {
     const lastFolderId = folderId ?? bookmarkBarIdRef.current ?? null;
+    // 启动/关闭竞态：bookmarkBarId 还未写入时，避免把 lastFolderId 覆盖为 null
+    if (!lastFolderId) return;
     const data: BookmarksViewStateCache = { lastFolderId };
     void storageService.setStorageData(BOOKMARKS_VIEW_STATE_KEY, data);
   }, []);
