@@ -219,7 +219,7 @@ const SettingsActions: React.FC<SettingsActionsProps> = ({ toastRef }) => {
     try {
       const result = await storageService.importConfig(pendingImport.data, { importLocalStorage: false });
       if (result.success) {
-        toastRef?.current?.showToast('配置已导入，正在刷新页面…', 'success');
+        toastRef?.current?.showToast('配置已导入，正在刷新页面...', 'success');
         setShowImportConfirm(false);
         setPendingImport(null);
         // 刷新 popup 以重新加载 settings/数据
@@ -263,19 +263,19 @@ const SettingsActions: React.FC<SettingsActionsProps> = ({ toastRef }) => {
       );
       
       if (!backupResult.success) {
-        throw new Error(backupResult.error || '备份设置到GitHub失败');
+        throw new Error(backupResult.error || '备份配置到GitHub失败');
       }
       
       // 更新状态
       const status = await backupService.getSettingsBackupStatus(true);
       setBackupStatus(status);
       
-      toastRef?.current?.showToast('设置已成功备份到GitHub', 'success');
+      toastRef?.current?.showToast('配置已成功备份到GitHub', 'success');
     } catch (error) {
-      console.error('GitHub备份设置失败:', error);
+      console.error('GitHub备份配置失败:', error);
       const errorMessage = error instanceof Error ? error.message : String(error);
       setGitHubError(errorMessage);
-      toastRef?.current?.showToast(`GitHub备份设置失败: ${errorMessage}`, 'error');
+      toastRef?.current?.showToast(`GitHub备份配置失败: ${errorMessage}`, 'error');
     } finally {
       setIsGitHubBackuping(false);
     }
@@ -291,7 +291,7 @@ const SettingsActions: React.FC<SettingsActionsProps> = ({ toastRef }) => {
     setShowBackupRestoreConfirm(true);
   };
   
-  // 执行GitHub恢复设置
+  // 执行GitHub恢复配置
   const handleGitHubRestore = async () => {
     setShowBackupRestoreConfirm(false);
     setIsGitHubRestoring(true);
@@ -317,25 +317,26 @@ const SettingsActions: React.FC<SettingsActionsProps> = ({ toastRef }) => {
       );
       
       if (!restoreResult.success) {
-        throw new Error(restoreResult.error || '从GitHub恢复设置失败');
+        throw new Error(restoreResult.error || '从GitHub恢复配置失败');
       }
       
       // 更新状态
       const status = await backupService.getSettingsBackupStatus(true);
       setBackupStatus(status);
       
-      toastRef?.current?.showToast('设置已从GitHub成功恢复，请刷新页面以应用更改', 'success');
+      toastRef?.current?.showToast('配置已从GitHub成功恢复，正在刷新页面...', 'success');
+      setTimeout(() => window.location.reload(), 300);
     } catch (error) {
-      console.error('从GitHub恢复设置失败:', error);
+      console.error('从GitHub恢复配置失败:', error);
       const errorMessage = error instanceof Error ? error.message : String(error);
       setGitHubError(errorMessage);
-      toastRef?.current?.showToast(`从GitHub恢复设置失败: ${errorMessage}`, 'error');
+      toastRef?.current?.showToast(`从GitHub恢复配置失败: ${errorMessage}`, 'error');
     } finally {
       setIsGitHubRestoring(false);
     }
   };
   
-  // 取消GitHub恢复设置
+  // 取消GitHub恢复配置
   const handleCancelGitHubRestore = () => {
     setShowBackupRestoreConfirm(false);
   };
@@ -405,7 +406,7 @@ const SettingsActions: React.FC<SettingsActionsProps> = ({ toastRef }) => {
               } 
               secondary={
                 <Typography variant="caption" color="text.secondary">
-                  导出当前配置（settings/tasks/bookmarks等；不含GitHub token）
+                  导出当前配置（不含GitHub token）
                 </Typography>
               }
             />
@@ -508,7 +509,7 @@ const SettingsActions: React.FC<SettingsActionsProps> = ({ toastRef }) => {
               } 
               secondary={
                 <Typography variant="caption" color="text.secondary">
-                  将设置备份到GitHub仓库
+                  将配置备份到GitHub仓库（不含GitHub token）
                 </Typography>
               }
             />
@@ -536,7 +537,7 @@ const SettingsActions: React.FC<SettingsActionsProps> = ({ toastRef }) => {
               } 
               secondary={
                 <Typography variant="caption" color="text.secondary">
-                  从GitHub仓库恢复设置
+                  从GitHub仓库恢复配置（覆盖本地数据）
                 </Typography>
               }
             />
@@ -664,7 +665,7 @@ const SettingsActions: React.FC<SettingsActionsProps> = ({ toastRef }) => {
             color="primary"
             disabled={isImporting}
           >
-            {isImporting ? '正在导入…' : '确认导入'}
+            {isImporting ? '正在导入...' : '确认导入'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -674,19 +675,19 @@ const SettingsActions: React.FC<SettingsActionsProps> = ({ toastRef }) => {
         open={showBackupRestoreConfirm}
         onClose={handleCancelGitHubRestore}
       >
-        <DialogTitle>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <CloudDownloadIcon color="primary" />
-            <span>确认从GitHub恢复设置</span>
-          </Box>
-        </DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            此操作将从GitHub仓库恢复您的设置，并覆盖当前的设置数据。
-            <br /><br />
-            建议在恢复前导出当前设置作为备份。
-          </DialogContentText>
-        </DialogContent>
+      <DialogTitle>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <CloudDownloadIcon color="primary" />
+          <span>确认从GitHub恢复配置</span>
+        </Box>
+      </DialogTitle>
+      <DialogContent>
+        <DialogContentText>
+          此操作将从GitHub仓库恢复您的配置，并覆盖当前的本地数据（settings、任务、书签自定义数据等）。
+          <br /><br />
+          建议在恢复前导出当前配置作为备份。
+        </DialogContentText>
+      </DialogContent>
         <DialogActions>
           <Button onClick={handleCancelGitHubRestore} color="primary">
             取消

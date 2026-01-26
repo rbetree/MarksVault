@@ -82,31 +82,20 @@ class BackupService {
   }
 
   /**
-   * 创建设置备份数据
-   * @returns 设置备份数据对象
+   * 创建“配置备份”数据
+   * 说明：历史上该类型名为 SETTINGS，但目前用于备份/恢复扩展的完整配置快照（local + sync）。
    */
   private async createSettingsBackupData(): Promise<any> {
-    // 获取用户设置
-    const settingsResult = await storageService.getSettings();
-    if (!settingsResult.success) {
-      throw new Error(`获取设置失败: ${settingsResult.error}`);
+    // 复用本地“配置导入导出”的序列化逻辑，确保本地文件与 GitHub 备份格式一致
+    const exportResult = await storageService.exportConfig({
+      includeGitHubCredentials: false,
+      includeLocalStorage: false
+    });
+    if (!exportResult.success || !exportResult.data) {
+      throw new Error(`导出配置失败: ${exportResult.error || '未知错误'}`);
     }
 
-    // 创建源信息
-    const source = `MarksVault Extension (${navigator.platform})`;
-
-    // 创建备份对象
-    const backup = {
-      version: '1.0',
-      timestamp: Date.now(),
-      source,
-      settings: settingsResult.data,
-      metadata: {
-        type: 'settings'
-      }
-    };
-
-    return backup;
+    return exportResult.data;
   }
 
   /**
@@ -130,7 +119,7 @@ class BackupService {
       if (type === BackupType.SETTINGS) {
         backupData = await this.createSettingsBackupData();
         backupFolder = SETTINGS_FOLDER_PATH;
-        backupDescription = '设置';
+        backupDescription = '配置';
       } else {
         backupData = await this.createBackupData();
         backupFolder = 'bookmarks';
@@ -206,7 +195,7 @@ class BackupService {
         };
 
         if (type === BackupType.SETTINGS) {
-          // 设置备份状态存储在另一个键中，避免与书签备份状态混淆
+          // 配置备份状态存储在另一个键中，避免与书签备份状态混淆
           await storageService.setStorageData('settings_backup_status', backupStatus);
         } else {
           await storageService.saveBackupStatus(backupStatus);
@@ -304,7 +293,7 @@ class BackupService {
   }
 
   /**
-   * 从GitHub恢复设置
+   * 从GitHub恢复配置（历史类型名为 SETTINGS）
    * @param credentials GitHub认证凭据
    * @param username GitHub用户名
    * @param useTimestampedFile 是否使用带时间戳的文件
@@ -331,7 +320,7 @@ class BackupService {
         filePath = timestampedFilePath.startsWith(SETTINGS_FOLDER_PATH) ?
           timestampedFilePath : `${SETTINGS_FOLDER_PATH}/${timestampedFilePath}`;
       } else {
-        // 否则，获取设置文件夹中的所有文件，找到最新的设置备份文件
+        // 否则，获取配置备份文件夹中的所有文件，找到最新的备份文件
         console.log(`尝试获取目录内容: ${SETTINGS_FOLDER_PATH}`);
         try {
           const files = await githubService.getRepositoryFiles(
@@ -343,15 +332,15 @@ class BackupService {
 
           console.log(`获取到${files.length}个文件:`, files.map(f => f.name).join(', '));
 
-          // 过滤获取所有设置备份文件
+          // 过滤获取所有配置备份文件（历史命名为 settings_backup_）
           const settingsBackupFiles = files.filter(
             file => file.name.startsWith('settings_backup_') && file.name.endsWith('.json')
           );
 
-          console.log(`找到${settingsBackupFiles.length}个设置备份文件`);
+          console.log(`找到${settingsBackupFiles.length}个配置备份文件`);
 
           if (settingsBackupFiles.length === 0) {
-            throw new Error('未找到设置备份文件，请先进行备份');
+            throw new Error('未找到配置备份文件，请先进行备份');
           }
 
           // 解析文件名中的时间戳，以便找到最新文件
@@ -369,7 +358,7 @@ class BackupService {
             .sort((a, b) => parseTimestamp(b.name) - parseTimestamp(a.name))[0];
 
           filePath = latestFile.path;
-          console.log(`选择最新的设置备份文件: ${filePath}`);
+          console.log(`选择最新的配置备份文件: ${filePath}`);
         } catch (error) {
           console.error('获取仓库文件列表失败:', error);
           throw new Error(`获取仓库文件列表失败: ${error instanceof Error ? error.message : String(error)}`);
@@ -377,7 +366,7 @@ class BackupService {
       }
 
       // 2. 获取备份文件内容
-      console.log('尝试获取设置备份文件:', filePath);
+      console.log('尝试获取配置备份文件:', filePath);
       const fileData = await githubService.getFileContent(
         credentials,
         username,
@@ -388,16 +377,28 @@ class BackupService {
       // 3. 解析备份数据
       const backupData = JSON.parse(fileData.content);
 
-      // 4. 验证数据格式
-      if (!backupData.settings || typeof backupData.settings !== 'object') {
+      // 4. 兼容两种格式：
+      // - 新版：配置快照（schemaVersion/app/local...），复用 storageService.importConfig
+      // - 旧版：仅 settings（backupData.settings），保持兼容
+      const looksLikeConfig = backupData
+        && typeof backupData === 'object'
+        && backupData.schemaVersion === 1
+        && backupData.app === 'MarksVault'
+        && backupData.local
+        && typeof backupData.local === 'object';
+
+      if (looksLikeConfig) {
+        const result = await storageService.importConfig(backupData, { importLocalStorage: false });
+        if (!result.success) {
+          throw new Error(`导入配置失败: ${result.error}`);
+        }
+      } else if (backupData.settings && typeof backupData.settings === 'object') {
+        const result = await storageService.saveSettings(backupData.settings);
+        if (!result.success) {
+          throw new Error(`保存设置失败: ${result.error}`);
+        }
+      } else {
         throw new Error('备份文件格式不正确');
-      }
-
-      // 5. 保存设置
-      const result = await storageService.saveSettings(backupData.settings);
-
-      if (!result.success) {
-        throw new Error(`保存设置失败: ${result.error}`);
       }
 
       // 6. 保存恢复状态
@@ -413,13 +414,17 @@ class BackupService {
       return {
         success: true,
         data: {
-          timestamp: backupData.timestamp,
+          timestamp: typeof backupData?.timestamp === 'number'
+            ? backupData.timestamp
+            : Date.now(),
           filePath
         },
-        timestamp: backupData.timestamp
+        timestamp: typeof backupData?.timestamp === 'number'
+          ? backupData.timestamp
+          : undefined
       };
     } catch (error) {
-      console.error('设置恢复失败:', error);
+      console.error('配置恢复失败:', error);
 
       // 保存失败状态
       const restoreStatus: BackupStatus = {
@@ -431,7 +436,7 @@ class BackupService {
 
       return {
         success: false,
-        error: `恢复失败: ${error instanceof Error ? error.message : String(error)}`
+          error: `恢复失败: ${error instanceof Error ? error.message : String(error)}`
       };
     }
   }
@@ -811,9 +816,9 @@ class BackupService {
   }
 
   /**
-   * 获取设置备份状态
+   * 获取配置备份状态（历史 key 为 settings_backup_status）
    * @param forceRefresh 是否强制刷新统计数据
-   * @returns 设置备份状态信息
+   * @returns 配置备份状态信息
    */
   async getSettingsBackupStatus(
     forceRefresh: boolean = false
@@ -824,13 +829,13 @@ class BackupService {
       const status = result.success ? result.data : {};
 
       if (forceRefresh) {
-        // 在这里可以添加获取更多设置备份统计信息的逻辑，类似于书签备份的getFullBackupStatus方法
-        // 例如获取设置备份的总数量、最新备份的大小等
+        // 在这里可以添加获取更多配置备份统计信息的逻辑，类似于书签备份的getFullBackupStatus方法
+        // 例如获取配置备份的总数量、最新备份的大小等
       }
 
       return status;
     } catch (error) {
-      console.error('获取设置备份状态失败:', error);
+      console.error('获取配置备份状态失败:', error);
       return {};
     }
   }
@@ -1264,7 +1269,7 @@ class BackupService {
    * 清理超出限制的旧备份文件
    * @param credentials GitHub凭据
    * @param username GitHub用户名
-   * @param type 备份类型 (书签或设置)
+   * @param type 备份类型 (书签或配置)
    * @returns 清理结果
    */
   async cleanupOldBackups(
@@ -1335,7 +1340,7 @@ class BackupService {
             username,
             DEFAULT_BACKUP_REPO,
             file.path,
-            `自动清理旧的${type === BackupType.SETTINGS ? '设置' : '书签'}备份文件`,
+            `自动清理旧的${type === BackupType.SETTINGS ? '配置' : '书签'}备份文件`,
             file.sha
           );
           deletedCount++;
