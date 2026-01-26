@@ -28,7 +28,7 @@ export interface BaseTrigger {
 export enum EventType {
   BROWSER_STARTUP = 'browser_startup',  // 浏览器启动
   BOOKMARK_CHANGED = 'bookmark_changed', // 书签变更（包括创建、删除、修改、移动）
-  EXTENSION_CLICKED = 'extension_clicked' // 扩展图标点击 - 已废弃，由于manifest.json中配置了default_popup，此事件永远不会触发
+  EXTENSION_CLICKED = 'extension_clicked' // 扩展图标点击 - 已废弃：已配置 action.default_popup，此事件永远不会触发
 }
 
 // 事件触发器接口
