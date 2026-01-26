@@ -25,6 +25,12 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit Tests
+        run: npm test
+
       - name: Build Project
         run: npm run build
 
@@ -32,5 +38,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: marksvault-build
-          path: dist
-          retention-days: 7 
+          path: .output/chrome-mv3
+          retention-days: 7
+

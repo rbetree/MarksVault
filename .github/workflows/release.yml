@@ -34,9 +34,6 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
-      - name: Build Project
-        run: npm run build
-
       - name: Get Version
         id: get_version
         run: |
@@ -46,20 +43,23 @@ jobs:
             echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
           fi
 
+      - name: Get Package Version
+        run: |
+          echo "PACKAGE_VERSION=$(node -p \"require('./package.json').version\")" >> $GITHUB_ENV
+
       - name: Verify Version
         run: |
-          PACKAGE_VERSION="v$(node -p "require('./package.json').version")"
-          echo "Package.json version: $PACKAGE_VERSION"
+          TAG_VERSION="${{ env.VERSION }}"
+          TAG_VERSION_NO_V="${TAG_VERSION#v}"
+
+          echo "Package.json version: ${{ env.PACKAGE_VERSION }}"
           echo "Release version: ${{ env.VERSION }}"
-          if [ "${{ env.VERSION }}" != "$PACKAGE_VERSION" ]; then
+          if [ "$TAG_VERSION_NO_V" != "${{ env.PACKAGE_VERSION }}" ]; then
             echo "Warning: Release version does not match version in package.json"
           fi
 
-      - name: Package Chrome Extension (ZIP)
-        run: |
-          cd dist
-          zip -r ../marksvault-${{ env.VERSION }}-chrome.zip ./*
-          cd ..
+      - name: Build & Zip Extensions
+        run: npm run zip:all
 
       - name: Generate Changelog
         id: changelog
@@ -125,4 +125,7 @@ jobs:
           draft: false
           prerelease: false
           files: |
-            marksvault-${{ env.VERSION }}-chrome.zip
+            .output/marksvault-${{ env.PACKAGE_VERSION }}-chrome.zip
+            .output/marksvault-${{ env.PACKAGE_VERSION }}-edge.zip
+            .output/marksvault-${{ env.PACKAGE_VERSION }}-firefox.zip
+            .output/marksvault-${{ env.PACKAGE_VERSION }}-sources.zip
