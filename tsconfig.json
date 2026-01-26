@@ -13,5 +13,5 @@
     "resolveJsonModule": true,
     "jsx": "react-jsx"
   },
-  "include": ["src"]
+  "include": ["src", ".wxt/wxt.d.ts"]
 }

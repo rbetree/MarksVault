@@ -28,11 +28,22 @@ export const getFaviconUrl = (url: string): string => {
   try {
     // 检查URL是否有效
     if (!url) return '';
-    
-    // 优先使用浏览器内置的 _favicon（需要 manifest 中声明 favicon 权限与 web_accessible_resources）
-    // 使用 runtime.getURL 构建 URL，避免硬编码 chrome-extension://（Firefox 为 moz-extension://）
-    // 注意：部分浏览器可能不支持 _favicon 端点，此时会回退到 Google favicon 服务
-    return browser.runtime.getURL(`/_favicon/?pageUrl=${encodeURIComponent(url)}&size=32`);
+
+    // Chromium（Chrome/Edge）支持内置的 `_favicon` 端点：
+    // - 该端点不是 public 资源文件，因此不能直接作为 getURL 的入参（WXT 会对路径做类型收窄）
+    // - 这里使用扩展根路径作为 base，再拼接 `_favicon`，避免硬编码 chrome-extension://
+    //
+    // Firefox 不支持该端点，直接回退到 Google favicon 服务
+    const isFirefox = typeof navigator !== 'undefined' && /Firefox/i.test(navigator.userAgent);
+    if (!isFirefox) {
+      const baseUrl = browser.runtime.getURL('/');
+      return `${baseUrl}_favicon/?pageUrl=${encodeURIComponent(url)}&size=32`;
+    }
+
+    // Firefox：使用 Google favicon 服务（图片加载失败时 UI 会自动回退到默认图标）
+    const domain = getDomainFromUrl(url);
+    if (!domain) return '';
+    return `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
   } catch (error) {
     console.error('获取图标URL失败:', error);
     

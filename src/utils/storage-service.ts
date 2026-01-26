@@ -77,7 +77,7 @@ class StorageService {
    */
   async getSettings(): Promise<StorageResult> {
     try {
-      const result = await browser.storage.local.get('settings');
+      const result = await browser.storage.local.get<{ settings?: Partial<UserSettings> }>('settings');
       const defaultSettings: UserSettings = {
         syncEnabled: false,
         viewType: 'grid', // 默认使用网格视图
@@ -155,9 +155,17 @@ class StorageService {
       }
 
       const currentSettings = result.data as UserSettings;
-      const updatedSettings = {
+      const updatedSettings: UserSettings = {
         ...currentSettings,
-        ...partialSettings
+        ...partialSettings,
+        notifications: {
+          ...currentSettings.notifications,
+          ...(partialSettings.notifications ?? {})
+        },
+        backup: {
+          ...(currentSettings.backup ?? { maxBackupsPerType: 10 }),
+          ...(partialSettings.backup ?? {})
+        }
       };
 
       return await this.saveSettings(updatedSettings);
