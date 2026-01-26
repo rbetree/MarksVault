@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { browser } from 'wxt/browser';
+import { browser, type Browser } from 'wxt/browser';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
@@ -105,22 +105,46 @@ const TasksView: React.FC<TasksViewProps> = ({ toastRef }) => {
 
   // 监听storage变化，处理任务配置页面的结果
   useEffect(() => {
+    type TaskConfigResult = {
+      success: boolean;
+      taskId?: string;
+      mode?: 'create' | 'edit';
+      timestamp?: number;
+    };
+
+    const isTaskConfigResult = (value: unknown): value is TaskConfigResult => {
+      if (!value || typeof value !== 'object') return false;
+      const record = value as Record<string, unknown>;
+      if (record.success !== true && record.success !== false) return false;
+      if (
+        record.mode !== undefined &&
+        record.mode !== 'create' &&
+        record.mode !== 'edit'
+      ) {
+        return false;
+      }
+      if (record.taskId !== undefined && typeof record.taskId !== 'string') return false;
+      if (record.timestamp !== undefined && typeof record.timestamp !== 'number') return false;
+      return true;
+    };
+
     const handleStorageChange = (
-      changes: { [key: string]: chrome.storage.StorageChange },
+      changes: { [key: string]: Browser.storage.StorageChange },
       areaName: string
     ) => {
       if (areaName === 'local' && changes.taskConfigResult) {
         const result = changes.taskConfigResult.newValue;
-        if (result && result.success) {
+        if (isTaskConfigResult(result) && result.success) {
           // 刷新任务列表
           refreshTasks();
           // 显示成功提示
+          const mode = result.mode ?? 'edit';
           toastRef?.current?.showToast(
-            result.mode === 'create' ? '任务创建成功' : '任务更新成功',
+            mode === 'create' ? '任务创建成功' : '任务更新成功',
             'success'
           );
           // 清除标记
-          browser.storage.local.remove('taskConfigResult');
+          void browser.storage.local.remove('taskConfigResult');
         }
       }
     };

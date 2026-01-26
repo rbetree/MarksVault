@@ -1,5 +1,5 @@
 // 书签项类型定义
-import { browser } from 'wxt/browser';
+import { browser, type Browser } from 'wxt/browser';
 
 export interface BookmarkItem {
   id: string;
@@ -93,7 +93,7 @@ class BookmarkService {
   /**
    * 转换Chrome书签树到应用所需格式
    */
-  private transformBookmarkTree(bookmarkNodes: chrome.bookmarks.BookmarkTreeNode[]): BookmarkItem[] {
+  private transformBookmarkTree(bookmarkNodes: Browser.bookmarks.BookmarkTreeNode[]): BookmarkItem[] {
     return bookmarkNodes.map(node => {
       const item: BookmarkItem = {
         id: node.id,
@@ -160,7 +160,7 @@ class BookmarkService {
       // 收集所有非文件夹的书签
       const bookmarks: BookmarkItem[] = [];
       
-      const collectBookmarks = (items: chrome.bookmarks.BookmarkTreeNode[]) => {
+      const collectBookmarks = (items: Browser.bookmarks.BookmarkTreeNode[]) => {
         items.forEach(item => {
           if (item.url) {
             bookmarks.push({

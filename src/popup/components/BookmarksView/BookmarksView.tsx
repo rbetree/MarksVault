@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useTransition, useMemo } from 'react';
-import { browser } from 'wxt/browser';
+import { browser, type Browser } from 'wxt/browser';
 import Box from '@mui/material/Box';
 import BookmarkGrid from './BookmarkGrid';
 import BookmarkList from './BookmarkList';
@@ -584,9 +584,18 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
   useEffect(() => {
     // 使用 WXT 的 browser 统一 API，避免依赖全局 chrome（Firefox 下可能不存在）
     if (!browser.bookmarks) return;
+    type BookmarksOnChangedListener = Parameters<typeof browser.bookmarks.onChanged.addListener>[0];
+    type BookmarkChangeInfo = Parameters<BookmarksOnChangedListener>[1];
+
+    type BookmarksOnRemovedListener = Parameters<typeof browser.bookmarks.onRemoved.addListener>[0];
+    type BookmarkRemoveInfo = Parameters<BookmarksOnRemovedListener>[1];
+
+    type BookmarksOnMovedListener = Parameters<typeof browser.bookmarks.onMoved.addListener>[0];
+    type BookmarkMoveInfo = Parameters<BookmarksOnMovedListener>[1];
+
     const getEffectiveCurrentFolderId = () => currentFolderIdRef.current ?? bookmarkBarIdRef.current;
 
-    const handleCreated = (_id: string, node: chrome.bookmarks.BookmarkTreeNode) => {
+    const handleCreated = (_id: string, node: Browser.bookmarks.BookmarkTreeNode) => {
       pathCacheRef.current.clear();
       const item: BookmarkItem = {
         id: node.id,
@@ -621,7 +630,7 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
       }
     };
 
-    const handleChanged = (id: string, changeInfo: chrome.bookmarks.BookmarkChangeInfo) => {
+    const handleChanged = (id: string, changeInfo: BookmarkChangeInfo) => {
       pathCacheRef.current.clear();
       const existing = bookmarksMap.current.get(id);
 
@@ -678,11 +687,11 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
       setFolderStack(prev => prev.map(f => (f.id === id ? { ...f, title: updated.title } : f)));
     };
 
-    const handleRemoved = (id: string, removeInfo: chrome.bookmarks.BookmarkRemoveInfo) => {
+    const handleRemoved = (id: string, removeInfo: BookmarkRemoveInfo) => {
       pathCacheRef.current.clear();
       // removeInfo.node 对于文件夹包含完整子树，可用于清理索引
       const removedIds: string[] = [];
-      const stack: chrome.bookmarks.BookmarkTreeNode[] = [removeInfo.node];
+      const stack: Browser.bookmarks.BookmarkTreeNode[] = [removeInfo.node];
       while (stack.length > 0) {
         const cur = stack.pop();
         if (!cur) break;
@@ -737,7 +746,7 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
       }
     };
 
-    const handleMoved = (id: string, moveInfo: chrome.bookmarks.BookmarkMoveInfo) => {
+    const handleMoved = (id: string, moveInfo: BookmarkMoveInfo) => {
       pathCacheRef.current.clear();
       void (async () => {
         const oldParentId = moveInfo.oldParentId;

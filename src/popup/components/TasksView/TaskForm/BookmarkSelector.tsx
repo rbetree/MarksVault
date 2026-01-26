@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { browser } from 'wxt/browser';
+import { browser, type Browser } from 'wxt/browser';
 import Box from '@mui/material/Box';
 import Grid from '@mui/material/Grid';
 import Checkbox from '@mui/material/Checkbox';
@@ -34,7 +34,7 @@ const BookmarkSelector: React.FC<BookmarkSelectorProps> = ({
   maxHeight = '400px'
 }) => {
   // 状态管理
-  const [bookmarkTree, setBookmarkTree] = useState<chrome.bookmarks.BookmarkTreeNode[]>([]);
+  const [bookmarkTree, setBookmarkTree] = useState<Browser.bookmarks.BookmarkTreeNode[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
@@ -72,7 +72,7 @@ const BookmarkSelector: React.FC<BookmarkSelectorProps> = ({
   }, [selections]);
 
   // 递归收集所有子节点的ID
-  const collectAllChildIds = (node: chrome.bookmarks.BookmarkTreeNode): string[] => {
+  const collectAllChildIds = (node: Browser.bookmarks.BookmarkTreeNode): string[] => {
     const ids: string[] = [node.id];
     if (node.children) {
       node.children.forEach(child => {
@@ -83,7 +83,7 @@ const BookmarkSelector: React.FC<BookmarkSelectorProps> = ({
   };
 
   // 将节点转换为 BookmarkSelection
-  const nodeToSelection = (node: chrome.bookmarks.BookmarkTreeNode): BookmarkSelection => {
+  const nodeToSelection = (node: Browser.bookmarks.BookmarkTreeNode): BookmarkSelection => {
     const selection: BookmarkSelection = {
       id: node.id,
       title: node.title || '未命名',
@@ -100,9 +100,9 @@ const BookmarkSelector: React.FC<BookmarkSelectorProps> = ({
 
   // 查找节点
   const findNode = (
-    tree: chrome.bookmarks.BookmarkTreeNode[],
+    tree: Browser.bookmarks.BookmarkTreeNode[],
     id: string
-  ): chrome.bookmarks.BookmarkTreeNode | null => {
+  ): Browser.bookmarks.BookmarkTreeNode | null => {
     for (const node of tree) {
       if (node.id === id) return node;
       if (node.children) {
@@ -114,7 +114,7 @@ const BookmarkSelector: React.FC<BookmarkSelectorProps> = ({
   };
 
   // 切换选中状态
-  const handleToggleSelection = (node: chrome.bookmarks.BookmarkTreeNode) => {
+  const handleToggleSelection = (node: Browser.bookmarks.BookmarkTreeNode) => {
     const newSelectedIds = new Set(selectedIds);
     const allIds = collectAllChildIds(node);
 
@@ -144,7 +144,7 @@ const BookmarkSelector: React.FC<BookmarkSelectorProps> = ({
   // 全选
   const handleSelectAll = () => {
     const allIds = new Set<string>();
-    const collectIds = (nodes: chrome.bookmarks.BookmarkTreeNode[]) => {
+    const collectIds = (nodes: Browser.bookmarks.BookmarkTreeNode[]) => {
       nodes.forEach(node => {
         allIds.add(node.id);
         if (node.children) {
@@ -262,7 +262,7 @@ const BookmarkSelector: React.FC<BookmarkSelectorProps> = ({
 
   // 递归渲染书签树
   const renderBookmarkNode = (
-    node: chrome.bookmarks.BookmarkTreeNode,
+    node: Browser.bookmarks.BookmarkTreeNode,
     depth: number = 0
   ): React.ReactNode => {
     const isFolder = !node.url;
