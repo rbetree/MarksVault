@@ -582,7 +582,8 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
 
   // 监听 chrome.bookmarks 事件：增量更新索引与当前视图，避免每次操作后全量 reload
   useEffect(() => {
-    if (!chrome?.bookmarks) return;
+    // 使用 WXT 的 browser 统一 API，避免依赖全局 chrome（Firefox 下可能不存在）
+    if (!browser.bookmarks) return;
     const getEffectiveCurrentFolderId = () => currentFolderIdRef.current ?? bookmarkBarIdRef.current;
 
     const handleCreated = (_id: string, node: chrome.bookmarks.BookmarkTreeNode) => {
