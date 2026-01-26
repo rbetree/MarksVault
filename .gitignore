@@ -3,6 +3,8 @@
 
 # 构建输出
 /dist
+.output/
+.wxt/
 
 # 笔记或参考
 /docs

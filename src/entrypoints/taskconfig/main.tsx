@@ -1,8 +1,8 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { CssBaseline } from '@mui/material';
-import { ThemeProvider } from '../popup/contexts/ThemeContext';
-import TaskConfigPage from './components/TaskConfigPage';
+import { ThemeProvider } from '../../popup/contexts/ThemeContext';
+import TaskConfigPage from '../../taskconfig/components/TaskConfigPage';
 
 const container = document.getElementById('root');
 if (!container) {

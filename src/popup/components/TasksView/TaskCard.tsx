@@ -104,7 +104,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
     
     // 如果是选择性推送任务，打开任务配置页面（执行模式）
     if (task.action.type === ActionType.SELECTIVE_PUSH) {
-      const url = chrome.runtime.getURL(`taskconfig/taskconfig.html?mode=execute&taskId=${task.id}`);
+      const url = chrome.runtime.getURL(`taskconfig.html?mode=execute&taskId=${task.id}`);
       chrome.tabs.create({ url });
       return;
     }

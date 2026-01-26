@@ -146,7 +146,7 @@ const TasksView: React.FC<TasksViewProps> = ({ toastRef }) => {
 
   // 打开任务配置页面
   const openTaskConfigPage = (mode: 'create' | 'edit', taskId?: string) => {
-    const url = chrome.runtime.getURL('taskconfig/taskconfig.html');
+    const url = chrome.runtime.getURL('taskconfig.html');
     const params = new URLSearchParams({ mode });
     if (taskId) {
       params.append('taskId', taskId);

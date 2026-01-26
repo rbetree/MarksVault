@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="assets/images/logo.png" alt="MarksVault" width="120">
+  <img src="public/assets/images/logo.png" alt="MarksVault" width="120">
   <h1>MarksVault - 书签保险箱</h1>
   <p>
     一个强大的浏览器扩展，用于智能管理、整理和安全备份您的书签数据
@@ -29,11 +29,11 @@
   <table>
     <tr>
       <td align="center">
-        <img src="assets/images/screenshots/theme-light.png" alt="明亮主题界面" width="250">
+        <img src="public/assets/images/screenshots/theme-light.png" alt="明亮主题界面" width="250">
         <p><i>明亮主题</i></p>
       </td>
       <td align="center">
-        <img src="assets/images/screenshots/theme-dark.png" alt="暗黑主题界面" width="250">
+        <img src="public/assets/images/screenshots/theme-dark.png" alt="暗黑主题界面" width="250">
         <p><i>暗黑主题</i></p>
       </td>
     </tr>
@@ -48,15 +48,15 @@
   <table>
     <tr>
       <td align="center">
-        <img src="assets/images/screenshots/bookmarks-view-1.png" alt="书签列表视图" width="250">
+        <img src="public/assets/images/screenshots/bookmarks-view-1.png" alt="书签列表视图" width="250">
         <p><i>列表视图</i></p>
       </td>
       <td align="center">
-        <img src="assets/images/screenshots/bookmarks-view-2.png" alt="书签网格视图" width="250">
+        <img src="public/assets/images/screenshots/bookmarks-view-2.png" alt="书签网格视图" width="250">
         <p><i>网格视图</i></p>
       </td>
       <td align="center">
-        <img src="assets/images/screenshots/bookmarks-view-3.png" alt="书签搜索" width="250">
+        <img src="public/assets/images/screenshots/bookmarks-view-3.png" alt="书签搜索" width="250">
         <p><i>书签搜索</i></p>
       </td>
     </tr>
@@ -68,15 +68,15 @@
   <table>
     <tr>
       <td align="center">
-        <img src="assets/images/screenshots/tasks-view-1.png" alt="任务卡片列表" width="250">
+        <img src="public/assets/images/screenshots/tasks-view-1.png" alt="任务卡片列表" width="250">
         <p><i>任务卡片列表</i></p>
       </td>
       <td align="center">
-        <img src="assets/images/screenshots/tasks-view-2.png" alt="任务卡片展开" width="250">
+        <img src="public/assets/images/screenshots/tasks-view-2.png" alt="任务卡片展开" width="250">
         <p><i>任务卡片展开</i></p>
       </td>
       <td align="center">
-        <img src="assets/images/screenshots/tasks-view-3.png" alt="任务创建" width="250">
+        <img src="public/assets/images/screenshots/tasks-view-3.png" alt="任务创建" width="250">
         <p><i>任务创建</i></p>
       </td>
     </tr>
@@ -88,15 +88,15 @@
   <table>
     <tr>
       <td align="center">
-        <img src="assets/images/screenshots/sync-view-1.png" alt="GitHub连接" width="250">
+        <img src="public/assets/images/screenshots/sync-view-1.png" alt="GitHub连接" width="250">
         <p><i>GitHub连接</i></p>
       </td>
       <td align="center">
-        <img src="assets/images/screenshots/sync-view-2.png" alt="备份统计" width="250">
+        <img src="public/assets/images/screenshots/sync-view-2.png" alt="备份统计" width="250">
         <p><i>连接后备份统计</i></p>
       </td>
       <td align="center">
-        <img src="assets/images/screenshots/sync-view-3.png" alt="下载恢复" width="250">
+        <img src="public/assets/images/screenshots/sync-view-3.png" alt="下载恢复" width="250">
         <p><i>下载恢复</i></p>
       </td>
     </tr>
@@ -108,15 +108,15 @@
   <table>
     <tr>
       <td align="center">
-        <img src="assets/images/screenshots/settings-view-1.png" alt="一般设置" width="250">
+        <img src="public/assets/images/screenshots/settings-view-1.png" alt="一般设置" width="250">
         <p><i>外观设置</i></p>
       </td>
       <td align="center">
-        <img src="assets/images/screenshots/settings-view-2.png" alt="高级设置" width="250">
+        <img src="public/assets/images/screenshots/settings-view-2.png" alt="高级设置" width="250">
         <p><i>高级设置</i></p>
       </td>
       <td align="center">
-        <img src="assets/images/screenshots/settings-view-3.png" alt="关于信息" width="250">
+        <img src="public/assets/images/screenshots/settings-view-3.png" alt="关于信息" width="250">
         <p><i>关于信息</i></p>
       </td>
     </tr>
@@ -216,7 +216,7 @@ src/                      # 源代码
    - 打开 `chrome://extensions/`
    - 启用"开发者模式"
    - 点击"加载已解压的扩展程序"
-   - 选择项目中的`dist`目录
+   - 选择项目中的`.output/chrome-mv3`目录
 
 
 ## 📝 具体使用

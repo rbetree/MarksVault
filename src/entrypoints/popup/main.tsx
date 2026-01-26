@@ -1,7 +1,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import App from './components/App';
-import { ThemeProvider } from './contexts/ThemeContext';
+import App from '../../popup/components/App';
+import { ThemeProvider } from '../../popup/contexts/ThemeContext';
 
 // 渲染弹出窗口
 const container = document.getElementById('root');
