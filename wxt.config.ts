@@ -19,7 +19,6 @@ export default defineConfig({
           128: 'assets/icons/logo/icon128.png',
         },
       },
-      options_page: 'popup.html#settings',
       icons: {
         16: 'assets/icons/logo/icon16.png',
         48: 'assets/icons/logo/icon48.png',

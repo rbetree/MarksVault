@@ -172,6 +172,9 @@ src/                      # 源代码（WXT srcDir）
 │   ├── popup/            # Popup 页面（输出为 popup.html）
 │   │   ├── index.html
 │   │   └── main.tsx
+│   ├── options/          # Options 页面（输出为 options.html）
+│   │   ├── index.html
+│   │   └── main.tsx
 │   └── taskconfig/       # Unlisted Page（输出为 taskconfig.html）
 │       ├── index.html
 │       └── main.tsx
