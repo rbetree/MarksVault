@@ -132,7 +132,7 @@
 | **扩展APIs** | Chrome Manifest V3, Bookmarks API, Storage API, Tabs API, Runtime API |
 | **状态管理** | React Context API + Hooks |
 | **外部集成** | GitHub API (仓库操作与内容管理) |
-| **构建与测试** | Webpack 5.82.1, ESLint 8.40.0, Jest 29.5.0 |
+| **构建与测试** | WXT（Vite）, ESLint 8.40.0, Jest 29.5.0 |
 | **项目结构** | 功能模块化设计, Service Worker后台, React弹出界面 |
 
 ## 🚀 功能
@@ -163,10 +163,19 @@
 ## 📁 项目结构
 
 ```
-src/                      # 源代码
-├── background/           # 扩展后台脚本
-│   └── background.ts     # 后台Service Worker脚本
-├── popup/                # 弹出窗口界面
+public/                   # 静态资源（原样拷贝到输出目录）
+└── assets/               # 图标、截图等资源
+
+src/                      # 源代码（WXT srcDir）
+├── entrypoints/          # WXT 入口（自动生成 manifest）
+│   ├── background.ts     # 后台 Service Worker 入口（MV3）
+│   ├── popup/            # Popup 页面（输出为 popup.html）
+│   │   ├── index.html
+│   │   └── main.tsx
+│   └── taskconfig/       # Unlisted Page（输出为 taskconfig.html）
+│       ├── index.html
+│       └── main.tsx
+├── popup/                # Popup 业务 UI（React）
 │   ├── components/       # React组件
 │   │   ├── BookmarksView/# 书签管理视图组件
 │   │   ├── TasksView/    # 任务管理视图组件
@@ -177,12 +186,14 @@ src/                      # 源代码
 │   │       ├── BottomNavigation.tsx # 底部导航组件
 │   │       ├── Toast.tsx         # 通知提示组件
 │   │       └── LoadingIndicator.tsx # 加载指示器
-│   ├── styles/           # CSS样式文件
-│   ├── popup.html        # 弹出窗口HTML
-│   └── popup.tsx         # 弹出窗口脚本入口
+│   └── contexts/         # 主题/上下文等
+├── taskconfig/           # 任务配置/执行页面（React）
+│   └── components/
 ├── services/             # 服务层
 ├── types/                # TypeScript类型定义
 └── utils/                # 工具函数
+
+wxt.config.ts             # WXT 配置（manifest/构建）
 ```
 
 ## 📥 安装指南
