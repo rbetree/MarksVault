@@ -39,6 +39,20 @@ export interface BookmarkCustomData {
   // 更多自定义数据...
 }
 
+// 配置导入/导出文件格式（v1）
+export interface MarksVaultConfigBackupV1 {
+  schemaVersion: 1;
+  app: 'MarksVault';
+  extensionVersion: string;
+  exportedAt: string; // ISO 字符串
+  // chrome.storage.local 全量数据
+  local: Record<string, any>;
+  // chrome.storage.sync 全量数据（默认不包含 github_credentials）
+  sync: Record<string, any>;
+  // popup 页面 localStorage（可选，当前仅用于版本检查等轻量状态）
+  localStorage?: Record<string, string>;
+}
+
 // 存储操作结果类型
 export interface StorageResult {
   success: boolean;
@@ -52,6 +66,9 @@ import { BackupStatus } from '../types/backup';
 class StorageService {
   // 备份统计信息缓存的过期时间（毫秒）
   private readonly BACKUP_STATS_CACHE_TTL = 10 * 60 * 1000; // 10分钟
+
+  // 配置导入/导出的 schemaVersion
+  private readonly CONFIG_BACKUP_SCHEMA_VERSION = 1 as const;
 
   /**
    * 获取用户设置
@@ -492,6 +509,123 @@ class StorageService {
       return {
         success: false,
         error: '清除所有数据失败: ' + (error instanceof Error ? error.message : String(error))
+      };
+    }
+  }
+
+  /**
+   * 导出配置到 JSON（默认不包含 GitHub 凭据）
+   * - local: chrome.storage.local 全量
+   * - sync: chrome.storage.sync 全量（默认剔除 github_credentials）
+   * - localStorage: popup localStorage（可选）
+   */
+  async exportConfig(options?: {
+    includeGitHubCredentials?: boolean;
+    includeLocalStorage?: boolean;
+  }): Promise<StorageResult> {
+    try {
+      const [local, syncAll] = await Promise.all([
+        chrome.storage.local.get(null),
+        chrome.storage.sync.get(null)
+      ]);
+
+      const includeGitHubCredentials = options?.includeGitHubCredentials === true;
+      const sync: Record<string, any> = { ...syncAll };
+      if (!includeGitHubCredentials) {
+        // 默认不导出 token，避免用户误分享备份文件导致泄露
+        delete sync.github_credentials;
+      }
+
+      let localStorageData: Record<string, string> | undefined;
+      if (options?.includeLocalStorage && typeof localStorage !== 'undefined') {
+        localStorageData = {};
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (!key) continue;
+          localStorageData[key] = localStorage.getItem(key) ?? '';
+        }
+      }
+
+      const data: MarksVaultConfigBackupV1 = {
+        schemaVersion: this.CONFIG_BACKUP_SCHEMA_VERSION,
+        app: 'MarksVault',
+        extensionVersion: chrome.runtime.getManifest().version,
+        exportedAt: new Date().toISOString(),
+        local,
+        sync,
+        localStorage: localStorageData
+      };
+
+      return { success: true, data };
+    } catch (error) {
+      console.error('导出配置失败:', error);
+      return {
+        success: false,
+        error: '导出配置失败: ' + (error instanceof Error ? error.message : String(error))
+      };
+    }
+  }
+
+  /**
+   * 从 JSON 导入配置
+   * - local 会先 clear，再 set（覆盖导入）
+   * - sync 默认不 clear，仅 set 备份文件中包含的 key（避免意外清空 GitHub 凭据）
+   * - localStorage（可选）仅 set 备份文件中包含的 key
+   *
+   * 兼容：如果传入的是旧版“仅 settings”导出文件，则只导入 settings
+   */
+  async importConfig(config: unknown, options?: {
+    importLocalStorage?: boolean;
+  }): Promise<StorageResult> {
+    try {
+      // 兼容旧版：settings 直接导入
+      if (config && typeof config === 'object' && !Array.isArray(config)) {
+        const maybeSettings = config as any;
+        const looksLikeSettings = typeof maybeSettings.syncEnabled === 'boolean'
+          && (maybeSettings.viewType === 'list' || maybeSettings.viewType === 'grid');
+
+        if (looksLikeSettings) {
+          return await this.saveSettings(maybeSettings as UserSettings);
+        }
+      }
+
+      if (!config || typeof config !== 'object' || Array.isArray(config)) {
+        return { success: false, error: '无效的配置文件格式：根对象必须是 JSON object' };
+      }
+
+      const data = config as Partial<MarksVaultConfigBackupV1>;
+      if (data.schemaVersion !== this.CONFIG_BACKUP_SCHEMA_VERSION || data.app !== 'MarksVault') {
+        return { success: false, error: '无效的配置文件：schemaVersion/app 不匹配' };
+      }
+      if (!data.local || typeof data.local !== 'object' || Array.isArray(data.local)) {
+        return { success: false, error: '无效的配置文件：local 数据缺失或格式错误' };
+      }
+
+      // 1) 覆盖导入 local
+      await chrome.storage.local.clear();
+      await chrome.storage.local.set(data.local as Record<string, any>);
+
+      // 2) 合并导入 sync（不清空）
+      if (data.sync && typeof data.sync === 'object' && !Array.isArray(data.sync)) {
+        const syncData = data.sync as Record<string, any>;
+        if (Object.keys(syncData).length > 0) {
+          await chrome.storage.sync.set(syncData);
+        }
+      }
+
+      // 3) 可选导入 localStorage
+      if (options?.importLocalStorage && data.localStorage && typeof localStorage !== 'undefined') {
+        for (const [key, value] of Object.entries(data.localStorage)) {
+          localStorage.setItem(key, value ?? '');
+        }
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('导入配置失败:', error);
+      return {
+        success: false,
+        error: '导入配置失败: ' + (error instanceof Error ? error.message : String(error))
       };
     }
   }

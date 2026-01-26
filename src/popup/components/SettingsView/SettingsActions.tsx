@@ -42,6 +42,20 @@ const SettingsActions: React.FC<SettingsActionsProps> = ({ toastRef }) => {
   // 状态管理
   const [showClearDialog, setShowClearDialog] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [showImportConfirm, setShowImportConfirm] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [pendingImport, setPendingImport] = useState<{
+    fileName: string;
+    mode: 'config' | 'settings';
+    data: any;
+    meta?: {
+      exportedAt?: string;
+      extensionVersion?: string;
+      localKeys?: number;
+      syncKeys?: number;
+      hasGitHubCredentials?: boolean;
+    };
+  } | null>(null);
   const [showBackupRestoreConfirm, setShowBackupRestoreConfirm] = useState(false);
   const [isGitHubBackuping, setIsGitHubBackuping] = useState(false);
   const [isGitHubRestoring, setIsGitHubRestoring] = useState(false);
@@ -94,33 +108,36 @@ const SettingsActions: React.FC<SettingsActionsProps> = ({ toastRef }) => {
     }
   };
 
-  // 处理设置导出
-  const handleExportSettings = async () => {
+  // 处理配置导出（默认不包含 GitHub 凭据）
+  const handleExportConfig = async () => {
     try {
-      const settingsResult = await storageService.getSettings();
-      
-      if (settingsResult.success && settingsResult.data) {
+      const result = await storageService.exportConfig({
+        includeGitHubCredentials: false,
+        includeLocalStorage: false,
+      });
+
+      if (result.success && result.data) {
         const settingsBlob = new Blob(
-          [JSON.stringify(settingsResult.data, null, 2)], 
+          [JSON.stringify(result.data, null, 2)],
           { type: 'application/json' }
         );
         
         const url = URL.createObjectURL(settingsBlob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = `marksvault-settings-${new Date().toISOString().slice(0, 10)}.json`;
+        link.download = `marksvault-config-${new Date().toISOString().slice(0, 10)}.json`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
         
-        toastRef?.current?.showToast('设置已导出', 'success');
+        toastRef?.current?.showToast('配置已导出', 'success');
       } else {
-        toastRef?.current?.showToast('导出设置失败', 'error');
+        toastRef?.current?.showToast('导出配置失败', 'error');
       }
     } catch (error) {
-      console.error('导出设置时出错:', error);
-      toastRef?.current?.showToast('导出设置时发生错误', 'error');
+      console.error('导出配置时出错:', error);
+      toastRef?.current?.showToast('导出配置时发生错误', 'error');
     }
   };
 
@@ -129,8 +146,8 @@ const SettingsActions: React.FC<SettingsActionsProps> = ({ toastRef }) => {
     fileInputRef.current?.click();
   };
 
-  // 处理设置导入
-  const handleImportSettings = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  // 处理配置导入：先解析文件，再二次确认覆盖导入
+  const handleImportConfig = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
     
@@ -139,35 +156,82 @@ const SettingsActions: React.FC<SettingsActionsProps> = ({ toastRef }) => {
       reader.onload = async (e) => {
         try {
           const content = e.target?.result as string;
-          const settings = JSON.parse(content);
-          
-          // 验证设置格式
-          if (!settings || typeof settings !== 'object') {
-            throw new Error('无效的设置文件格式');
+          const parsed = JSON.parse(content);
+
+          // 判定导入模式：兼容旧版 settings-only
+          const looksLikeSettings = parsed && typeof parsed === 'object'
+            && typeof parsed.syncEnabled === 'boolean'
+            && (parsed.viewType === 'list' || parsed.viewType === 'grid');
+
+          const looksLikeConfig = parsed && typeof parsed === 'object'
+            && parsed.schemaVersion === 1
+            && parsed.app === 'MarksVault'
+            && parsed.local
+            && typeof parsed.local === 'object';
+
+          if (!looksLikeSettings && !looksLikeConfig) {
+            throw new Error('无效的配置文件格式');
           }
-          
-          const result = await storageService.saveSettings(settings);
-          
-          if (result.success) {
-            toastRef?.current?.showToast('设置已导入，请刷新页面以应用更改', 'success');
-          } else {
-            toastRef?.current?.showToast(`导入设置失败: ${result.error}`, 'error');
-          }
+
+          setPendingImport({
+            fileName: file.name,
+            mode: looksLikeConfig ? 'config' : 'settings',
+            data: parsed,
+            meta: looksLikeConfig
+              ? {
+                exportedAt: typeof parsed.exportedAt === 'string' ? parsed.exportedAt : undefined,
+                extensionVersion: typeof parsed.extensionVersion === 'string' ? parsed.extensionVersion : undefined,
+                localKeys: parsed.local ? Object.keys(parsed.local).length : 0,
+                syncKeys: parsed.sync ? Object.keys(parsed.sync).length : 0,
+                hasGitHubCredentials: Boolean(parsed?.sync?.github_credentials)
+              }
+              : undefined
+          });
+          setShowImportConfirm(true);
         } catch (parseError) {
-          console.error('解析设置文件时出错:', parseError);
-          toastRef?.current?.showToast('无效的设置文件格式', 'error');
+          console.error('解析配置文件时出错:', parseError);
+          toastRef?.current?.showToast('无效的配置文件格式', 'error');
         }
       };
       
       reader.readAsText(file);
     } catch (error) {
-      console.error('导入设置时出错:', error);
-      toastRef?.current?.showToast('导入设置时发生错误', 'error');
+      console.error('导入配置时出错:', error);
+      toastRef?.current?.showToast('导入配置时发生错误', 'error');
     } finally {
       // 重置文件输入，以便可以重新选择相同的文件
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
+    }
+  };
+
+  const handleCancelImport = () => {
+    if (isImporting) return;
+    setShowImportConfirm(false);
+    setPendingImport(null);
+  };
+
+  const handleConfirmImport = async () => {
+    if (!pendingImport) return;
+
+    setIsImporting(true);
+    try {
+      const result = await storageService.importConfig(pendingImport.data, { importLocalStorage: false });
+      if (result.success) {
+        toastRef?.current?.showToast('配置已导入，正在刷新页面…', 'success');
+        setShowImportConfirm(false);
+        setPendingImport(null);
+        // 刷新 popup 以重新加载 settings/数据
+        setTimeout(() => window.location.reload(), 300);
+      } else {
+        toastRef?.current?.showToast(`导入配置失败: ${result.error}`, 'error');
+      }
+    } catch (error) {
+      console.error('执行导入配置时出错:', error);
+      toastRef?.current?.showToast('导入配置时发生错误', 'error');
+    } finally {
+      setIsImporting(false);
     }
   };
   
@@ -328,7 +392,7 @@ const SettingsActions: React.FC<SettingsActionsProps> = ({ toastRef }) => {
                 color="primary"
                 size="small"
                 startIcon={<FileDownloadIcon />}
-                onClick={handleExportSettings}
+                onClick={handleExportConfig}
                 sx={{ minWidth: '90px', fontSize: '0.75rem' }}
               >
                 导出
@@ -341,7 +405,7 @@ const SettingsActions: React.FC<SettingsActionsProps> = ({ toastRef }) => {
               } 
               secondary={
                 <Typography variant="caption" color="text.secondary">
-                  将当前设置导出为JSON文件
+                  导出当前配置（settings/tasks/bookmarks等；不含GitHub token）
                 </Typography>
               }
             />
@@ -368,7 +432,7 @@ const SettingsActions: React.FC<SettingsActionsProps> = ({ toastRef }) => {
               } 
               secondary={
                 <Typography variant="caption" color="text.secondary">
-                  从JSON文件导入设置
+                  从JSON文件导入配置（覆盖本地数据）
                 </Typography>
               }
             />
@@ -377,8 +441,8 @@ const SettingsActions: React.FC<SettingsActionsProps> = ({ toastRef }) => {
               ref={fileInputRef}
               style={{ display: 'none' }}
               accept=".json"
-              onChange={handleImportSettings}
-              aria-label="导入设置文件"
+              onChange={handleImportConfig}
+              aria-label="导入配置文件"
             />
           </ListItem>
           
@@ -551,6 +615,56 @@ const SettingsActions: React.FC<SettingsActionsProps> = ({ toastRef }) => {
             autoFocus
           >
             {clearing ? '正在清除...' : '确认清除'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* 导入配置确认对话框 */}
+      <Dialog
+        open={showImportConfirm}
+        onClose={handleCancelImport}
+      >
+        <DialogTitle>确认导入配置</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            此操作将覆盖当前本地数据（settings、任务、书签自定义数据等）。
+            <br />
+            建议在导入前先导出当前配置作为备份。
+          </DialogContentText>
+          {pendingImport?.mode === 'config' && (
+            <DialogContentText sx={{ mt: 2 }}>
+              文件：{pendingImport.fileName}
+              <br />
+              导出时间：{pendingImport.meta?.exportedAt || '未知'}
+              <br />
+              版本：{pendingImport.meta?.extensionVersion || '未知'}
+              <br />
+              local keys：{pendingImport.meta?.localKeys ?? 0}；sync keys：{pendingImport.meta?.syncKeys ?? 0}
+              {pendingImport.meta?.hasGitHubCredentials ? (
+                <>
+                  <br />
+                  ⚠️ 该文件包含 GitHub 凭据（token）字段，但默认不会清空 sync，仅对文件中包含的 key 做覆盖写入。
+                </>
+              ) : null}
+            </DialogContentText>
+          )}
+          {pendingImport?.mode === 'settings' && (
+            <DialogContentText sx={{ mt: 2 }}>
+              检测到旧版“仅 settings”文件：将只导入 settings。
+            </DialogContentText>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCancelImport} disabled={isImporting}>
+            取消
+          </Button>
+          <Button
+            onClick={handleConfirmImport}
+            variant="contained"
+            color="primary"
+            disabled={isImporting}
+          >
+            {isImporting ? '正在导入…' : '确认导入'}
           </Button>
         </DialogActions>
       </Dialog>
