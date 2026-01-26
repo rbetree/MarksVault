@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { browser } from 'wxt/browser';
 import { Box, CircularProgress, Alert } from '@mui/material';
 import TaskConfigHeader from './TaskConfigHeader';
 import TaskFormContainer from './TaskFormContainer';
@@ -62,7 +63,7 @@ const TaskConfigPage: React.FC = () => {
 
       if (result.success && result.taskId) {
         // 将保存结果写入chrome.storage.local
-        await chrome.storage.local.set({
+        await browser.storage.local.set({
           taskConfigResult: {
             success: true,
             taskId: result.taskId,

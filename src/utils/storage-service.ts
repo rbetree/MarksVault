@@ -62,6 +62,7 @@ export interface StorageResult {
 
 // 导入备份状态类型
 import { BackupStatus } from '../types/backup';
+import { browser } from 'wxt/browser';
 
 class StorageService {
   // 备份统计信息缓存的过期时间（毫秒）
@@ -76,7 +77,7 @@ class StorageService {
    */
   async getSettings(): Promise<StorageResult> {
     try {
-      const result = await chrome.storage.local.get('settings');
+      const result = await browser.storage.local.get('settings');
       const defaultSettings: UserSettings = {
         syncEnabled: false,
         viewType: 'grid', // 默认使用网格视图
@@ -128,7 +129,7 @@ class StorageService {
    */
   async saveSettings(settings: UserSettings): Promise<StorageResult> {
     try {
-      await chrome.storage.local.set({ settings });
+      await browser.storage.local.set({ settings });
       return {
         success: true
       };
@@ -175,7 +176,7 @@ class StorageService {
    */
   async getBookmarkCustomData(): Promise<StorageResult> {
     try {
-      const result = await chrome.storage.local.get('bookmarks');
+      const result = await browser.storage.local.get('bookmarks');
       const bookmarkData = result.bookmarks || {
         lastUpdated: null,
         customData: {}
@@ -201,7 +202,7 @@ class StorageService {
    */
   async saveBookmarkCustomData(bookmarkData: BookmarkCustomData): Promise<StorageResult> {
     try {
-      await chrome.storage.local.set({
+      await browser.storage.local.set({
         bookmarks: {
           ...bookmarkData,
           lastUpdated: Date.now()
@@ -260,7 +261,7 @@ class StorageService {
    */
   async saveGitHubCredentials(credentials: GitHubCredentials): Promise<StorageResult> {
     try {
-      await chrome.storage.sync.set({ 'github_credentials': credentials });
+      await browser.storage.sync.set({ 'github_credentials': credentials });
       return {
         success: true
       };
@@ -279,7 +280,7 @@ class StorageService {
    */
   async getGitHubCredentials(): Promise<StorageResult> {
     try {
-      const result = await chrome.storage.sync.get('github_credentials');
+      const result = await browser.storage.sync.get('github_credentials');
       return {
         success: true,
         data: result.github_credentials || null
@@ -299,7 +300,7 @@ class StorageService {
    */
   async clearGitHubCredentials(): Promise<StorageResult> {
     try {
-      await chrome.storage.sync.remove('github_credentials');
+      await browser.storage.sync.remove('github_credentials');
       return {
         success: true
       };
@@ -329,7 +330,7 @@ class StorageService {
         ...status
       };
 
-      await chrome.storage.local.set({ 'backup_status': mergedStatus });
+      await browser.storage.local.set({ 'backup_status': mergedStatus });
       return {
         success: true
       };
@@ -348,7 +349,7 @@ class StorageService {
    */
   async getBackupStatus(): Promise<StorageResult> {
     try {
-      const result = await chrome.storage.local.get('backup_status');
+      const result = await browser.storage.local.get('backup_status');
       return {
         success: true,
         data: result.backup_status || {}
@@ -368,7 +369,7 @@ class StorageService {
    */
   async getBackupStatsCache(): Promise<StorageResult> {
     try {
-      const result = await chrome.storage.local.get('backup_stats_cache');
+      const result = await browser.storage.local.get('backup_stats_cache');
       return {
         success: true,
         data: result.backup_stats_cache || null
@@ -394,7 +395,7 @@ class StorageService {
         timestamp: Date.now()
       };
 
-      await chrome.storage.local.set({ 'backup_stats_cache': cacheData });
+      await browser.storage.local.set({ 'backup_stats_cache': cacheData });
       return {
         success: true
       };
@@ -430,7 +431,7 @@ class StorageService {
    */
   async getStorageData(key: string): Promise<StorageResult> {
     try {
-      const result = await chrome.storage.local.get(key);
+      const result = await browser.storage.local.get(key);
       return {
         success: true,
         data: result[key] || null
@@ -457,7 +458,7 @@ class StorageService {
 
     while (retryCount < maxRetries) {
       try {
-        await chrome.storage.local.set({ [key]: data });
+        await browser.storage.local.set({ [key]: data });
 
         if (retryCount > 0) {
           console.log(`保存数据到 ${key} 成功，在第 ${retryCount + 1} 次尝试后`);
@@ -497,8 +498,8 @@ class StorageService {
   async clearAllData(): Promise<StorageResult> {
     try {
       await Promise.all([
-        chrome.storage.local.clear(),
-        chrome.storage.sync.clear()
+        browser.storage.local.clear(),
+        browser.storage.sync.clear()
       ]);
 
       return {
@@ -525,8 +526,8 @@ class StorageService {
   }): Promise<StorageResult> {
     try {
       const [local, syncAll] = await Promise.all([
-        chrome.storage.local.get(null),
-        chrome.storage.sync.get(null)
+        browser.storage.local.get(null),
+        browser.storage.sync.get(null)
       ]);
 
       const includeGitHubCredentials = options?.includeGitHubCredentials === true;
@@ -549,7 +550,7 @@ class StorageService {
       const data: MarksVaultConfigBackupV1 = {
         schemaVersion: this.CONFIG_BACKUP_SCHEMA_VERSION,
         app: 'MarksVault',
-        extensionVersion: chrome.runtime.getManifest().version,
+        extensionVersion: browser.runtime.getManifest().version,
         exportedAt: new Date().toISOString(),
         local,
         sync,
@@ -602,14 +603,14 @@ class StorageService {
       }
 
       // 1) 覆盖导入 local
-      await chrome.storage.local.clear();
-      await chrome.storage.local.set(data.local as Record<string, any>);
+      await browser.storage.local.clear();
+      await browser.storage.local.set(data.local as Record<string, any>);
 
       // 2) 合并导入 sync（不清空）
       if (data.sync && typeof data.sync === 'object' && !Array.isArray(data.sync)) {
         const syncData = data.sync as Record<string, any>;
         if (Object.keys(syncData).length > 0) {
-          await chrome.storage.sync.set(syncData);
+          await browser.storage.sync.set(syncData);
         }
       }
 

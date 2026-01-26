@@ -1,4 +1,6 @@
 // 书签项类型定义
+import { browser } from 'wxt/browser';
+
 export interface BookmarkItem {
   id: string;
   parentId?: string;
@@ -26,7 +28,7 @@ class BookmarkService {
   async getAllBookmarks(): Promise<BookmarkResult> {
     try {
       // 使用Chrome书签API获取书签树
-      const bookmarkTree = await chrome.bookmarks.getTree();
+      const bookmarkTree = await browser.bookmarks.getTree();
       return {
         success: true,
         data: this.transformBookmarkTree(bookmarkTree)
@@ -46,7 +48,7 @@ class BookmarkService {
    */
   async getFolderChildren(folderId: string): Promise<BookmarkResult> {
     try {
-      const children = await chrome.bookmarks.getChildren(folderId);
+      const children = await browser.bookmarks.getChildren(folderId);
       return {
         success: true,
         data: this.transformBookmarkTree(children)
@@ -66,7 +68,7 @@ class BookmarkService {
    */
   async getBookmarkById(id: string): Promise<BookmarkResult> {
     try {
-      const nodes = await chrome.bookmarks.get(id);
+      const nodes = await browser.bookmarks.get(id);
       if (!nodes || nodes.length === 0) {
         return {
           success: false,
@@ -119,7 +121,7 @@ class BookmarkService {
    */
   async getFolderItemCount(folderId: string): Promise<BookmarkResult> {
     try {
-      const subTree = await chrome.bookmarks.getSubTree(folderId);
+      const subTree = await browser.bookmarks.getSubTree(folderId);
       if (subTree.length === 0 || !subTree[0].children) {
         return {
           success: true,
@@ -147,7 +149,7 @@ class BookmarkService {
    */
   async getBookmarksInFolder(folderId: string): Promise<BookmarkResult> {
     try {
-      const subTree = await chrome.bookmarks.getSubTree(folderId);
+      const subTree = await browser.bookmarks.getSubTree(folderId);
       if (subTree.length === 0 || !subTree[0].children) {
         return {
           success: true,
@@ -198,7 +200,7 @@ class BookmarkService {
    */
   async createBookmark(bookmark: { parentId?: string; title: string; url: string }): Promise<BookmarkResult> {
     try {
-      const newBookmark = await chrome.bookmarks.create(bookmark);
+      const newBookmark = await browser.bookmarks.create(bookmark);
       return {
         success: true,
         data: {
@@ -227,7 +229,7 @@ class BookmarkService {
    */
   async createFolder(folder: { parentId?: string; title: string }): Promise<BookmarkResult> {
     try {
-      const newFolder = await chrome.bookmarks.create(folder);
+      const newFolder = await browser.bookmarks.create(folder);
       return {
         success: true,
         data: {
@@ -256,7 +258,7 @@ class BookmarkService {
    */
   async updateBookmark(id: string, changes: { title?: string; url?: string }): Promise<BookmarkResult> {
     try {
-      const updatedBookmark = await chrome.bookmarks.update(id, changes);
+      const updatedBookmark = await browser.bookmarks.update(id, changes);
       return {
         success: true,
         data: {
@@ -283,7 +285,7 @@ class BookmarkService {
    */
   async removeBookmark(id: string): Promise<BookmarkResult> {
     try {
-      await chrome.bookmarks.remove(id);
+      await browser.bookmarks.remove(id);
       return {
         success: true
       };
@@ -303,7 +305,7 @@ class BookmarkService {
    */
   async removeBookmarkTree(id: string): Promise<BookmarkResult> {
     try {
-      await chrome.bookmarks.removeTree(id);
+      await browser.bookmarks.removeTree(id);
       return {
         success: true
       };
@@ -324,7 +326,7 @@ class BookmarkService {
    */
   async moveBookmark(id: string, destination: { parentId?: string; index?: number }): Promise<BookmarkResult> {
     try {
-      const movedBookmark = await chrome.bookmarks.move(id, destination);
+      const movedBookmark = await browser.bookmarks.move(id, destination);
       return {
         success: true,
         data: {
@@ -359,7 +361,7 @@ class BookmarkService {
         };
       }
 
-      const results = await chrome.bookmarks.search(query);
+      const results = await browser.bookmarks.search(query);
       return {
         success: true,
         data: results.map(node => ({
@@ -387,7 +389,7 @@ class BookmarkService {
    */
   async getBookmarkRoots(): Promise<BookmarkResult> {
     try {
-      const bookmarkTree = await chrome.bookmarks.getTree();
+      const bookmarkTree = await browser.bookmarks.getTree();
       
       if (bookmarkTree.length === 0 || !bookmarkTree[0].children) {
         return {

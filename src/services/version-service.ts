@@ -3,6 +3,8 @@
  * 负责检查扩展版本更新、比较版本号、管理更新提醒
  */
 
+import { browser } from 'wxt/browser';
+
 export interface ReleaseInfo {
   version: string;
   releaseUrl: string;
@@ -50,7 +52,7 @@ class VersionService {
    * 获取当前扩展版本
    */
   getCurrentVersion(): string {
-    return chrome.runtime.getManifest().version;
+    return browser.runtime.getManifest().version;
   }
   
   /**
