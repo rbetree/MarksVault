@@ -878,7 +878,7 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({
               关于本操作：将当前浏览器书签推送至指定仓库
             </Typography>
             <Typography variant="body2" sx={{ mb: 0.5, fontSize: '0.8rem' }}>
-              作用：方便 <a href="https://github.com/rbetree/menav" target="_blank" rel="noopener noreferrer" style={{color: 'inherit', textDecoration: 'underline'}}>menav-个人导航站</a> 项目的"书签导入"功能
+              作用：方便 <a href="https://github.com/rbetree/menav" target="_blank" rel="noopener noreferrer" style={{color: 'inherit', textDecoration: 'underline'}}>menav-个人导航站</a> 项目的“书签导入”功能
             </Typography>
           </Box>
           

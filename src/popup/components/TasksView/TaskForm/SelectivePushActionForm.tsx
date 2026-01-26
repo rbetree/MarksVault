@@ -111,7 +111,7 @@ const SelectivePushActionForm: React.FC<SelectivePushActionFormProps> = ({
             关于本操作
           </Typography>
           <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>
-            配置推送参数后，点击任务卡片的"运行"按钮来选择要推送的书签
+            配置推送参数后，点击任务卡片的“运行”按钮来选择要推送的书签
           </Typography>
         </Box>
 

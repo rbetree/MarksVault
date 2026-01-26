@@ -7,7 +7,9 @@ export interface ToastRef {
   hideToast: () => void;
 }
 
-const Toast = forwardRef<ToastRef, {}>((_, ref) => {
+type ToastProps = Record<string, never>;
+
+const Toast = forwardRef<ToastRef, ToastProps>((_, ref) => {
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState('');
   const [severity, setSeverity] = useState<AlertColor>('info');
@@ -60,5 +62,7 @@ const Toast = forwardRef<ToastRef, {}>((_, ref) => {
     </Snackbar>
   );
 });
+
+Toast.displayName = 'Toast';
 
 export default Toast; 
