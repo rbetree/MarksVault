@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { browser } from 'wxt/browser';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Switch from '@mui/material/Switch';
@@ -473,8 +474,8 @@ const SettingsView: React.FC<SettingsViewProps> = ({ toastRef }) => {
                   <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.5 }}>
                     <Chip label="v0.1.1" size="small" color="primary" sx={{ fontSize: '0.7rem', height: 20 }} />
                     <Box sx={{ display: 'flex', ml: 1.5 }}>
-                      <Link href="#" onClick={(e) => { e.preventDefault(); chrome.tabs.create({ url: 'https://github.com/rbetree/MarksVault' }); }} sx={{ color: 'primary.main', display: 'flex' }}><GitHubIcon sx={{ fontSize: 18 }} /></Link>
-                      <Link href="#" onClick={(e) => { e.preventDefault(); chrome.tabs.create({ url: 'https://github.com/rbetree/MarksVault/issues' }); }} sx={{ color: 'primary.main', ml: 1, display: 'flex' }}><BugReportIcon sx={{ fontSize: 18 }} /></Link>
+                      <Link href="#" onClick={(e) => { e.preventDefault(); browser.tabs.create({ url: 'https://github.com/rbetree/MarksVault' }); }} sx={{ color: 'primary.main', display: 'flex' }}><GitHubIcon sx={{ fontSize: 18 }} /></Link>
+                      <Link href="#" onClick={(e) => { e.preventDefault(); browser.tabs.create({ url: 'https://github.com/rbetree/MarksVault/issues' }); }} sx={{ color: 'primary.main', ml: 1, display: 'flex' }}><BugReportIcon sx={{ fontSize: 18 }} /></Link>
                     </Box>
                   </Box>
                 </Box>

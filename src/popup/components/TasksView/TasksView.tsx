@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { browser } from 'wxt/browser';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
@@ -119,13 +120,13 @@ const TasksView: React.FC<TasksViewProps> = ({ toastRef }) => {
             'success'
           );
           // 清除标记
-          chrome.storage.local.remove('taskConfigResult');
+          browser.storage.local.remove('taskConfigResult');
         }
       }
     };
 
-    chrome.storage.onChanged.addListener(handleStorageChange);
-    return () => chrome.storage.onChanged.removeListener(handleStorageChange);
+    browser.storage.onChanged.addListener(handleStorageChange);
+    return () => browser.storage.onChanged.removeListener(handleStorageChange);
   }, [toastRef]);
 
   // 刷新任务列表
@@ -146,13 +147,13 @@ const TasksView: React.FC<TasksViewProps> = ({ toastRef }) => {
 
   // 打开任务配置页面
   const openTaskConfigPage = (mode: 'create' | 'edit', taskId?: string) => {
-    const url = chrome.runtime.getURL('taskconfig.html');
+    const url = browser.runtime.getURL('/taskconfig.html');
     const params = new URLSearchParams({ mode });
     if (taskId) {
       params.append('taskId', taskId);
     }
 
-    chrome.tabs.create({
+    browser.tabs.create({
       url: `${url}?${params.toString()}`,
       active: true
     });

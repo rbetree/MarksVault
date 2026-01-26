@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { browser } from 'wxt/browser';
 import Box from '@mui/material/Box';
 import Grid from '@mui/material/Grid';
 import Checkbox from '@mui/material/Checkbox';
@@ -44,7 +45,7 @@ const BookmarkSelector: React.FC<BookmarkSelectorProps> = ({
   const loadBookmarkTree = useCallback(async () => {
     setLoading(true);
     try {
-      const tree = await chrome.bookmarks.getTree();
+      const tree = await browser.bookmarks.getTree();
       setBookmarkTree(tree);
       
       // 默认展开根节点

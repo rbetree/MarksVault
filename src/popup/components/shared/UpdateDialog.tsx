@@ -1,4 +1,5 @@
 import React from 'react';
+import { browser } from 'wxt/browser';
 import {
   Dialog,
   DialogTitle,
@@ -45,7 +46,7 @@ const UpdateDialog: React.FC<UpdateDialogProps> = ({
    */
   const handleUpdate = () => {
     // 在新标签页中打开 GitHub releases 页面
-    chrome.tabs.create({ url: releaseUrl });
+    browser.tabs.create({ url: releaseUrl });
     onClose();
   };
 
@@ -273,7 +274,7 @@ const UpdateDialog: React.FC<UpdateDialogProps> = ({
             <Box sx={{ flexGrow: 1 }} />
             {releaseUrl && (
               <Button
-                onClick={() => chrome.tabs.create({ url: releaseUrl })}
+                onClick={() => browser.tabs.create({ url: releaseUrl })}
                 variant="outlined"
                 startIcon={<OpenInNewIcon />}
                 size="small"

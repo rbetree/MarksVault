@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { browser } from 'wxt/browser';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Menu from '@mui/material/Menu';
@@ -217,7 +218,7 @@ const BookmarkGridItem: React.FC<BookmarkGridItemProps> = ({
     event.stopPropagation();
     handleMenuClose();
     if (bookmark.url) {
-      chrome.tabs.create({ url: bookmark.url });
+      browser.tabs.create({ url: bookmark.url });
     }
   };
 
@@ -232,7 +233,7 @@ const BookmarkGridItem: React.FC<BookmarkGridItemProps> = ({
         // 打开所有有URL的项
         result.data.forEach((item: BookmarkItemType) => {
           if (item.url) {
-            chrome.tabs.create({ url: item.url });
+            browser.tabs.create({ url: item.url });
           }
         });
       }

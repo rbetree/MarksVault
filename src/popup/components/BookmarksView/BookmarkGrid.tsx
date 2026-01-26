@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { browser } from 'wxt/browser';
 import Box from '@mui/material/Box';
 import LoadingIndicator from '../shared/LoadingIndicator';
 import Typography from '@mui/material/Typography';
@@ -238,7 +239,7 @@ const BookmarkGrid: React.FC<BookmarkGridProps> = ({
   // 处理书签点击
   const handleBookmarkOpen = useCallback((bookmark: BookmarkItemType) => {
     if (bookmark.url) {
-      chrome.tabs.create({ url: bookmark.url });
+      browser.tabs.create({ url: bookmark.url });
     }
   }, []);
 

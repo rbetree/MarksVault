@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { browser } from 'wxt/browser';
 import List from '@mui/material/List';
 import Typography from '@mui/material/Typography';
 import Divider from '@mui/material/Divider';
@@ -216,7 +217,7 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
   // 处理书签点击
   const handleBookmarkOpen = useCallback((bookmark: BookmarkItemType) => {
     if (bookmark.url) {
-      chrome.tabs.create({ url: bookmark.url });
+      browser.tabs.create({ url: bookmark.url });
     }
   }, []);
 

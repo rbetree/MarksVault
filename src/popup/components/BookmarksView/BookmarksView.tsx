@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useTransition, useMemo } from 'react';
+import { browser } from 'wxt/browser';
 import Box from '@mui/material/Box';
 import BookmarkGrid from './BookmarkGrid';
 import BookmarkList from './BookmarkList';
@@ -805,16 +806,16 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
       })();
     };
 
-    chrome.bookmarks.onCreated.addListener(handleCreated);
-    chrome.bookmarks.onChanged.addListener(handleChanged);
-    chrome.bookmarks.onRemoved.addListener(handleRemoved);
-    chrome.bookmarks.onMoved.addListener(handleMoved);
+    browser.bookmarks.onCreated.addListener(handleCreated);
+    browser.bookmarks.onChanged.addListener(handleChanged);
+    browser.bookmarks.onRemoved.addListener(handleRemoved);
+    browser.bookmarks.onMoved.addListener(handleMoved);
 
     return () => {
-      chrome.bookmarks.onCreated.removeListener(handleCreated);
-      chrome.bookmarks.onChanged.removeListener(handleChanged);
-      chrome.bookmarks.onRemoved.removeListener(handleRemoved);
-      chrome.bookmarks.onMoved.removeListener(handleMoved);
+      browser.bookmarks.onCreated.removeListener(handleCreated);
+      browser.bookmarks.onChanged.removeListener(handleChanged);
+      browser.bookmarks.onRemoved.removeListener(handleRemoved);
+      browser.bookmarks.onMoved.removeListener(handleMoved);
     };
   }, [
     clearSearch,
