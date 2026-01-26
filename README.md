@@ -200,7 +200,10 @@ wxt.config.ts             # WXT 配置（manifest/构建）
 
 ### 直接安装
 1. 前往 [Releases](https://github.com/rbetree/MarksVault/releases) 页面，下载最新版本的扩展文件：
-   - `marksvault-vX.X.X-chrome.zip` - 压缩包格式
+   - `marksvault-<version>-chrome.zip` - Chrome / Chromium
+   - `marksvault-<version>-edge.zip` - Microsoft Edge
+   - `marksvault-<version>-firefox.zip` - Firefox
+   - （Firefox 上架 AMO 时，可能还会附带 `marksvault-<version>-sources.zip` 用于源码提交）
 
 2. 使用ZIP文件安装:
    - 解压下载的 `.zip` 文件到本地文件夹
@@ -228,6 +231,8 @@ wxt.config.ts             # WXT 配置（manifest/构建）
    - 启用"开发者模式"
    - 点击"加载已解压的扩展程序"
    - 选择项目中的`.output/chrome-mv3`目录
+
+> Edge：选择 `.output/edge-mv3`；Firefox：在 `about:debugging#/runtime/this-firefox` 中加载 `.output/firefox-mv2/manifest.json`。
 
 
 ## 📝 具体使用
