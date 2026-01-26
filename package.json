@@ -1,6 +1,6 @@
 {
   "name": "marksvault",
-  "version": "0.1.1",
+  "version": "1.0.0",
   "description": "智能管理、整理和安全备份您的书签数据",
   "scripts": {
     "dev": "wxt",
