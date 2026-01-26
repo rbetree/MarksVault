@@ -7,7 +7,7 @@ export interface ToastRef {
   hideToast: () => void;
 }
 
-type ToastProps = Record<string, never>;
+type ToastProps = Record<never, never>;
 
 const Toast = forwardRef<ToastRef, ToastProps>((_, ref) => {
   const [open, setOpen] = useState(false);
