@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { browser } from 'wxt/browser';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import IconButton from '@mui/material/IconButton';
@@ -43,7 +44,7 @@ const SelectivePushExecutor: React.FC<SelectivePushExecutorProps> = ({
 
     try {
       // 发送消息到background执行推送
-      const response = await chrome.runtime.sendMessage({
+      const response = await browser.runtime.sendMessage({
         type: 'EXECUTE_SELECTIVE_PUSH',
         payload: {
           taskId: task.id,
