@@ -1,48 +1,35 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import Box from '@mui/material/Box';
-import Button from '@mui/material/Button';
+import Paper from '@mui/material/Paper';
 import Typography from '@mui/material/Typography';
 import Divider from '@mui/material/Divider';
-import Avatar from '@mui/material/Avatar';
-import CircularProgress from '@mui/material/CircularProgress';
 import Grid from '@mui/material/Grid';
-import Card from '@mui/material/Card';
-import CardContent from '@mui/material/CardContent';
 import CardHeader from '@mui/material/CardHeader';
-import Tooltip from '@mui/material/Tooltip';
-import Alert from '@mui/material/Alert';
-import Badge from '@mui/material/Badge';
-import Dialog from '@mui/material/Dialog';
-import DialogActions from '@mui/material/DialogActions';
-import DialogContent from '@mui/material/DialogContent';
-import DialogContentText from '@mui/material/DialogContentText';
-import DialogTitle from '@mui/material/DialogTitle';
-import Skeleton from '@mui/material/Skeleton';
-import Fade from '@mui/material/Fade';
 import IconButton from '@mui/material/IconButton';
+import Tooltip from '@mui/material/Tooltip';
+import CircularProgress from '@mui/material/CircularProgress';
+import Avatar from '@mui/material/Avatar';
+import Button from '@mui/material/Button';
+import Alert from '@mui/material/Alert';
+import Fade from '@mui/material/Fade';
 import LogoutIcon from '@mui/icons-material/Logout';
-import CloudUploadIcon from '@mui/icons-material/CloudUpload';
-import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
-import VerifiedIcon from '@mui/icons-material/Verified';
-import AccessTimeIcon from '@mui/icons-material/AccessTime';
-import WarningIcon from '@mui/icons-material/Warning';
 import GitHubIcon from '@mui/icons-material/GitHub';
 import AssessmentIcon from '@mui/icons-material/Assessment';
-import FolderIcon from '@mui/icons-material/Folder';
-import BookmarkIcon from '@mui/icons-material/Bookmark';
 import StorageIcon from '@mui/icons-material/Storage';
+import BookmarkIcon from '@mui/icons-material/Bookmark';
+import FolderIcon from '@mui/icons-material/Folder';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import TaskAltIcon from '@mui/icons-material/TaskAlt';
+import DashboardCard from '../shared/DashboardCard';
+
+
 import { GitHubUser } from '../../../types/github';
 import { ToastRef } from '../shared/Toast';
-import storageService from '../../../utils/storage-service';
 import backupService from '../../../services/backup-service';
 import { BackupStatus } from '../../../types/backup';
-import BackupSelectionDialog from './BackupSelectionDialog';
-import { GitHubCredentials } from '../../../utils/storage-service';
 import { formatDate } from '../../../utils/date-utils';
-
-// 备份仓库名称常量
-const BACKUP_REPO_NAME = 'marksvault-backups';
+import taskService, { isSystemTaskId } from '../../../services/task-service';
+import { TaskStatus } from '../../../types/task';
 
 interface SyncOperationsProps {
   user: GitHubUser;
@@ -50,50 +37,43 @@ interface SyncOperationsProps {
   toastRef?: React.RefObject<ToastRef>;
 }
 
-const SyncOperations: React.FC<SyncOperationsProps> = ({ user, onLogout, toastRef }) => {
-  const [isUploading, setIsUploading] = useState(false);
-  const [isDownloading, setIsDownloading] = useState(false);
+/**
+ * 概览页内容（保留文件名以避免大规模改动）：
+ * - 仅展示 GitHub 连接状态、备份统计信息等“信息可视化”
+ * - 备份/恢复等“操作”统一迁移到任务页
+ */
+const SyncOperations: React.FC<SyncOperationsProps> = ({ user, onLogout }) => {
   const [backupStatus, setBackupStatus] = useState<BackupStatus>({});
-  const [showRestoreConfirm, setShowRestoreConfirm] = useState(false);
-  const [showBackupSelection, setShowBackupSelection] = useState(false);
-  const [selectedBackupPath, setSelectedBackupPath] = useState<string | null>(null);
-  const [backupError, setBackupError] = useState<string | null>(null);
-  const [restoreError, setRestoreError] = useState<string | null>(null);
-  const [credentials, setCredentials] = useState<GitHubCredentials | null>(null);
   const [isStatsLoading, setIsStatsLoading] = useState(true);
   const [isStatsUpdating, setIsStatsUpdating] = useState(false);
+  const [taskStats, setTaskStats] = useState({
+    total: 0,
+    enabled: 0,
+    disabled: 0,
+    failed: 0,
+    lastExecutionTime: 0,
+  });
 
-  // 添加备份选择对话框刷新方法的引用
-  const backupSelectionRefreshRef = useRef<(() => void) | null>(null);
-
-  // 处理备份状态更新的回调
   const handleBackupStatusUpdate = useCallback((updatedStatus: BackupStatus) => {
     setBackupStatus(updatedStatus);
     setIsStatsUpdating(false);
   }, []);
 
-  // 组件挂载时加载备份状态和GitHub凭据
+  // 组件挂载时加载备份状态
   useEffect(() => {
     const loadData = async () => {
       try {
         setIsStatsLoading(true);
 
-        // 加载GitHub凭据
-        const credentialsResult = await storageService.getGitHubCredentials();
-        if (credentialsResult.success && credentialsResult.data) {
-          setCredentials(credentialsResult.data);
-        }
-
-        // 使用缓存优先策略加载备份状态
+        // 使用缓存优先策略加载备份状态；如为缓存则后台更新
         const status = await backupService.getBackupStatus(false, handleBackupStatusUpdate);
         setBackupStatus(status);
 
-        // 如果状态中有isFromCache标记，表示使用的是缓存数据，后台正在更新
         if (status.stats?.isFromCache) {
           setIsStatsUpdating(true);
         }
       } catch (error) {
-        console.error('加载数据失败:', error);
+        console.error('加载概览数据失败:', error);
       } finally {
         setIsStatsLoading(false);
       }
@@ -102,126 +82,40 @@ const SyncOperations: React.FC<SyncOperationsProps> = ({ user, onLogout, toastRe
     loadData();
   }, [handleBackupStatusUpdate]);
 
-  // 处理上传
-  const handleUpload = async () => {
-    setIsUploading(true);
-    setBackupError(null);
+  // 加载任务统计信息（概览展示）
+  useEffect(() => {
+    const loadTaskStats = async () => {
+      try {
+        const result = await taskService.getTasksByStatus();
+        if (!result.success) return;
 
-    try {
-      // 获取GitHub凭据
-      const credentialsResult = await storageService.getGitHubCredentials();
-      if (!credentialsResult.success || !credentialsResult.data) {
-        throw new Error('无法获取GitHub凭据，请重新登录');
+        const tasks = (result.data as any[]).filter(
+          (t: any) => t && typeof t.id === 'string' && !isSystemTaskId(t.id)
+        ) as any[];
+
+        const enabled = tasks.filter(t => t.status === TaskStatus.ENABLED).length;
+        const disabled = tasks.filter(t => t.status === TaskStatus.DISABLED).length;
+        const failed = tasks.filter(t => t.status === TaskStatus.FAILED).length;
+
+        const lastExecutionTime = tasks.reduce((max, t) => {
+          const ts = t?.history?.lastExecution?.timestamp;
+          return typeof ts === 'number' && ts > max ? ts : max;
+        }, 0);
+
+        setTaskStats({
+          total: tasks.length,
+          enabled,
+          disabled,
+          failed,
+          lastExecutionTime,
+        });
+      } catch (error) {
+        console.error('加载任务统计失败:', error);
       }
+    };
 
-      // 执行备份
-      const backupResult = await backupService.backupToGitHub(
-        credentialsResult.data,
-        user.login
-      );
-
-      if (!backupResult.success) {
-        throw new Error(backupResult.error || '备份失败');
-      }
-
-      // 更新状态
-      const status = await backupService.getBackupStatus();
-      setBackupStatus(status);
-
-      // 刷新备份列表（如果选择对话框是打开的）
-      if (backupSelectionRefreshRef.current) {
-        backupSelectionRefreshRef.current();
-      }
-
-      toastRef?.current?.showToast('书签成功备份到GitHub', 'success');
-    } catch (error) {
-      console.error('上传失败:', error);
-      setBackupError(error instanceof Error ? error.message : String(error));
-      toastRef?.current?.showToast('上传失败', 'error');
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
-  // 打开备份选择对话框
-  const handleBackupSelectionOpen = () => {
-    // 重置选择状态
-    setSelectedBackupPath(null);
-    setShowBackupSelection(true);
-  };
-
-  // 关闭备份选择对话框
-  const handleBackupSelectionClose = () => {
-    setShowBackupSelection(false);
-  };
-
-  // 备份选择后的回调
-  const handleBackupSelected = (filePath: string) => {
-    setSelectedBackupPath(filePath);
-    // 打开确认对话框
-    setShowRestoreConfirm(true);
-  };
-
-  // 处理下载前确认
-  const handleDownloadConfirm = () => {
-    if (!selectedBackupPath) {
-      // 如果没有选择备份文件，打开选择对话框
-      handleBackupSelectionOpen();
-    } else {
-      // 如果已经选择了备份文件，直接打开确认对话框
-      setShowRestoreConfirm(true);
-    }
-  };
-
-  // 执行下载恢复
-  const handleDownload = async () => {
-    setShowRestoreConfirm(false);
-    setIsDownloading(true);
-    setRestoreError(null);
-
-    try {
-      // 获取GitHub凭据
-      const credentialsResult = await storageService.getGitHubCredentials();
-      if (!credentialsResult.success || !credentialsResult.data) {
-        throw new Error('无法获取GitHub凭据，请重新登录');
-      }
-
-      if (!selectedBackupPath) {
-        throw new Error('未选择备份文件');
-      }
-
-      // 执行恢复，使用选定的备份文件
-      const restoreResult = await backupService.restoreFromGitHub(
-        credentialsResult.data,
-        user.login,
-        true, // 使用指定的备份文件
-        selectedBackupPath
-      );
-
-      if (!restoreResult.success) {
-        throw new Error(restoreResult.error || '恢复失败');
-      }
-
-      // 更新状态
-      const status = await backupService.getBackupStatus();
-      setBackupStatus(status);
-      setSelectedBackupPath(null); // 重置选择
-
-      toastRef?.current?.showToast('书签已成功恢复', 'success');
-    } catch (error) {
-      console.error('下载恢复失败:', error);
-      setRestoreError(error instanceof Error ? error.message : String(error));
-      toastRef?.current?.showToast('恢复失败', 'error');
-    } finally {
-      setIsDownloading(false);
-    }
-  };
-
-  // 取消下载恢复
-  const handleCancelDownload = () => {
-    setShowRestoreConfirm(false);
-    setSelectedBackupPath(null);
-  };
+    loadTaskStats();
+  }, []);
 
   // 辅助函数：格式化文件大小
   const formatFileSize = (bytes?: number): string => {
@@ -243,7 +137,6 @@ const SyncOperations: React.FC<SyncOperationsProps> = ({ user, onLogout, toastRe
     }
   };
 
-  // 统计信息卡片的骨架屏组件 - 与实际内容布局完全一致
   const StatsSkeletonCard = () => (
     <Box
       sx={{
@@ -251,10 +144,9 @@ const SyncOperations: React.FC<SyncOperationsProps> = ({ user, onLogout, toastRe
         bgcolor: 'transparent',
         borderRadius: 1,
         position: 'relative',
-        border: '1px solid rgba(255, 255, 255, 0.05)'
+        border: '1px solid rgba(255, 255, 255, 0.05)',
       }}
     >
-      {/* 骨架屏卡片标题 - 使用真实标题，只有图标和刷新按钮用骨架屏 */}
       <CardHeader
         avatar={<AssessmentIcon color="primary" />}
         title="备份统计信息"
@@ -268,330 +160,245 @@ const SyncOperations: React.FC<SyncOperationsProps> = ({ user, onLogout, toastRe
         }
         sx={{ pb: 0 }}
       />
-
-      <Box sx={{ pt: 1 }}>
-        {/* 骨架屏统计数字区域 - 与实际内容布局一致 */}
-        <Grid container spacing={2}>
-          {/* 备份数量区域 */}
-          <Grid item xs={4}>
-            <Box sx={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              p: 1
-            }}>
-              <Skeleton variant="circular" width={24} height={24} sx={{ mb: 0.5 }} />
-              <Skeleton variant="text" width={40} height={32} sx={{ mb: 0.5 }} />
-              <Skeleton variant="text" width={80} height={16} />
-            </Box>
-          </Grid>
-
-          {/* 书签数量区域 */}
-          <Grid item xs={4}>
-            <Box sx={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              p: 1
-            }}>
-              <Skeleton variant="circular" width={24} height={24} sx={{ mb: 0.5 }} />
-              <Skeleton variant="text" width={40} height={32} sx={{ mb: 0.5 }} />
-              <Skeleton variant="text" width={80} height={16} />
-            </Box>
-          </Grid>
-
-          {/* 文件夹数量区域 */}
-          <Grid item xs={4}>
-            <Box sx={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              p: 1
-            }}>
-              <Skeleton variant="circular" width={24} height={24} sx={{ mb: 0.5 }} />
-              <Skeleton variant="text" width={40} height={32} sx={{ mb: 0.5 }} />
-              <Skeleton variant="text" width={80} height={16} />
-            </Box>
-          </Grid>
-
-          <Grid item xs={12}>
-            <Divider sx={{ my: 0.5 }} />
-          </Grid>
-
-          <Grid item xs={12}>
-            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-              <Skeleton variant="text" width={100} height={16} sx={{ mr: 1 }} />
-              <Skeleton variant="text" width={50} height={16} />
-            </Box>
-          </Grid>
-        </Grid>
+      <Box sx={{ pt: 1, px: 2, pb: 2 }}>
+        <Typography variant="body2" color="text.secondary">
+          正在加载统计信息...
+        </Typography>
       </Box>
-    </Box >
+    </Box>
   );
 
   return (
-    <Box sx={{ m: 0, bgcolor: 'transparent', boxShadow: 'none' }}>
-      <Box sx={{ p: 1 }}>
-        <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          同步操作
-        </Typography>
+    <Box sx={{ m: 0 }}>
+      {/* 操作迁移提示 */}
+      <Alert
+        severity="info"
+        icon={<TaskAltIcon fontSize="inherit" />}
+        sx={{
+          mb: 2,
+          py: 0,
+          borderRadius: 2,
+          bgcolor: 'rgba(2, 136, 209, 0.08)',
+          border: '1px solid rgba(2, 136, 209, 0.2)',
+          '& .MuiAlert-message': { fontSize: '0.85rem' }
+        }}
+        action={
+          <Button
+            color="info"
+            size="small"
+            onClick={() => {
+              window.location.hash = 'tasks';
+            }}
+            sx={{ textTransform: 'none', fontWeight: 600 }}
+          >
+            去任务
+          </Button>
+        }
+      >
+        备份/恢复等操作已迁移到“任务”页，概览仅展示统计信息
+      </Alert>
 
-        {/* 同步状态信息 */}
-        <Box sx={{ mb: 2 }}>
-          {backupStatus.lastBackupTime && (
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-              <Typography variant="body2" color="text.secondary">
-                上次备份时间: {formatDate(backupStatus.lastBackupTime)}
-              </Typography>
+      <Grid container spacing={2}>
+        {/* GitHub 连接信息 */}
+        <Grid item xs={12}>
+          <DashboardCard
+            contentSx={{ p: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0 }}>
+              <Avatar src={user.avatar_url} sx={{ width: 40, height: 40, border: '2px solid rgba(255,255,255,0.1)' }} />
+              <Box sx={{ minWidth: 0 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, lineHeight: 1.2 }} noWrap>
+                  {user.name || user.login}
+                </Typography>
+                <Typography variant="caption" color="text.secondary" noWrap>
+                  @{user.login}
+                </Typography>
+              </Box>
             </Box>
-          )}
-
-          {backupStatus.lastRestoreTime && (
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-              <Typography variant="body2" color="text.secondary">
-                上次恢复时间: {formatDate(backupStatus.lastRestoreTime)}
-              </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <Tooltip title="前往 GitHub 主页">
+                <IconButton
+                  size="small"
+                  component="a"
+                  href={user.html_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main', bgcolor: 'rgba(255,255,255,0.05)' } }}
+                >
+                  <GitHubIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="断开连接">
+                <IconButton
+                  size="small"
+                  onClick={onLogout}
+                  sx={{ color: 'text.secondary', '&:hover': { color: 'error.main', bgcolor: 'error.dark' } }}
+                >
+                  <LogoutIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
             </Box>
-          )}
-        </Box>
+          </DashboardCard>
+        </Grid>
 
-        {/* 备份统计信息卡片 - 使用Fade包装实现平滑过渡 */}
-        {/* 统一显示备份统计信息卡片结构，无论是否有备份数据 */}
-        {isStatsLoading ? (
-          <StatsSkeletonCard />
-        ) : (
-          <Fade in={true} timeout={500}>
-            <Box
-              sx={{
-                mb: 2,
-                bgcolor: 'transparent',
-                borderRadius: 1,
-                position: 'relative',
-                border: '1px solid rgba(255, 255, 255, 0.05)'
-              }}
-            >
-              {/* 卡片标题 */}
-              <CardHeader
-                avatar={<AssessmentIcon color="primary" />}
-                title="备份统计信息"
-                titleTypographyProps={{ variant: 'subtitle1' }}
-                action={
-                  <Tooltip title="刷新统计数据">
-                    <Box sx={{ display: 'inline-flex' }}>
+        {/* 备份统计信息 */}
+        <Grid item xs={12} sm={6}>
+          {isStatsLoading ? (
+            <StatsSkeletonCard />
+          ) : (
+            <Fade in={true} timeout={400}>
+              <Box> {/* Wrap in Box to make it a valid JSX child if DashboardCard is used directly or Grid item needs distinct child */}
+                <DashboardCard
+                  title="备份统计"
+                  icon={<AssessmentIcon />}
+                  action={
+                    <Tooltip title="刷新统计数据">
                       <IconButton
                         size="small"
                         onClick={handleRefreshStats}
                         disabled={isStatsUpdating}
+                        sx={{ p: 0.5 }}
                       >
                         {isStatsUpdating ? (
-                          <CircularProgress size={18} />
+                          <CircularProgress size={16} color="inherit" />
                         ) : (
                           <RefreshIcon fontSize="small" />
                         )}
                       </IconButton>
-                    </Box>
-                  </Tooltip>
-                }
-                sx={{ pb: 0 }}
-              />
-
-              {/* 统一有数据和无数据状态的卡片内容结构 */}
-              <Box sx={{ pt: 1 }}>
-                <Grid container spacing={2}>
-                  {/* 备份数量区域 */}
-                  <Grid item xs={4}>
-                    <Box sx={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      p: 1
-                    }}>
-                      <StorageIcon color="primary" sx={{ mb: 0.5 }} />
-                      <Typography variant="h5" sx={{ fontWeight: 'medium' }}>
-                        {backupStatus.stats && (backupStatus.stats.totalBackups ?? 0) > 0
-                          ? backupStatus.stats.totalBackups ?? 0
-                          : '0'}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        总备份数量
-                      </Typography>
-                    </Box>
-                  </Grid>
-
-                  {/* 书签数量区域 */}
-                  <Grid item xs={4}>
-                    <Box sx={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      p: 1
-                    }}>
-                      <BookmarkIcon color="primary" sx={{ mb: 0.5 }} />
-                      <Typography variant="h5" sx={{ fontWeight: 'medium' }}>
-                        {backupStatus.stats && (backupStatus.stats.totalBackups ?? 0) > 0
-                          ? backupStatus.stats.totalBookmarks ?? 0
-                          : '0'}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        书签数量
-                      </Typography>
-                    </Box>
-                  </Grid>
-
-                  {/* 文件夹数量区域 */}
-                  <Grid item xs={4}>
-                    <Box sx={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      p: 1
-                    }}>
-                      <FolderIcon color="primary" sx={{ mb: 0.5 }} />
-                      <Typography variant="h5" sx={{ fontWeight: 'medium' }}>
-                        {backupStatus.stats && (backupStatus.stats.totalBackups ?? 0) > 0
-                          ? backupStatus.stats.totalFolders ?? 0
-                          : '0'}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        文件夹数量
-                      </Typography>
-                    </Box>
-                  </Grid>
-
-                  <Grid item xs={12}>
-                    <Divider sx={{ my: 0.5 }} />
-                  </Grid>
-
-                  {/* 文件大小或无数据提示 */}
-                  <Grid item xs={12}>
-                    {backupStatus.stats && backupStatus.stats.fileSize !== undefined && (backupStatus.stats.totalBackups ?? 0) > 0 ? (
-                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        <Typography variant="body2" color="text.secondary">
-                          最新备份大小:
+                    </Tooltip>
+                  }
+                  sx={{ height: '100%' }}
+                >
+                  <Grid container spacing={2}>
+                    <Grid item xs={4}>
+                      <Box sx={{ textAlign: 'center' }}>
+                        <Typography variant="h4" sx={{ fontWeight: 600, fontSize: '1.5rem', mb: 0.5, color: 'primary.main' }}>
+                          {backupStatus.stats ? backupStatus.stats.totalBackups ?? 0 : 0}
                         </Typography>
-                        <Typography variant="body2" sx={{ ml: 0.5, fontWeight: 'medium' }}>
-                          {formatFileSize(backupStatus.stats.fileSize)}
+                        <Typography variant="caption" color="text.secondary">
+                          总备份
                         </Typography>
+                      </Box>
+                    </Grid>
+                    <Grid item xs={4}>
+                      <Box sx={{ textAlign: 'center' }}>
+                        <Typography variant="h4" sx={{ fontWeight: 600, fontSize: '1.5rem', mb: 0.5 }}>
+                          {backupStatus.stats ? backupStatus.stats.totalBookmarks ?? 0 : 0}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          书签
+                        </Typography>
+                      </Box>
+                    </Grid>
+                    <Grid item xs={4}>
+                      <Box sx={{ textAlign: 'center' }}>
+                        <Typography variant="h4" sx={{ fontWeight: 600, fontSize: '1.5rem', mb: 0.5 }}>
+                          {backupStatus.stats ? backupStatus.stats.totalFolders ?? 0 : 0}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          文件夹
+                        </Typography>
+                      </Box>
+                    </Grid>
+                  </Grid>
+
+                  <Box sx={{ mt: 2, pt: 2, borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                    {backupStatus.lastBackupTime ? (
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                        <Typography variant="caption" color="text.secondary">上次备份</Typography>
+                        <Typography variant="caption" color="text.primary">{formatDate(backupStatus.lastBackupTime)}</Typography>
                       </Box>
                     ) : (
-                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        <Typography variant="body2" color="text.secondary">
-                          备份状态:
-                        </Typography>
-                        <Typography variant="body2" sx={{ ml: 0.5, fontWeight: 'medium' }}>
-                          尚未创建备份
-                        </Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>暂无备份记录</Typography>
+                    )}
+
+                    {backupStatus.stats?.fileSize !== undefined && (
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <Typography variant="caption" color="text.secondary">最新大小</Typography>
+                        <Typography variant="caption" color="text.primary">{formatFileSize(backupStatus.stats.fileSize)}</Typography>
                       </Box>
                     )}
-                  </Grid>
-                </Grid>
+                  </Box>
+
+                  {backupStatus.backupFileUrl && (
+                    <Button
+                      fullWidth
+                      variant="outlined"
+                      size="small"
+                      startIcon={<GitHubIcon fontSize="small" />}
+                      component="a"
+                      href={backupStatus.backupFileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      sx={{ mt: 2, textTransform: 'none', fontSize: '0.8rem', borderColor: 'rgba(255,255,255,0.1)', color: 'text.secondary', '&:hover': { borderColor: 'primary.main', color: 'primary.main' } }}
+                    >
+                      查看最新备份
+                    </Button>
+                  )}
+                </DashboardCard>
               </Box>
-            </Box>
-          </Fade>
-        )}
-
-        {/* 错误信息显示 */}
-        {backupError && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            备份错误: {backupError}
-          </Alert>
-        )}
-
-        {restoreError && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            恢复错误: {restoreError}
-          </Alert>
-        )}
-
-        {/* 操作按钮 */}
-        <Grid container spacing={2}>
-          <Grid item xs={6}>
-            <Button
-              variant="contained"
-              fullWidth
-              color="primary"
-              startIcon={isUploading ? <CircularProgress size={20} color="inherit" /> : <CloudUploadIcon />}
-              disabled={isUploading || isDownloading}
-              onClick={handleUpload}
-            >
-              上传备份
-            </Button>
-          </Grid>
-          <Grid item xs={6}>
-            <Button
-              variant="outlined"
-              fullWidth
-              color="primary"
-              startIcon={isDownloading ? <CircularProgress size={20} color="inherit" /> : <CloudDownloadIcon />}
-              disabled={isUploading || isDownloading}
-              onClick={handleBackupSelectionOpen}
-            >
-              下载恢复
-            </Button>
-          </Grid>
+            </Fade>
+          )}
         </Grid>
 
-        {/* 备份文件链接 */}
-        {backupStatus.backupFileUrl && (
-          <Box sx={{ mt: 2, display: 'flex', justifyContent: 'center' }}>
-            <Button
-              variant="text"
-              color="primary"
-              startIcon={<GitHubIcon fontSize="small" />}
-              component="a"
-              href={backupStatus.backupFileUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              sx={{ textTransform: 'none', fontSize: '0.8rem' }}
-            >
-              在GitHub查看最新备份
-            </Button>
-          </Box>
-        )}
-      </Box>
+        {/* 任务统计 */}
+        <Grid item xs={12} sm={6}>
+          <DashboardCard
+            title="任务概览"
+            icon={<TaskAltIcon />}
+            action={
+              <Button
+                size="small"
+                onClick={() => {
+                  window.location.hash = 'tasks';
+                }}
+                sx={{ minWidth: 'auto', px: 1, fontSize: '0.75rem' }}
+              >
+                管理
+              </Button>
+            }
+            sx={{ height: '100%' }}
+          >
+            <Grid container spacing={2}>
+              <Grid item xs={6}>
+                <Box sx={{ p: 1.5, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 1, textAlign: 'center' }}>
+                  <Typography variant="h5" sx={{ fontWeight: 'bold' }}>{taskStats.total}</Typography>
+                  <Typography variant="caption" color="text.secondary">总任务</Typography>
+                </Box>
+              </Grid>
+              <Grid item xs={6}>
+                <Box sx={{ p: 1.5, bgcolor: 'rgba(76, 175, 80, 0.08)', borderRadius: 1, textAlign: 'center', color: 'success.light' }}>
+                  <Typography variant="h5" sx={{ fontWeight: 'bold' }}>{taskStats.enabled}</Typography>
+                  <Typography variant="caption" sx={{ opacity: 0.8 }}>运行中</Typography>
+                </Box>
+              </Grid>
+            </Grid>
 
-      {/* 恢复确认对话框 */}
-      <Dialog
-        open={showRestoreConfirm}
-        onClose={handleCancelDownload}
-      >
-        <DialogTitle>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <WarningIcon color="warning" />
-            <span>确认恢复书签</span>
-          </Box>
-        </DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            此操作将从GitHub恢复您的书签，并覆盖当前浏览器中的书签。此操作不可撤销。
-            <br /><br />
-            建议在恢复前手动备份当前书签。
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCancelDownload} color="primary">
-            取消
-          </Button>
-          <Button onClick={handleDownload} color="error" variant="contained">
-            确认恢复
-          </Button>
-        </DialogActions>
-      </Dialog>
+            <Box sx={{ mt: 2 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1, px: 0.5 }}>
+                <Typography variant="caption" color="text.secondary">失败任务</Typography>
+                <Typography variant="caption" color={taskStats.failed > 0 ? "error.main" : "text.secondary"} sx={{ fontWeight: taskStats.failed > 0 ? 'bold' : 'normal' }}>
+                  {taskStats.failed}
+                </Typography>
+              </Box>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', px: 0.5 }}>
+                <Typography variant="caption" color="text.secondary">已禁用</Typography>
+                <Typography variant="caption" color="text.secondary">{taskStats.disabled}</Typography>
+              </Box>
+            </Box>
 
-      {/* 备份选择对话框 */}
-      {showBackupSelection && credentials && (
-        <BackupSelectionDialog
-          open={showBackupSelection}
-          onClose={handleBackupSelectionClose}
-          onSelect={handleBackupSelected}
-          credentials={credentials}
-          username={user.login}
-          repoName={BACKUP_REPO_NAME}
-          onRefreshRef={backupSelectionRefreshRef}
-        />
-      )}
+            {taskStats.lastExecutionTime > 0 && (
+              <Box sx={{ mt: 2, pt: 1.5, borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                  最近活动: {formatDate(taskStats.lastExecutionTime)}
+                </Typography>
+              </Box>
+            )}
+          </DashboardCard>
+        </Grid>
+      </Grid>
     </Box>
   );
 };
 
-export default SyncOperations; 
+export default SyncOperations;

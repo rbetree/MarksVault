@@ -4,7 +4,10 @@ import {
   TaskStorage,
   TaskExecutionResult,
   createDefaultTask,
-  createDefaultTaskStorage
+  createDefaultTaskStorage,
+  createManualTrigger,
+  createBackupAction,
+  BackupAction,
 } from '../types/task';
 import storageService, { StorageResult } from '../utils/storage-service';
 // 导入触发器服务 - 注意避免循环依赖
@@ -12,6 +15,16 @@ import storageService, { StorageResult } from '../utils/storage-service';
 
 // 任务存储的键名
 const TASKS_STORAGE_KEY = 'tasks_data';
+
+// 内置系统任务（用于“任务页快捷操作”，不展示在任务列表中）
+export const SYSTEM_TASK_IDS = {
+  BOOKMARKS_BACKUP: 'sys_bookmarks_backup',
+  BOOKMARKS_RESTORE: 'sys_bookmarks_restore',
+} as const;
+
+export const isSystemTaskId = (taskId: string): boolean => {
+  return Object.values(SYSTEM_TASK_IDS).includes(taskId as any);
+};
 
 /**
  * 任务存储服务
@@ -50,6 +63,78 @@ class TaskService {
       }
     } catch (error) {
       console.error('初始化任务存储时发生错误:', error);
+    }
+  }
+
+  /**
+   * 确保系统内置任务存在
+   * 说明：这些任务用于承载“快捷操作”的统一执行/历史记录，但不会展示在任务列表中。
+   */
+  public async ensureSystemTasks(): Promise<StorageResult> {
+    try {
+      const tasksResult = await this.getTasks();
+      if (!tasksResult.success) return tasksResult;
+
+      const taskStorage = tasksResult.data as TaskStorage;
+      let hasChanges = false;
+
+      const now = Date.now();
+
+      if (!taskStorage.tasks[SYSTEM_TASK_IDS.BOOKMARKS_BACKUP]) {
+        const action = createBackupAction('backup') as BackupAction;
+        action.description = '立即备份书签到GitHub';
+        action.options.commitMessage = '手动备份书签';
+        action.options.includeMetadata = true;
+
+        taskStorage.tasks[SYSTEM_TASK_IDS.BOOKMARKS_BACKUP] = {
+          id: SYSTEM_TASK_IDS.BOOKMARKS_BACKUP,
+          name: '快捷操作：立即备份',
+          description: '在任务页快速执行一次书签备份',
+          status: TaskStatus.ENABLED,
+          createdAt: now,
+          updatedAt: now,
+          trigger: createManualTrigger('快捷备份'),
+          action,
+          history: { executions: [] },
+        };
+        hasChanges = true;
+      }
+
+      if (!taskStorage.tasks[SYSTEM_TASK_IDS.BOOKMARKS_RESTORE]) {
+        const action = createBackupAction('restore') as BackupAction;
+        action.description = '从GitHub恢复书签';
+        // 默认不写死 backupFilePath：执行时允许选择或直接使用最新备份
+        delete action.options.backupFilePath;
+
+        taskStorage.tasks[SYSTEM_TASK_IDS.BOOKMARKS_RESTORE] = {
+          id: SYSTEM_TASK_IDS.BOOKMARKS_RESTORE,
+          name: '快捷操作：恢复书签',
+          description: '在任务页选择备份并恢复到本地书签（高风险）',
+          status: TaskStatus.ENABLED,
+          createdAt: now,
+          updatedAt: now,
+          trigger: createManualTrigger('快捷恢复（危险操作）'),
+          action,
+          history: { executions: [] },
+        };
+        hasChanges = true;
+      }
+
+      if (!hasChanges) {
+        return { success: true, data: { created: false } };
+      }
+
+      taskStorage.lastUpdated = Date.now();
+      const saveResult = await this.saveTasks(taskStorage);
+      if (!saveResult.success) return saveResult;
+
+      return { success: true, data: { created: true } };
+    } catch (error) {
+      console.error('确保系统任务失败:', error);
+      return {
+        success: false,
+        error: '确保系统任务失败: ' + (error instanceof Error ? error.message : String(error)),
+      };
     }
   }
 
@@ -176,9 +261,16 @@ class TaskService {
       }
 
       const taskStorage = result.data as TaskStorage;
-      const newTask = taskData
-        ? { ...createDefaultTask(), ...taskData, id: `task_${Date.now()}` }
-        : createDefaultTask();
+      const baseTask = taskData ? { ...createDefaultTask(), ...taskData } : createDefaultTask();
+
+      // 支持外部传入自定义 id（用于系统任务/迁移），否则生成新 id；并保证不与现有任务冲突
+      const desiredId = typeof baseTask.id === 'string' ? baseTask.id.trim() : '';
+      let taskId = desiredId || `task_${Date.now()}`;
+      while (taskStorage.tasks[taskId]) {
+        taskId = `task_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
+      }
+
+      const newTask: Task = { ...baseTask, id: taskId };
 
       // 更新存储
       taskStorage.tasks[newTask.id] = newTask;
@@ -377,7 +469,7 @@ class TaskService {
         );
 
         if (isCredentialError) {
-          console.warn(`任务 ${taskId} 因GitHub凭据问题失败，需要用户在同步页面重新授权`);
+          console.warn(`任务 ${taskId} 因GitHub凭据问题失败，需要用户在“概览”页面重新授权`);
         }
       }
 

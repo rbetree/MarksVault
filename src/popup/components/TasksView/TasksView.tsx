@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { browser, type Browser } from 'wxt/browser';
 import Box from '@mui/material/Box';
-import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
 import Alert from '@mui/material/Alert';
 import Fab from '@mui/material/Fab';
@@ -9,7 +8,6 @@ import AddIcon from '@mui/icons-material/Add';
 import MenuItem from '@mui/material/MenuItem';
 import Select, { SelectChangeEvent } from '@mui/material/Select';
 import FormControl from '@mui/material/FormControl';
-import InputLabel from '@mui/material/InputLabel';
 import Dialog from '@mui/material/Dialog';
 import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
@@ -20,132 +18,90 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import IconButton from '@mui/material/IconButton';
 import { ToastRef } from '../shared/Toast';
 import { Task, TaskStatus } from '../../../types/task';
-import taskService from '../../../services/task-service';
+import taskService, { isSystemTaskId } from '../../../services/task-service';
 import TaskCard from './TaskCard';
 import EmptyTaskList from './EmptyTaskList';
 import TaskSkeleton from './TaskSkeleton';
 import {
-  taskHeaderStyles,
-  filterContainerStyles,
-  fabStyles,
   globalFabStyles
 } from '../../styles/TaskStyles';
-import { styled } from '@mui/material/styles';
-import Paper from '@mui/material/Paper';
-
-const ActionArea = styled(Box)(({ theme }) => ({
-  padding: theme.spacing(0.5, 0.5, 0, 0.5),
-  backgroundColor: 'transparent',
-  display: 'flex',
-  flexDirection: 'row',
-  alignItems: 'center',
-  width: '100%',
-  justifyContent: 'space-between',
-}));
-
-const LeftColumn = styled(Box)(({ theme }) => ({
-  flex: 1,
-  paddingRight: theme.spacing(0.5),
-}));
-
-const RightColumn = styled(Box)(({ theme }) => ({
-  flex: '0 0 auto',
-  minWidth: '140px',
-  paddingLeft: theme.spacing(0.5),
-}));
+import { AuthStatus, GitHubUser } from '../../../types/github';
+import QuickActionsPanel from './QuickActionsPanel';
+import PageLayout from '../shared/PageLayout';
 
 interface TasksViewProps {
   toastRef?: React.RefObject<ToastRef>;
+  authStatus: AuthStatus;
+  user: GitHubUser | null;
+  isAuthLoading: boolean;
 }
 
-/**
- * 任务管理主视图组件
- * 负责显示任务列表、提供过滤和任务操作功能
- */
-const TasksView: React.FC<TasksViewProps> = ({ toastRef }) => {
-  // 状态管理
+const TasksView: React.FC<TasksViewProps> = ({
+  toastRef,
+  authStatus,
+  user,
+  isAuthLoading
+}) => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<TaskStatus | 'all'>('all');
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [deleteTaskId, setDeleteTaskId] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-  // 加载任务数据
+  // 加载任务列表
   useEffect(() => {
-    const fetchTasks = async () => {
-      setLoading(true);
-      setError(null);
+    let isMounted = true;
 
+    const fetchTasks = async () => {
       try {
-        let result;
-        if (filterStatus === 'all') {
-          result = await taskService.getTasksByStatus();
-        } else {
-          result = await taskService.getTasksByStatus(filterStatus);
+        if (loading) {
+          // 只在初始加载时显示骨架屏
         }
+
+        setError(null);
+
+        const result = filterStatus === 'all'
+          ? await taskService.getTasks()
+          : await taskService.getTasksByStatus(filterStatus);
+
+        if (!isMounted) return;
 
         if (result.success) {
-          setTasks(result.data as Task[]);
+          // 过滤掉系统任务
+          const filteredTasks = (result.data as Task[]).filter(
+            t => t && typeof t.id === 'string' && !isSystemTaskId(t.id)
+          );
+          setTasks(filteredTasks);
         } else {
-          setError('加载任务失败: ' + result.error);
+          setError(result.error || '获取任务列表失败');
         }
-      } catch (error) {
-        console.error('获取任务时出错:', error);
-        setError('加载任务时发生错误');
+      } catch (err) {
+        if (!isMounted) return;
+        console.error('加载任务失败:', err);
+        setError('加载任务失败，请稍后重试');
       } finally {
-        setLoading(false);
-        setIsRefreshing(false);
+        if (isMounted) {
+          setLoading(false);
+          setIsRefreshing(false);
+        }
       }
     };
 
     fetchTasks();
+
+    return () => {
+      isMounted = false;
+    };
   }, [filterStatus, refreshTrigger]);
 
-  // 监听storage变化，处理任务配置页面的结果
+  // 监听存储变化，自动刷新任务列表
   useEffect(() => {
-    type TaskConfigResult = {
-      success: boolean;
-      taskId?: string;
-      mode?: 'create' | 'edit';
-      timestamp?: number;
-    };
-
-    const isTaskConfigResult = (value: unknown): value is TaskConfigResult => {
-      if (!value || typeof value !== 'object') return false;
-      const record = value as Record<string, unknown>;
-      if (record.success !== true && record.success !== false) return false;
-      if (
-        record.mode !== undefined &&
-        record.mode !== 'create' &&
-        record.mode !== 'edit'
-      ) {
-        return false;
-      }
-      if (record.taskId !== undefined && typeof record.taskId !== 'string') return false;
-      if (record.timestamp !== undefined && typeof record.timestamp !== 'number') return false;
-      return true;
-    };
-
-    const handleStorageChange = (
-      changes: { [key: string]: Browser.storage.StorageChange },
-      areaName: string
-    ) => {
-      if (areaName === 'local' && changes.taskConfigResult) {
-        const result = changes.taskConfigResult.newValue;
-        if (isTaskConfigResult(result) && result.success) {
-          // 刷新任务列表
-          refreshTasks();
-          // 显示成功提示
-          const mode = result.mode ?? 'edit';
-          toastRef?.current?.showToast(
-            mode === 'create' ? '任务创建成功' : '任务更新成功',
-            'success'
-          );
-          // 清除标记
-          void browser.storage.local.remove('taskConfigResult');
-        }
+    const handleStorageChange = (changes: Browser.Storage.StorageAreaOnChangedChangesType, areaName: string) => {
+      if (areaName === 'local' && changes.tasks) {
+        // 只有当任务数据真的发生变化时才刷新
+        setRefreshTrigger(prev => prev + 1);
       }
     };
 
@@ -275,96 +231,53 @@ const TasksView: React.FC<TasksViewProps> = ({ toastRef }) => {
   };
 
   return (
-    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      {/* 操作区域 */}
-      <ActionArea>
-        {/* 左侧：页面标题/路径 */}
-        <LeftColumn>
-          <Paper
-            sx={{
-              p: '1px 4px',
-              display: 'flex',
-              alignItems: 'center',
-              width: '100%',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              height: '32px',
-              borderRadius: 1,
-              bgcolor: 'rgba(255, 255, 255, 0.03)',
-              boxShadow: 'none',
-              pl: 1
-            }}
-          >
-            <Typography
-              variant="body2"
-              noWrap
+    <PageLayout
+      title="任务管理"
+      actions={
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <Tooltip title="刷新任务列表">
+            <span style={{ display: 'inline-block' }}>
+              <IconButton
+                onClick={refreshTasks}
+                disabled={loading || isRefreshing}
+                size="small"
+                sx={{ p: 0.5, mr: 1 }}
+              >
+                <RefreshIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
+
+          <FormControl size="small" sx={{ minWidth: 80, '& .MuiInputBase-root': { height: '24px', fontSize: '0.8rem', border: 'none' }, '& .MuiOutlinedInput-notchedOutline': { border: 'none' } }}>
+            <Select
+              value={filterStatus}
+              onChange={handleFilterChange}
               sx={{
-                fontWeight: 400,
-                fontSize: '0.9rem',
-                color: 'text.primary',
+                fontSize: '0.8rem',
+                '& .MuiSelect-select': { py: 0, pr: '24px !important' }
               }}
+              variant="standard"
+              disableUnderline
             >
-              任务管理
-            </Typography>
-          </Paper>
-        </LeftColumn>
-
-        {/* 右侧：操作按钮 */}
-        <RightColumn>
-          <Paper
-            sx={{
-              p: '1px 4px',
-              display: 'flex',
-              alignItems: 'center',
-              width: '100%',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              height: '32px',
-              borderRadius: 1,
-              bgcolor: 'rgba(255, 255, 255, 0.03)',
-              boxShadow: 'none',
-              justifyContent: 'flex-end',
-              pr: 0.5
-            }}
-          >
-            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-              <Tooltip title="刷新任务列表">
-                <span style={{ display: 'inline-block' }}>
-                  <IconButton
-                    onClick={refreshTasks}
-                    disabled={loading || isRefreshing}
-                    size="small"
-                    sx={{ p: 0.5, mr: 1 }}
-                  >
-                    <RefreshIcon fontSize="small" />
-                  </IconButton>
-                </span>
-              </Tooltip>
-
-              <FormControl size="small" sx={{ minWidth: 80, '& .MuiInputBase-root': { height: '24px', fontSize: '0.8rem', border: 'none' }, '& .MuiOutlinedInput-notchedOutline': { border: 'none' } }}>
-                <Select
-                  value={filterStatus}
-                  onChange={handleFilterChange}
-                  sx={{
-                    fontSize: '0.8rem',
-                    '& .MuiSelect-select': { py: 0, pr: '24px !important' }
-                  }}
-                  variant="standard"
-                  disableUnderline
-                >
-                  <MenuItem value="all" sx={{ fontSize: '0.85rem', minHeight: '32px', py: 0.5 }}>全部</MenuItem>
-                  <MenuItem value={TaskStatus.ENABLED} sx={{ fontSize: '0.85rem', minHeight: '32px', py: 0.5 }}>已启用</MenuItem>
-                  <MenuItem value={TaskStatus.DISABLED} sx={{ fontSize: '0.85rem', minHeight: '32px', py: 0.5 }}>已禁用</MenuItem>
-                  <MenuItem value={TaskStatus.RUNNING} sx={{ fontSize: '0.85rem', minHeight: '32px', py: 0.5 }}>运行中</MenuItem>
-                  <MenuItem value={TaskStatus.COMPLETED} sx={{ fontSize: '0.85rem', minHeight: '32px', py: 0.5 }}>已完成</MenuItem>
-                  <MenuItem value={TaskStatus.FAILED} sx={{ fontSize: '0.85rem', minHeight: '32px', py: 0.5 }}>失败</MenuItem>
-                </Select>
-              </FormControl>
-            </Box>
-          </Paper>
-        </RightColumn>
-      </ActionArea>
-
-      {/* 任务内容区 */}
-      <Box sx={{ flexGrow: 1, overflowY: 'auto', px: 0.5, pt: 1, backgroundColor: 'transparent' }}>
+              <MenuItem value="all" sx={{ fontSize: '0.85rem', minHeight: '32px', py: 0.5 }}>全部</MenuItem>
+              <MenuItem value={TaskStatus.ENABLED} sx={{ fontSize: '0.85rem', minHeight: '32px', py: 0.5 }}>已启用</MenuItem>
+              <MenuItem value={TaskStatus.DISABLED} sx={{ fontSize: '0.85rem', minHeight: '32px', py: 0.5 }}>已禁用</MenuItem>
+              <MenuItem value={TaskStatus.RUNNING} sx={{ fontSize: '0.85rem', minHeight: '32px', py: 0.5 }}>运行中</MenuItem>
+              <MenuItem value={TaskStatus.COMPLETED} sx={{ fontSize: '0.85rem', minHeight: '32px', py: 0.5 }}>已完成</MenuItem>
+              <MenuItem value={TaskStatus.FAILED} sx={{ fontSize: '0.85rem', minHeight: '32px', py: 0.5 }}>失败</MenuItem>
+            </Select>
+          </FormControl>
+        </Box>
+      }
+    >
+      <Box sx={{ pb: 8 }}> {/* Add padding bottom to avoid FAB overlap */}
+        <QuickActionsPanel
+          toastRef={toastRef}
+          authStatus={authStatus}
+          user={user}
+          isAuthLoading={isAuthLoading}
+          onExecuted={refreshTasks}
+        />
         {renderTasks()}
       </Box>
 
@@ -403,8 +316,8 @@ const TasksView: React.FC<TasksViewProps> = ({ toastRef }) => {
           </Button>
         </DialogActions>
       </Dialog>
-    </Box>
+    </PageLayout>
   );
 };
 
-export default TasksView; 
+export default TasksView;

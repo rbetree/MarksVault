@@ -87,7 +87,7 @@ const GitHubAuth: React.FC<GitHubAuthProps> = ({ onAuth, authStatus, errorMessag
             }}
           >
             <InfoIcon fontSize="small" sx={{ mr: 0.5, fontSize: '1rem', mt: 0.1 }} />
-            请提供GitHub个人访问令牌以启用同步功能。系统将自动获取您的GitHub账户信息。
+            请提供GitHub个人访问令牌以启用备份/推送等功能。系统将自动获取您的GitHub账户信息。
           </Typography>
 
           <TextField

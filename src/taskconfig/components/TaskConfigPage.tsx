@@ -6,9 +6,10 @@ import CircularProgress from '@mui/material/CircularProgress';
 import TaskConfigHeader from './TaskConfigHeader';
 import TaskFormContainer from './TaskFormContainer';
 import SelectivePushExecutor from './SelectivePushExecutor';
+import BackupRestoreExecutor from './BackupRestoreExecutor';
 import { useUrlParams } from '../hooks/useUrlParams';
 import { useTaskConfigData } from '../hooks/useTaskConfigData';
-import { Task, ActionType } from '../../types/task';
+import { Task, ActionType, BackupAction } from '../../types/task';
 import { taskConfigStyles } from '../styles/taskConfigStyles';
 
 /**
@@ -136,26 +137,42 @@ const TaskConfigPage: React.FC = () => {
 
   // 执行模式：渲染选择性推送执行器
   if (mode === 'execute') {
-    // 验证任务类型是否为SELECTIVE_PUSH
-    if (formData.action.type !== ActionType.SELECTIVE_PUSH) {
+    // 选择性推送任务：交互式执行
+    if (formData.action.type === ActionType.SELECTIVE_PUSH) {
       return (
         <Box sx={taskConfigStyles.pageContainer}>
-          <Box sx={taskConfigStyles.errorContainer}>
-            <Alert severity="error" sx={{ maxWidth: 600 }}>
-              此任务不是选择性推送任务，无法在执行模式下打开
-            </Alert>
-          </Box>
+          <SelectivePushExecutor
+            task={formData}
+            onComplete={handleExecuteComplete}
+            onCancel={handleCancel}
+          />
+        </Box>
+      );
+    }
+
+    // 恢复书签任务（高风险）：交互式执行 + 二次确认
+    if (
+      formData.action.type === ActionType.BACKUP &&
+      (formData.action as BackupAction).operation === 'restore'
+    ) {
+      return (
+        <Box sx={taskConfigStyles.pageContainer}>
+          <BackupRestoreExecutor
+            task={formData}
+            onComplete={handleExecuteComplete}
+            onCancel={handleCancel}
+          />
         </Box>
       );
     }
 
     return (
       <Box sx={taskConfigStyles.pageContainer}>
-        <SelectivePushExecutor
-          task={formData}
-          onComplete={handleExecuteComplete}
-          onCancel={handleCancel}
-        />
+        <Box sx={taskConfigStyles.errorContainer}>
+          <Alert severity="error" sx={{ maxWidth: 600 }}>
+            此任务不支持在执行模式下打开
+          </Alert>
+        </Box>
       </Box>
     );
   }

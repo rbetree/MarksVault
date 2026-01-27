@@ -4,7 +4,7 @@ import Box from '@mui/material/Box';
 import BackupIcon from '@mui/icons-material/Backup';
 import CleaningServicesIcon from '@mui/icons-material/CleaningServices';
 import UploadIcon from '@mui/icons-material/Upload';
-import { Action, ActionType } from '../../../types/task';
+import { Action, ActionType, BackupAction } from '../../../types/task';
 
 interface TaskActionInfoProps {
   action: Action;
@@ -20,14 +20,16 @@ const TaskActionInfo: React.FC<TaskActionInfoProps> = ({ action, compact = false
   const renderBackupAction = () => {
     if (action.type !== ActionType.BACKUP) return null;
     
-    const { target, options } = action;
+    const backupAction = action as BackupAction;
+    const { target, options } = backupAction;
+    const operationLabel = backupAction.operation === 'restore' ? '恢复' : '备份';
     
     if (compact) {
       return (
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
           <BackupIcon fontSize="small" color="action" sx={{ fontSize: '14px' }} />
           <Typography variant="body2" sx={{ ml: 0.75, fontSize: '11px' }}>
-            备份到 {target}
+            {operationLabel} {operationLabel === '恢复' ? '自' : '到'} {target}
           </Typography>
         </Box>
       );
@@ -38,17 +40,24 @@ const TaskActionInfo: React.FC<TaskActionInfoProps> = ({ action, compact = false
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
           <BackupIcon fontSize="small" color="action" sx={{ fontSize: '14px' }} />
           <Typography variant="subtitle2" sx={{ ml: 0.75, fontSize: '12px' }}>
-            备份操作
+            备份/恢复
           </Typography>
         </Box>
         <Typography variant="body2" color="text.secondary" sx={{ ml: 3, fontSize: '11px' }}>
+          操作: {operationLabel}
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ ml: 3, fontSize: '11px' }}>
           目标: {target}
         </Typography>
-        {options && options.commitMessage && (
+        {backupAction.operation === 'restore' ? (
+          <Typography variant="body2" color="text.secondary" sx={{ ml: 3, fontSize: '11px' }}>
+            备份文件: {options?.backupFilePath ? options.backupFilePath : '最新备份'}
+          </Typography>
+        ) : options && options.commitMessage ? (
           <Typography variant="body2" color="text.secondary" sx={{ ml: 3, fontSize: '11px' }}>
             提交消息: {options.commitMessage}
           </Typography>
-        )}
+        ) : null}
       </Box>
     );
   };

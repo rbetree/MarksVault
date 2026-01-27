@@ -32,7 +32,7 @@ import Tooltip from '@mui/material/Tooltip';
 import Chip from '@mui/material/Chip';
 import CircularProgress from '@mui/material/CircularProgress';
 import Alert from '@mui/material/Alert';
-import { Task, TaskStatus, TriggerType, TaskExecutionResult, EventType, ActionType } from '../../../types/task';
+import { Task, TaskStatus, TriggerType, TaskExecutionResult, EventType, ActionType, BackupAction } from '../../../types/task';
 import TaskStatusChip from './TaskStatusChip';
 import TaskTriggerInfo from './TaskTriggerInfo';
 import TaskActionInfo from './TaskActionInfo';
@@ -105,6 +105,16 @@ const TaskCard: React.FC<TaskCardProps> = ({
     
     // 如果是选择性推送任务，打开任务配置页面（执行模式）
     if (task.action.type === ActionType.SELECTIVE_PUSH) {
+      const url = browser.runtime.getURL(`/taskconfig.html?mode=execute&taskId=${task.id}`);
+      browser.tabs.create({ url });
+      return;
+    }
+
+    // 恢复书签属于高风险操作：在独立页面中执行（选择备份 + 二次确认）
+    if (
+      task.action.type === ActionType.BACKUP &&
+      (task.action as BackupAction).operation === 'restore'
+    ) {
       const url = browser.runtime.getURL(`/taskconfig.html?mode=execute&taskId=${task.id}`);
       browser.tabs.create({ url });
       return;
@@ -381,7 +391,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
             {task.history.lastExecution?.error}
             {isCredentialError() && (
               <Box component="span" sx={{ display: 'block', mt: 0.2, fontSize: '9px' }}>
-                请到同步页面配置GitHub凭据
+                请到“概览”页面配置GitHub凭据
               </Box>
             )}
           </Alert>

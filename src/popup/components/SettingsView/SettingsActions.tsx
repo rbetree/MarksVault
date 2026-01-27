@@ -238,7 +238,7 @@ const SettingsActions: React.FC<SettingsActionsProps> = ({ toastRef }) => {
   // GitHub备份设置
   const handleGitHubBackup = async () => {
     if (!hasGitHubCredentials) {
-      toastRef?.current?.showToast('请先在同步页设置GitHub凭据', 'warning');
+      toastRef?.current?.showToast('请先在“概览”页设置GitHub凭据', 'warning');
       return;
     }
     
@@ -249,7 +249,7 @@ const SettingsActions: React.FC<SettingsActionsProps> = ({ toastRef }) => {
       // 获取GitHub凭据
       const credentialsResult = await storageService.getGitHubCredentials();
       if (!credentialsResult.success || !credentialsResult.data) {
-        throw new Error('无法获取GitHub凭据，请在同步页配置');
+        throw new Error('无法获取GitHub凭据，请在“概览”页配置');
       }
       
       // 从GitHub响应中获取用户名
@@ -284,7 +284,7 @@ const SettingsActions: React.FC<SettingsActionsProps> = ({ toastRef }) => {
   // 处理GitHub恢复确认
   const handleGitHubRestoreConfirm = () => {
     if (!hasGitHubCredentials) {
-      toastRef?.current?.showToast('请先在同步页设置GitHub凭据', 'warning');
+      toastRef?.current?.showToast('请先在“概览”页设置GitHub凭据', 'warning');
       return;
     }
     
@@ -301,7 +301,7 @@ const SettingsActions: React.FC<SettingsActionsProps> = ({ toastRef }) => {
       // 获取GitHub凭据
       const credentialsResult = await storageService.getGitHubCredentials();
       if (!credentialsResult.success || !credentialsResult.data) {
-        throw new Error('无法获取GitHub凭据，请在同步页配置');
+        throw new Error('无法获取GitHub凭据，请在“概览”页配置');
       }
       
       // 从GitHub响应中获取用户名

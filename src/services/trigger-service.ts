@@ -83,7 +83,7 @@ class TriggerService {
                                 errorMessage.includes('凭据无效');
         
         if (isCredentialError) {
-          console.log(`任务 ${task.id} 因GitHub凭据问题失败，需要用户在同步页面重新授权后才能恢复`);
+          console.log(`任务 ${task.id} 因GitHub凭据问题失败，需要用户在“概览”页面重新授权后才能恢复`);
           continue;
         }
         

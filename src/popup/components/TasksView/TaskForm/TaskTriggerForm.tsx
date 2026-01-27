@@ -12,6 +12,8 @@ import {
   EventType,
   ManualTrigger,
   ActionType,
+  Action,
+  BackupAction,
   createEventTrigger,
   createManualTrigger
 } from '../../../../types/task';
@@ -35,23 +37,33 @@ const TRIGGER_OPTIONS: TriggerOption[] = [
 interface TaskTriggerFormProps {
   trigger: Trigger;
   onChange: (updatedTrigger: Trigger, isValid: boolean) => void;
-  currentActionType?: ActionType;
+  currentAction?: Action;
 }
 
 /**
  * 任务触发器配置表单组件
  * 用于选择任务的触发条件
  */
-const TaskTriggerForm: React.FC<TaskTriggerFormProps> = ({ trigger, onChange, currentActionType }) => {
+const TaskTriggerForm: React.FC<TaskTriggerFormProps> = ({ trigger, onChange, currentAction }) => {
   // 触发器选项值
   const [triggerOptionValue, setTriggerOptionValue] = useState<string>('');
   
-  // 当action类型为SELECTIVE_PUSH时，强制使用MANUAL触发器
+  const shouldForceManualTrigger =
+    currentAction?.type === ActionType.SELECTIVE_PUSH ||
+    (currentAction?.type === ActionType.BACKUP &&
+      (currentAction as BackupAction).operation === 'restore');
+
+  const forcedManualDescription =
+    currentAction?.type === ActionType.SELECTIVE_PUSH
+      ? '选择性推送任务'
+      : '恢复书签任务（危险操作）';
+
+  // 当 action 需要交互/高风险时，强制使用 MANUAL 触发器
   useEffect(() => {
-    if (currentActionType === ActionType.SELECTIVE_PUSH && trigger.type !== TriggerType.MANUAL) {
-      onChange(createManualTrigger('选择性推送任务'), true);
+    if (shouldForceManualTrigger && trigger.type !== TriggerType.MANUAL) {
+      onChange(createManualTrigger(forcedManualDescription), true);
     }
-  }, [currentActionType, trigger.type, onChange]);
+  }, [shouldForceManualTrigger, forcedManualDescription, trigger.type, onChange]);
   
   // 初始化表单数据
   useEffect(() => {
@@ -104,7 +116,7 @@ const TaskTriggerForm: React.FC<TaskTriggerFormProps> = ({ trigger, onChange, cu
           value={triggerOptionValue}
           label="触发条件"
           onChange={handleTriggerOptionChange}
-          disabled={currentActionType === ActionType.SELECTIVE_PUSH}
+          disabled={shouldForceManualTrigger}
           MenuProps={{
             PaperProps: {
               style: {

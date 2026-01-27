@@ -3,12 +3,12 @@ import BottomNavigation from '@mui/material/BottomNavigation';
 import BottomNavigationAction from '@mui/material/BottomNavigationAction';
 import Paper from '@mui/material/Paper';
 import BookmarksIcon from '@mui/icons-material/Bookmarks';
+import DashboardIcon from '@mui/icons-material/Dashboard';
 import TaskIcon from '@mui/icons-material/Assignment';
-import SyncIcon from '@mui/icons-material/Sync';
 import SettingsIcon from '@mui/icons-material/Settings';
 
 // 导航选项类型
-export type NavOption = 'bookmarks' | 'tasks' | 'sync' | 'settings';
+export type NavOption = 'bookmarks' | 'overview' | 'tasks' | 'settings';
 
 interface BottomNavProps {
   value: NavOption;
@@ -45,14 +45,14 @@ const AppBottomNavigation: React.FC<BottomNavProps> = ({ value, onChange }) => {
           icon={<BookmarksIcon />} 
         />
         <BottomNavigationAction 
+          label="概览" 
+          value="overview" 
+          icon={<DashboardIcon />} 
+        />
+        <BottomNavigationAction 
           label="任务" 
           value="tasks" 
           icon={<TaskIcon />} 
-        />
-        <BottomNavigationAction 
-          label="同步" 
-          value="sync" 
-          icon={<SyncIcon />} 
         />
         <BottomNavigationAction 
           label="设置" 

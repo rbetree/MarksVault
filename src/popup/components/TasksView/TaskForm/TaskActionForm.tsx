@@ -518,7 +518,7 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({
           }}
         >
           <Typography variant="subtitle2" gutterBottom>
-            同步操作配置
+            备份/恢复配置
           </Typography>
           
           <FormControl component="fieldset" size="small" fullWidth sx={{ mb: 1.5 }}>
@@ -970,7 +970,7 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({
   const actionTypeOptions = [
     { 
       type: ActionType.BACKUP, 
-      title: "同步书签", 
+      title: "备份/恢复", 
       description: "",
       icon: <BackupIcon fontSize="medium" />
     },

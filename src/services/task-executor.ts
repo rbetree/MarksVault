@@ -137,6 +137,9 @@ class TaskExecutor {
     const executionStartTime = new Date();
     console.log(`[${executionStartTime.toLocaleString()}] 开始执行任务: ${taskId}${retryCount > 0 ? ` (重试 ${retryCount}/${this.config.maxRetries})` : ''}`);
 
+    // 超时定时器句柄（用于清理，避免悬挂定时器导致资源泄漏）
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
     try {
       // 获取任务详情
       const taskResult = await taskService.getTaskById(taskId);
@@ -165,7 +168,7 @@ class TaskExecutor {
 
       // 创建超时Promise
       const timeoutPromise = new Promise<TaskExecutionResult>((_, reject) => {
-        setTimeout(() => {
+        timeoutId = setTimeout(() => {
           reject(new Error(`任务执行超时(${this.config.timeout / 1000}秒)`));
         }, this.config.timeout);
       });
@@ -190,16 +193,18 @@ class TaskExecutor {
       // 竞争模式，哪个先完成就用哪个结果
       executionResult = await Promise.race([executePromise, timeoutPromise]);
 
+      // 清理超时定时器（避免后台悬挂定时器导致资源泄漏）
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+
       // 添加执行持续时间
       executionResult.duration = Date.now() - startTime;
 
       // 更新任务执行历史记录
       console.log(`更新任务 ${taskId} 执行历史记录...`);
       await taskService.updateTaskExecutionHistory(taskId, executionResult);
-
-      // 恢复任务状态为启用
-      console.log(`恢复任务 ${taskId} 状态为 ENABLED`);
-      await taskService.setTaskStatus(taskId, TaskStatus.ENABLED);
 
       const executionEndTime = new Date();
       const executionTimeMessage = `开始: ${executionStartTime.toLocaleString()}, 结束: ${executionEndTime.toLocaleString()}, 耗时: ${Math.round((executionEndTime.getTime() - executionStartTime.getTime()) / 1000)}秒`;
@@ -245,6 +250,11 @@ class TaskExecutor {
       const executionTimeMessage = `开始: ${executionStartTime.toLocaleString()}, 结束: ${executionEndTime.toLocaleString()}, 耗时: ${Math.round((executionEndTime.getTime() - executionStartTime.getTime()) / 1000)}秒`;
       console.error(`任务 ${taskId} 执行失败: ${errorMessage}, ${executionTimeMessage}`);
     } finally {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+
       // 无论结果如何，从执行中任务集合中移除
       this.executingTasks.delete(taskId);
       console.log(`任务 ${taskId} 已从执行队列移除`);
@@ -283,6 +293,9 @@ class TaskExecutor {
     const executionStartTime = new Date();
     console.log(`[${executionStartTime.toLocaleString()}] 开始执行任务(带数据): ${taskId}${retryCount > 0 ? ` (重试 ${retryCount}/${this.config.maxRetries})` : ''}`);
 
+    // 超时定时器句柄（用于清理，避免悬挂定时器导致资源泄漏）
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
     try {
       // 任务执行前更新任务状态为RUNNING
       await taskService.setTaskStatus(taskId, TaskStatus.RUNNING);
@@ -299,7 +312,7 @@ class TaskExecutor {
 
       // 创建超时Promise
       const timeoutPromise = new Promise<TaskExecutionResult>((_, reject) => {
-        setTimeout(() => {
+        timeoutId = setTimeout(() => {
           reject(new Error(`任务执行超时(${this.config.timeout / 1000}秒)`));
         }, this.config.timeout);
       });
@@ -323,16 +336,18 @@ class TaskExecutor {
       // 竞争模式
       executionResult = await Promise.race([executePromise, timeoutPromise]);
 
+      // 清理超时定时器（避免后台悬挂定时器导致资源泄漏）
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+
       // 添加执行持续时间
       executionResult.duration = Date.now() - startTime;
 
       // 更新任务执行历史记录
       console.log(`更新任务 ${taskId} 执行历史记录...`);
       await taskService.updateTaskExecutionHistory(taskId, executionResult);
-
-      // 恢复任务状态为启用
-      console.log(`恢复任务 ${taskId} 状态为 ENABLED`);
-      await taskService.setTaskStatus(taskId, TaskStatus.ENABLED);
 
       const executionEndTime = new Date();
       const executionTimeMessage = `开始: ${executionStartTime.toLocaleString()}, 结束: ${executionEndTime.toLocaleString()}, 耗时: ${Math.round((executionEndTime.getTime() - executionStartTime.getTime()) / 1000)}秒`;
@@ -370,6 +385,11 @@ class TaskExecutor {
       const executionTimeMessage = `开始: ${executionStartTime.toLocaleString()}, 结束: ${executionEndTime.toLocaleString()}, 耗时: ${Math.round((executionEndTime.getTime() - executionStartTime.getTime()) / 1000)}秒`;
       console.error(`任务 ${taskId} 执行失败: ${errorMessage}, ${executionTimeMessage}`);
     } finally {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+
       this.executingTasks.delete(taskId);
       console.log(`任务 ${taskId} 已从执行队列移除`);
     }
@@ -433,6 +453,16 @@ class TaskExecutor {
     const backupAction = task.action as BackupAction;
 
     try {
+      // 安全策略：恢复属于高风险操作，必须是手动触发任务
+      if (backupAction.operation === 'restore' && task.trigger.type !== TriggerType.MANUAL) {
+        return {
+          success: false,
+          timestamp: Date.now(),
+          error: '恢复书签属于高风险操作，必须使用手动触发任务',
+          details: '请将任务触发器设置为“手动触发”，并在执行前确认备份文件来源与内容',
+        };
+      }
+
       // 获取GitHub凭据
       const credentialsResult = await storageService.getGitHubCredentials();
 
@@ -441,8 +471,8 @@ class TaskExecutor {
         return {
           success: false,
           timestamp: Date.now(),
-          error: '未找到GitHub凭据，请先在同步设置中配置GitHub账号',
-          details: '请打开扩展的同步页面，完成GitHub账号授权后再执行此任务'
+          error: '未找到GitHub凭据，请先在“概览”页配置GitHub账号',
+          details: '请打开扩展的“概览”页面，完成GitHub账号授权后再执行此任务'
         };
       }
 
@@ -614,8 +644,8 @@ class TaskExecutor {
         return {
           success: false,
           timestamp: Date.now(),
-          error: '未找到GitHub凭据，请先在同步设置中配置GitHub账号',
-          details: '请打开扩展的同步页面，完成GitHub账号授权后再执行此任务'
+          error: '未找到GitHub凭据，请先在“概览”页配置GitHub账号',
+          details: '请打开扩展的“概览”页面，完成GitHub账号授权后再执行此任务'
         };
       }
 
@@ -705,8 +735,8 @@ class TaskExecutor {
         return {
           success: false,
           timestamp: Date.now(),
-          error: '未找到GitHub凭据，请先在同步设置中配置GitHub账号',
-          details: '请打开扩展的同步页面，完成GitHub账号授权后再执行此任务'
+          error: '未找到GitHub凭据，请先在“概览”页配置GitHub账号',
+          details: '请打开扩展的“概览”页面，完成GitHub账号授权后再执行此任务'
         };
       }
 

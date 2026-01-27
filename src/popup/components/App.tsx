@@ -16,14 +16,17 @@ import githubService from '../../services/github-service';
 import { StyledEngineProvider } from '@mui/material/styles';
 
 const App: React.FC = () => {
-  // 从URL hash初始化当前视图
-  const initView = (): NavOption => {
-    const hash = window.location.hash.substring(1);
+  const getViewFromHash = (hash: string): NavOption => {
     if (hash === 'settings') return 'settings';
     if (hash === 'tasks') return 'tasks';
-    if (hash === 'sync') return 'sync';
+    if (hash === 'overview') return 'overview';
+    // 兼容旧版本 hash
+    if (hash === 'sync') return 'overview';
     return 'bookmarks';
   };
+
+  // 从URL hash初始化当前视图
+  const initView = (): NavOption => getViewFromHash(window.location.hash.substring(1));
 
   const [currentView, setCurrentView] = useState<NavOption>(initView());
   const toastRef = useRef<ToastRef>(null);
@@ -32,6 +35,16 @@ const App: React.FC = () => {
   const [authStatus, setAuthStatus] = useState<AuthStatus>(AuthStatus.INITIAL);
   const [user, setUser] = useState<GitHubUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  // 同步 hash 导航（支持页面内跳转/外部 deep link）
+  useEffect(() => {
+    const handleHashChange = () => {
+      setCurrentView(getViewFromHash(window.location.hash.substring(1)));
+    };
+
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
 
   // 组件挂载时检查现有凭据
   useEffect(() => {
@@ -103,8 +116,15 @@ const App: React.FC = () => {
       case 'bookmarks':
         return <BookmarksView toastRef={toastRef} />;
       case 'tasks':
-        return <TasksView toastRef={toastRef} />;
-      case 'sync':
+        return (
+          <TasksView
+            toastRef={toastRef}
+            authStatus={authStatus}
+            user={user}
+            isAuthLoading={isLoading}
+          />
+        );
+      case 'overview':
         return (
           <SyncView
             toastRef={toastRef}
