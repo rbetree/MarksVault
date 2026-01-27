@@ -1,6 +1,6 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import { CssBaseline } from '@mui/material';
+import CssBaseline from '@mui/material/CssBaseline';
 import { ThemeProvider } from '../../popup/contexts/ThemeContext';
 import TaskConfigPage from '../../taskconfig/components/TaskConfigPage';
 

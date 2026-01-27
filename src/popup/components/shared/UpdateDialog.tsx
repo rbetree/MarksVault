@@ -1,22 +1,18 @@
 import React from 'react';
 import { browser } from 'wxt/browser';
-import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Button,
-  Typography,
-  Box,
-  Divider,
-  Link,
-  Chip
-} from '@mui/material';
-import {
-  NewReleases as NewReleasesIcon,
-  OpenInNew as OpenInNewIcon,
-  Code as CodeIcon
-} from '@mui/icons-material';
+import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
+import Chip from '@mui/material/Chip';
+import Dialog from '@mui/material/Dialog';
+import DialogActions from '@mui/material/DialogActions';
+import DialogContent from '@mui/material/DialogContent';
+import DialogTitle from '@mui/material/DialogTitle';
+import Divider from '@mui/material/Divider';
+import Link from '@mui/material/Link';
+import Typography from '@mui/material/Typography';
+import NewReleasesIcon from '@mui/icons-material/NewReleases';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import CodeIcon from '@mui/icons-material/Code';
 
 interface UpdateDialogProps {
   open: boolean;

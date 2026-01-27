@@ -5,7 +5,6 @@ import CardContent from '@mui/material/CardContent';
 import Typography from '@mui/material/Typography';
 import Divider from '@mui/material/Divider';
 import Box from '@mui/material/Box';
-import { SvgIconComponent } from '@mui/icons-material';
 
 interface SettingCardProps {
   title: string;

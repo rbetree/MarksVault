@@ -35,9 +35,10 @@ import {
   createPushAction,
   createSelectivePushAction
 } from '../../../../types/task';
-import { Radio, RadioGroup } from '@mui/material';
-import { Typography } from '@mui/material';
-import { Divider } from '@mui/material';
+import Divider from '@mui/material/Divider';
+import Radio from '@mui/material/Radio';
+import RadioGroup from '@mui/material/RadioGroup';
+import Typography from '@mui/material/Typography';
 import bookmarkService from '../../../../utils/bookmark-service';
 import SelectivePushActionForm from './SelectivePushActionForm';
 

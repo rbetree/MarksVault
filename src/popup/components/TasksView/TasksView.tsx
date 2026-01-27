@@ -327,14 +327,16 @@ const TasksView: React.FC<TasksViewProps> = ({ toastRef }) => {
           >
             <Box sx={{ display: 'flex', alignItems: 'center' }}>
               <Tooltip title="刷新任务列表">
-                <IconButton
-                  onClick={refreshTasks}
-                  disabled={loading || isRefreshing}
-                  size="small"
-                  sx={{ p: 0.5, mr: 1 }}
-                >
-                  <RefreshIcon fontSize="small" />
-                </IconButton>
+                <span style={{ display: 'inline-block' }}>
+                  <IconButton
+                    onClick={refreshTasks}
+                    disabled={loading || isRefreshing}
+                    size="small"
+                    sx={{ p: 0.5, mr: 1 }}
+                  >
+                    <RefreshIcon fontSize="small" />
+                  </IconButton>
+                </span>
               </Tooltip>
 
               <FormControl size="small" sx={{ minWidth: 80, '& .MuiInputBase-root': { height: '24px', fontSize: '0.8rem', border: 'none' }, '& .MuiOutlinedInput-notchedOutline': { border: 'none' } }}>

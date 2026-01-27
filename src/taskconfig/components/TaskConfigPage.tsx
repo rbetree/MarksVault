@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { browser } from 'wxt/browser';
-import { Box, CircularProgress, Alert } from '@mui/material';
+import Alert from '@mui/material/Alert';
+import Box from '@mui/material/Box';
+import CircularProgress from '@mui/material/CircularProgress';
 import TaskConfigHeader from './TaskConfigHeader';
 import TaskFormContainer from './TaskFormContainer';
 import SelectivePushExecutor from './SelectivePushExecutor';
