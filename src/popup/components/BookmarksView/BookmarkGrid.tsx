@@ -69,6 +69,10 @@ const RightColumn = styled(Box)(({ theme }) => ({
 
 const EmptyState = styled(Box)(({ theme }) => ({
   width: '100%',
+  // 在 grid 布局中，默认会被当作一个 grid item 放到单个单元格里（宽度只有 1/6），
+  // 中文会被逐字换行，导致“没有书签”竖排显示；这里让占位内容横跨所有列。
+  gridColumn: '1 / -1',
+  justifySelf: 'stretch',
   textAlign: 'center',
   padding: theme.spacing(3),
   color: theme.palette.text.secondary,
@@ -483,7 +487,7 @@ const BookmarkGrid: React.FC<BookmarkGridProps> = ({
         onDrop={handleGridDrop}
       >
         {isLoading ? (
-          <Box sx={{ width: '100%', height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+          <Box sx={{ gridColumn: '1 / -1', width: '100%', height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
             <LoadingIndicator message="" />
           </Box>
         ) : bookmarks.length === 0 ? (
