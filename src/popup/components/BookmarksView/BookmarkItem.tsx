@@ -3,6 +3,7 @@ import { browser } from 'wxt/browser';
 import ListItem from '@mui/material/ListItem';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
+import Divider from '@mui/material/Divider';
 import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import ListItemButton from '@mui/material/ListItemButton';
@@ -10,9 +11,12 @@ import FolderIcon from '@mui/icons-material/Folder';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
-import FileDownloadIcon from '@mui/icons-material/FileDownload';
+import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
+import BookmarkAddIcon from '@mui/icons-material/BookmarkAdd';
+import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolder';
+import UpdateIcon from '@mui/icons-material/Update';
 import LinkIcon from '@mui/icons-material/Link';
-import bookmarkService, { BookmarkItem as BookmarkItemType } from '../../../utils/bookmark-service';
+import { BookmarkItem as BookmarkItemType } from '../../../utils/bookmark-service';
 import { getFaviconUrl } from '../../../utils/favicon-service';
 import { styled } from '@mui/material/styles';
 import { useBookmarkDragDrop } from './useBookmarkDragDrop';
@@ -82,6 +86,9 @@ interface BookmarkItemProps {
   index: number;
   isSearching?: boolean;
   resolveBookmarkPath?: (bookmarkId: string) => Promise<string>;
+  onCreateBookmark?: () => void;
+  onCreateFolder?: () => void;
+  onUpdateToCurrentUrl?: (bookmarkId: string) => void;
   onEdit?: (bookmark: BookmarkItemType) => void;
   onDelete?: (bookmark: BookmarkItemType) => void;
   onOpen?: (bookmark: BookmarkItemType) => void;
@@ -94,6 +101,9 @@ const BookmarkItem: React.FC<BookmarkItemProps> = ({
   index,
   isSearching = false,
   resolveBookmarkPath,
+  onCreateBookmark,
+  onCreateFolder,
+  onUpdateToCurrentUrl,
   onEdit,
   onDelete,
   onOpen,
@@ -205,32 +215,37 @@ const BookmarkItem: React.FC<BookmarkItemProps> = ({
     }
   };
 
-  const handleOpenAllInNewTabs = async (event: React.MouseEvent<HTMLElement>) => {
+  const handleOpenInIncognito = async (event: React.MouseEvent<HTMLElement>) => {
     event.stopPropagation();
     handleMenuClose();
 
-    if (bookmark.isFolder) {
-      // 获取文件夹中的所有书签
-      const result = await bookmarkService.getBookmarksInFolder(bookmark.id);
-      if (result.success && result.data) {
-        // 打开所有有URL的项
-        result.data.forEach((item: BookmarkItemType) => {
-          if (item.url) {
-            browser.tabs.create({ url: item.url });
-          }
-        });
-      }
+    if (!bookmark.url) return;
+
+    try {
+      await browser.windows.create({ url: bookmark.url, incognito: true });
+    } catch (error) {
+      console.error('打开隐身窗口失败:', error);
+      // 兜底：至少在新标签页打开
+      browser.tabs.create({ url: bookmark.url });
     }
   };
 
-  const handleExportFolder = (event: React.MouseEvent<HTMLElement>) => {
+  const handleCreateBookmark = (event: React.MouseEvent<HTMLElement>) => {
     event.stopPropagation();
     handleMenuClose();
+    onCreateBookmark?.();
+  };
 
-    if (bookmark.isFolder) {
-      // 实现文件夹导出逻辑
-      alert(`导出文件夹功能正在开发中...`);
-    }
+  const handleCreateFolder = (event: React.MouseEvent<HTMLElement>) => {
+    event.stopPropagation();
+    handleMenuClose();
+    onCreateFolder?.();
+  };
+
+  const handleUpdateToCurrentUrl = (event: React.MouseEvent<HTMLElement>) => {
+    event.stopPropagation();
+    handleMenuClose();
+    onUpdateToCurrentUrl?.(bookmark.id);
   };
 
   const handleIconError = () => {
@@ -336,15 +351,6 @@ const BookmarkItem: React.FC<BookmarkItemProps> = ({
         anchorReference="anchorPosition"
         anchorPosition={menuAnchorPosition || undefined}
       >
-        <MenuItem
-          onClick={handleEditClick}
-          sx={{ minHeight: '32px', py: 0.5, px: 1.5 }}
-        >
-          <ListItemIcon sx={{ minWidth: '28px' }}>
-            <EditIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText primaryTypographyProps={{ variant: 'body2', sx: { fontSize: '13px' } }}>编辑</ListItemText>
-        </MenuItem>
         {!bookmark.isFolder && bookmark.url && (
           <MenuItem
             onClick={handleOpenInNewTab}
@@ -353,31 +359,81 @@ const BookmarkItem: React.FC<BookmarkItemProps> = ({
             <ListItemIcon sx={{ minWidth: '28px' }}>
               <OpenInNewIcon fontSize="small" />
             </ListItemIcon>
-            <ListItemText primaryTypographyProps={{ variant: 'body2', sx: { fontSize: '13px' } }}>新标签页打开</ListItemText>
+            <ListItemText primaryTypographyProps={{ variant: 'body2', sx: { fontSize: '13px' } }}>
+              在新标签中打开
+            </ListItemText>
           </MenuItem>
         )}
-        {bookmark.isFolder && (
+
+        {!bookmark.isFolder && bookmark.url && <Divider sx={{ my: 0.5 }} />}
+
+        {!bookmark.isFolder && bookmark.url && (
           <MenuItem
-            onClick={handleOpenAllInNewTabs}
+            onClick={handleOpenInIncognito}
             sx={{ minHeight: '32px', py: 0.5, px: 1.5 }}
           >
             <ListItemIcon sx={{ minWidth: '28px' }}>
-              <OpenInNewIcon fontSize="small" />
+              <VisibilityOffIcon fontSize="small" />
             </ListItemIcon>
-            <ListItemText primaryTypographyProps={{ variant: 'body2', sx: { fontSize: '13px' } }}>在新标签页中打开所有</ListItemText>
+            <ListItemText primaryTypographyProps={{ variant: 'body2', sx: { fontSize: '13px' } }}>
+              在隐身窗口中打开
+            </ListItemText>
           </MenuItem>
         )}
-        {bookmark.isFolder && (
+
+        <MenuItem
+          onClick={handleCreateBookmark}
+          disabled={!onCreateBookmark}
+          sx={{ minHeight: '32px', py: 0.5, px: 1.5 }}
+        >
+          <ListItemIcon sx={{ minWidth: '28px' }}>
+            <BookmarkAddIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText primaryTypographyProps={{ variant: 'body2', sx: { fontSize: '13px' } }}>
+            新建书签
+          </ListItemText>
+        </MenuItem>
+
+        <MenuItem
+          onClick={handleCreateFolder}
+          disabled={!onCreateFolder}
+          sx={{ minHeight: '32px', py: 0.5, px: 1.5 }}
+        >
+          <ListItemIcon sx={{ minWidth: '28px' }}>
+            <CreateNewFolderIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText primaryTypographyProps={{ variant: 'body2', sx: { fontSize: '13px' } }}>
+            新建文件夹
+          </ListItemText>
+        </MenuItem>
+
+        {!bookmark.isFolder && (
           <MenuItem
-            onClick={handleExportFolder}
+            onClick={handleUpdateToCurrentUrl}
+            disabled={!onUpdateToCurrentUrl}
             sx={{ minHeight: '32px', py: 0.5, px: 1.5 }}
           >
             <ListItemIcon sx={{ minWidth: '28px' }}>
-              <FileDownloadIcon fontSize="small" />
+              <UpdateIcon fontSize="small" />
             </ListItemIcon>
-            <ListItemText primaryTypographyProps={{ variant: 'body2', sx: { fontSize: '13px' } }}>导出文件夹</ListItemText>
+            <ListItemText primaryTypographyProps={{ variant: 'body2', sx: { fontSize: '13px' } }}>
+              更新为当前网址
+            </ListItemText>
           </MenuItem>
         )}
+
+        <MenuItem
+          onClick={handleEditClick}
+          sx={{ minHeight: '32px', py: 0.5, px: 1.5 }}
+        >
+          <ListItemIcon sx={{ minWidth: '28px' }}>
+            <EditIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText primaryTypographyProps={{ variant: 'body2', sx: { fontSize: '13px' } }}>
+            编辑...
+          </ListItemText>
+        </MenuItem>
+
         <MenuItem
           onClick={handleDeleteClick}
           sx={{ minHeight: '32px', py: 0.5, px: 1.5 }}
@@ -385,7 +441,9 @@ const BookmarkItem: React.FC<BookmarkItemProps> = ({
           <ListItemIcon sx={{ minWidth: '28px' }}>
             <DeleteIcon fontSize="small" />
           </ListItemIcon>
-          <ListItemText primaryTypographyProps={{ variant: 'body2', sx: { fontSize: '13px' } }}>删除</ListItemText>
+          <ListItemText primaryTypographyProps={{ variant: 'body2', sx: { fontSize: '13px' } }}>
+            删除
+          </ListItemText>
         </MenuItem>
       </Menu>
     </ListItem>

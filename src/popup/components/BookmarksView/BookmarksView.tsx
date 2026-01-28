@@ -1,31 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback, useTransition, useMemo } from 'react';
 import { browser, type Browser } from 'wxt/browser';
-import Box from '@mui/material/Box';
 import BookmarkGrid from './BookmarkGrid';
 import BookmarkList from './BookmarkList';
-import LoadingIndicator from '../shared/LoadingIndicator';
-import ViewToggleButton from './ViewToggleButton';
+import PageLayout from '../shared/PageLayout';
+import { BookmarksHeader } from './BookmarksHeader';
 import { ToastRef } from '../shared/Toast';
 import bookmarkService, { BookmarkItem, BookmarkResult } from '../../../utils/bookmark-service';
 import storageService, { UserSettings } from '../../../utils/storage-service';
-
-function sortBookmarks(bookmarks: BookmarkItem[], method: 'default' | 'name' | 'dateAdded'): BookmarkItem[] {
-  if (method === 'default') return bookmarks;
-
-  return [...bookmarks].sort((a, b) => {
-    // 确保文件夹始终排在前面
-    if (a.isFolder && !b.isFolder) return -1;
-    if (!a.isFolder && b.isFolder) return 1;
-
-    // 然后根据排序方法排序
-    if (method === 'name') {
-      return a.title.localeCompare(b.title);
-    } else if (method === 'dateAdded') {
-      return (b.dateAdded || 0) - (a.dateAdded || 0);
-    }
-    return 0;
-  });
-}
 
 interface BookmarksViewProps {
   toastRef: React.RefObject<ToastRef>;
@@ -44,7 +25,6 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
   const [folderStack, setFolderStack] = useState<BookmarkItem[]>([]);
   const [viewType, setViewType] = useState<'list' | 'grid'>('grid'); // 默认使用网格视图
   const [bookmarkBarId, setBookmarkBarId] = useState<string | null>(null); // 添加书签栏ID状态变量
-  const [sortMethod, setSortMethod] = useState<'default' | 'name' | 'dateAdded'>('default');
   const bookmarksMap = useRef<Map<string, BookmarkItem>>(new Map());
   const fullIndexBuiltRef = useRef(false);
   const isBuildingFullIndexRef = useRef(false);
@@ -58,12 +38,9 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
   const refreshCurrentFolderChildrenRef = useRef<(options?: { silent?: boolean }) => Promise<void>>(async () => { });
   const pathCacheRef = useRef<Map<string, string>>(new Map());
 
-  // 当前文件夹的一层 children（原始顺序）；展示层通过 sortMethod 做派生排序
+  // 当前文件夹的一层 children（原始顺序）
   const [currentFolderItems, setCurrentFolderItems] = useState<BookmarkItem[]>([]);
-  const currentBookmarks = useMemo(
-    () => sortBookmarks(currentFolderItems, sortMethod),
-    [currentFolderItems, sortMethod]
-  );
+  const currentBookmarks = currentFolderItems;
 
   // 搜索：debounce + 竞态控制（last-write-wins）+ 低优先级更新（startTransition）
   const searchDebounceTimerRef = useRef<number | null>(null);
@@ -188,15 +165,6 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
     void refreshCurrentFolderChildren();
   }, [currentFolderId, bookmarkBarId]);
 
-  // 排序方式变化时：如果处于搜索态，需要同步对 searchResults 重排（不必等下一次搜索）
-  useEffect(() => {
-    if (!isSearching) return;
-
-    startTransition(() => {
-      setSearchResults(prev => sortBookmarks(prev, sortMethod));
-    });
-  }, [isSearching, sortMethod, startTransition]);
-
   // 加载用户设置
   const loadUserSettings = async () => {
     try {
@@ -226,11 +194,6 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
     saveViewTypeSetting(type);
   }, []);
 
-  // 处理排序方法变更
-  const handleSortChange = useCallback((method: 'default' | 'name' | 'dateAdded') => {
-    setSortMethod(method);
-  }, []);
-
 
   const performSearch = useCallback(async (query: string, requestSeq: number) => {
     try {
@@ -251,9 +214,8 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
             : item;
         });
 
-        const sorted = sortBookmarks(enriched, sortMethod);
         startTransition(() => {
-          setSearchResults(sorted);
+          setSearchResults(enriched);
         });
       } else {
         startTransition(() => {
@@ -273,7 +235,7 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
       });
       toastRef.current?.showToast('搜索书签时发生错误', 'error');
     }
-  }, [sortMethod, startTransition, toastRef]);
+  }, [startTransition, toastRef]);
 
   // 处理搜索（仅负责：更新输入值 + debounce 调度）
   const handleSearch = useCallback((query: string) => {
@@ -915,6 +877,31 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
     handleResult(result, '书签已更新');
   }, []);
 
+  // 将指定书签的 URL（以及可选的标题）更新为“当前标签页”
+  const handleUpdateToCurrentUrl = useCallback(async (bookmarkId: string) => {
+    try {
+      const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+      const tab = tabs?.[0];
+      const url = tab?.url;
+
+      if (!url) {
+        toastRef.current?.showToast('无法获取当前标签页网址', 'warning');
+        return;
+      }
+
+      const changes: { title?: string; url?: string } = { url };
+      if (typeof tab.title === 'string' && tab.title.trim()) {
+        changes.title = tab.title;
+      }
+
+      const result = await bookmarkService.updateBookmark(bookmarkId, changes);
+      handleResult(result, '书签已更新');
+    } catch (error) {
+      console.error('更新为当前网址错误:', error);
+      toastRef.current?.showToast('更新书签时发生错误', 'error');
+    }
+  }, [toastRef]);
+
   // 删除书签
   const handleDeleteBookmark = useCallback(async (id: string) => {
     const result = await bookmarkService.removeBookmark(id);
@@ -1005,6 +992,7 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
     onAddBookmark: handleAddBookmark,
     onAddFolder: handleAddFolder,
     onEditBookmark: handleEditBookmark,
+    onUpdateToCurrentUrl: handleUpdateToCurrentUrl,
     onDeleteBookmark: handleDeleteBookmark,
     onDeleteFolder: handleDeleteFolder,
     onNavigateToFolder: navigateToFolder,
@@ -1012,8 +1000,6 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
     onMoveBookmark: handleMoveBookmark,
     viewType,
     onViewTypeChange: handleViewTypeChange,
-    sortMethod,
-    onSortChange: handleSortChange,
     searchText,
     isSearching,
     resolveBookmarkPath,
@@ -1026,6 +1012,7 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
     handleAddBookmark,
     handleAddFolder,
     handleEditBookmark,
+    handleUpdateToCurrentUrl,
     handleDeleteBookmark,
     handleDeleteFolder,
     navigateToFolder,
@@ -1033,8 +1020,6 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
     handleMoveBookmark,
     viewType,
     handleViewTypeChange,
-    sortMethod,
-    handleSortChange,
     searchText,
     isSearching,
     resolveBookmarkPath,
@@ -1050,10 +1035,22 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
   };
 
   return (
-    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      {/* 书签内容区域 */}
+    <PageLayout
+      title={
+        <BookmarksHeader
+          parentFolder={parentFolder}
+          isSearching={isSearching}
+          onNavigateBack={navigateBack}
+          searchText={searchText}
+          onSearch={handleSearch}
+          onClearSearch={clearSearch}
+          viewType={viewType}
+          onViewTypeChange={handleViewTypeChange}
+        />
+      }
+    >
       {renderBookmarkView()}
-    </Box>
+    </PageLayout>
   );
 };
 
