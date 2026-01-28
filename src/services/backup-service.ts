@@ -796,19 +796,39 @@ class BackupService {
       const result = await storageService.getBackupStatus();
       const baseStatus = result.success ? result.data : {};
 
-      // 如果需要强制刷新或者状态中没有统计数据，则获取完整状态
-      if (forceRefresh || !baseStatus.stats) {
-        const fullStatus = await this.getFullBackupStatus(baseStatus, updateCallback);
-        return fullStatus;
+      // 非强制刷新：优先使用本地缓存的统计信息（避免每次打开都访问 GitHub）
+      if (!forceRefresh) {
+        const cacheResult = await storageService.getBackupStatsCache();
+        if (
+          cacheResult.success &&
+          cacheResult.data &&
+          storageService.isBackupStatsCacheValid(cacheResult.data) &&
+          cacheResult.data.data
+        ) {
+          return {
+            ...baseStatus,
+            stats: {
+              ...(cacheResult.data.data as any),
+              isFromCache: true,
+            },
+          };
+        }
+
+        // 兼容：如果历史数据里已经存了 stats，则直接返回
+        if (baseStatus.stats) {
+          return baseStatus;
+        }
       }
 
-      // 如果有回调但状态已经包含统计数据，则异步刷新并通过回调返回更新后的状态
-      if (updateCallback && baseStatus.stats) {
-        // 异步刷新统计数据
-        this.refreshBackupStatsAsync(baseStatus, updateCallback);
+      // 无缓存（首次）或用户手动刷新：从 GitHub 拉取
+      const fullStatus = await this.getFullBackupStatus(baseStatus, updateCallback, forceRefresh);
+
+      // 将最新统计写回 backup_status，方便下次无缓存时仍可展示
+      if (fullStatus.stats) {
+        await storageService.saveBackupStatus({ stats: { ...fullStatus.stats, isFromCache: false } });
       }
 
-      return baseStatus;
+      return fullStatus;
     } catch (error) {
       console.error('获取备份状态失败:', error);
       return {};
@@ -848,7 +868,8 @@ class BackupService {
    */
   private async getFullBackupStatus(
     baseStatus: BackupStatus,
-    updateCallback?: (updatedStatus: BackupStatus) => void
+    updateCallback?: (updatedStatus: BackupStatus) => void,
+    forceRefreshStats: boolean = false
   ): Promise<BackupStatus> {
     try {
       // 尝试获取GitHub凭据
@@ -861,7 +882,7 @@ class BackupService {
       const userResult = await githubService.validateCredentials(credentialsResult.data);
 
       // 获取统计信息
-      const stats = await this.getBackupStats(credentialsResult.data, userResult.login, true);
+      const stats = await this.getBackupStats(credentialsResult.data, userResult.login, forceRefreshStats);
 
       // 更新状态
       const updatedStatus = { ...baseStatus, stats };
