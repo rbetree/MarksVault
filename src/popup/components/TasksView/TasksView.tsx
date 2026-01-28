@@ -207,7 +207,7 @@ const TasksView: React.FC<TasksViewProps> = ({
       return (
         <Alert
           severity="error"
-          sx={{ my: 2 }}
+          sx={{ mb: 2 }}
           action={
             <Button color="inherit" size="small" onClick={refreshTasks}>
               重试
@@ -228,7 +228,7 @@ const TasksView: React.FC<TasksViewProps> = ({
     }
 
     return (
-      <Box sx={{ mt: 2 }}>
+      <Box>
         {tasks.map(task => (
           <TaskCard
             key={task.id}
@@ -245,6 +245,9 @@ const TasksView: React.FC<TasksViewProps> = ({
   return (
     <PageLayout
       title="任务管理"
+      contentSx={{
+        pb: 18, // 为固定悬浮按钮预留足够底部空间
+      }}
       actions={
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
           <Tooltip title="刷新任务列表">
@@ -282,7 +285,7 @@ const TasksView: React.FC<TasksViewProps> = ({
         </Box>
       }
     >
-      <Box sx={{ pb: 8 }}> {/* Add padding bottom to avoid FAB overlap */}
+      <Box>
         <QuickActionsPanel
           toastRef={toastRef}
           authStatus={authStatus}

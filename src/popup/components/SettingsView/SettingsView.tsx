@@ -138,7 +138,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ toastRef }) => {
       }
       contentSx={{ pb: 2 }}
     >
-      <Box sx={{ flexGrow: 1, minHeight: 0, pt: 0.5 }}>
+      <Box sx={{ flexGrow: 1, minHeight: 0 }}>
         {tabValue === 0 && (
           <GeneralSettings
             settings={settings}

@@ -124,9 +124,6 @@ const SyncOperations: React.FC = () => {
 
   return (
     <Box sx={{ m: 0 }}>
-      {/* 顶部间距 */}
-      <Box sx={{ height: 8 }} />
-
       <Grid container spacing={2}>
         {/* 备份统计信息 */}
         <Grid item xs={12} sm={6}>
@@ -140,10 +137,10 @@ const SyncOperations: React.FC = () => {
                     size="small"
                     onClick={handleRefreshStats}
                     disabled={isStatsLoading || isStatsUpdating}
-                    sx={{ p: 0.5 }}
+                    sx={{ p: 0.5, width: 28, height: 28 }}
                   >
                     {isStatsLoading || isStatsUpdating ? (
-                      <CircularProgress size={16} color="inherit" />
+                      <CircularProgress size={20} color="inherit" />
                     ) : (
                       <RefreshIcon fontSize="small" />
                     )}

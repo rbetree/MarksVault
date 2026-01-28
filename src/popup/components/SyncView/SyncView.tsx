@@ -2,7 +2,6 @@ import React from 'react';
 import Box from '@mui/material/Box';
 import IconButton from '@mui/material/IconButton';
 import Tooltip from '@mui/material/Tooltip';
-import LogoutIcon from '@mui/icons-material/Logout';
 import GitHubIcon from '@mui/icons-material/GitHub';
 import GitHubAuth from './GitHubAuth';
 import SyncOperations from './SyncOperations';
@@ -17,7 +16,6 @@ interface SyncViewProps {
   authStatus: AuthStatus;
   user: GitHubUser | null;
   onAuth: (credentials: GitHubCredentials) => Promise<void>;
-  onLogout: () => Promise<void>;
   isLoading: boolean;
 }
 
@@ -25,7 +23,6 @@ const SyncView: React.FC<SyncViewProps> = ({
   authStatus,
   user,
   onAuth,
-  onLogout,
   isLoading
 }) => {
   // 显示加载指示器
@@ -42,7 +39,7 @@ const SyncView: React.FC<SyncViewProps> = ({
       title="概览"
       actions={
         authStatus === AuthStatus.AUTHENTICATED && user ? (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
             <Tooltip title="前往 GitHub 主页">
               <IconButton
                 size="small"
@@ -53,16 +50,6 @@ const SyncView: React.FC<SyncViewProps> = ({
                 sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main', bgcolor: 'rgba(255,255,255,0.05)' } }}
               >
                 <GitHubIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-
-            <Tooltip title="断开连接">
-              <IconButton
-                size="small"
-                onClick={onLogout}
-                sx={{ color: 'text.secondary', '&:hover': { color: 'error.main', bgcolor: 'error.dark' } }}
-              >
-                <LogoutIcon fontSize="small" />
               </IconButton>
             </Tooltip>
           </Box>

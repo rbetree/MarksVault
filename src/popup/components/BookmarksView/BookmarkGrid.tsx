@@ -26,10 +26,9 @@ import { BookmarkItem as BookmarkItemType } from '../../../utils/bookmark-servic
 const DRAG_TYPE = 'application/marksvault-bookmark';
 
 // 样式化组件
-const GridContainer = styled(Box)(({ theme }) => ({
+const GridContainer = styled(Box)(() => ({
   display: 'grid',
   gridTemplateColumns: 'repeat(6, 1fr)',
-  padding: theme.spacing(0.5),
   width: '100%',
   // Height handled by PageLayout
   gap: '4px',

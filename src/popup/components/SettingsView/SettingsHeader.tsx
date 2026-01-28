@@ -27,7 +27,6 @@ const SettingsHeader: React.FC<SettingsHeaderProps> = ({ tabValue, onTabChange }
 
             <Box sx={{
                 width: '60%',
-                mr: -1, // Compensate for PageLayout padding if needed, but let's see
                 bgcolor: 'rgba(255, 255, 255, 0.03)',
                 borderRadius: 1,
                 border: '1px solid rgba(255, 255, 255, 0.1)',

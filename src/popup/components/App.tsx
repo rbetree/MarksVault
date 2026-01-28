@@ -131,7 +131,6 @@ const App: React.FC = () => {
             authStatus={authStatus}
             user={user}
             onAuth={handleAuth}
-            onLogout={handleLogout}
             isLoading={isLoading}
           />
         );
@@ -175,7 +174,7 @@ const App: React.FC = () => {
               display: 'flex',
               flexDirection: 'column',
               pb: 7, // 为所有页面添加底部导航栏的高度间距
-              px: 0.5, // 统一内容区域的水平内边距
+              px: 0, // 由各页面布局组件控制内边距（确保顶部栏贴边）
             }}
           >
             {renderContent()}

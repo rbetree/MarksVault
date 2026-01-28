@@ -32,13 +32,14 @@ export const BookmarksHeaderTitle: React.FC<Pick<BookmarksHeaderProps, 'parentFo
         <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', overflow: 'hidden' }}>
             {isSearching ? (
                 <Typography
-                    variant="body2"
+                    variant="subtitle2"
                     noWrap
                     sx={{
-                        fontWeight: 400,
+                        fontWeight: 600,
                         flex: 1,
-                        fontSize: '0.9rem',
+                        fontSize: '0.95rem',
                         color: 'text.primary',
+                        letterSpacing: '0.02em',
                     }}
                 >
                     搜索结果
@@ -49,13 +50,14 @@ export const BookmarksHeaderTitle: React.FC<Pick<BookmarksHeaderProps, 'parentFo
                         <ArrowBackIcon fontSize="small" />
                     </IconButton>
                     <Typography
-                        variant="body2"
+                        variant="subtitle2"
                         noWrap
                         sx={{
-                            fontWeight: 400,
+                            fontWeight: 600,
                             flex: 1,
-                            fontSize: '0.9rem',
-                            color: 'text.primary'
+                            fontSize: '0.95rem',
+                            color: 'text.primary',
+                            letterSpacing: '0.02em',
                         }}
                     >
                         {parentFolder.title}
@@ -63,13 +65,14 @@ export const BookmarksHeaderTitle: React.FC<Pick<BookmarksHeaderProps, 'parentFo
                 </>
             ) : (
                 <Typography
-                    variant="body2"
+                    variant="subtitle2"
                     noWrap
                     sx={{
-                        fontWeight: 400,
+                        fontWeight: 600,
                         flex: 1,
-                        fontSize: '0.9rem',
+                        fontSize: '0.95rem',
                         color: 'text.primary',
+                        letterSpacing: '0.02em',
                     }}
                 >
                     书签栏

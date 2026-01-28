@@ -231,8 +231,6 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
           flexGrow: 1,
           // overflowY: 'auto',  // Let PageLayout handle scroll
           // overflowX: 'hidden',
-          px: 0.5,
-          pt: 1,
           columnCount: 2,
           columnGap: '8px',
           width: '100%',
