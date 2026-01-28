@@ -7,6 +7,7 @@ import Typography from '@mui/material/Typography';
 import Paper from '@mui/material/Paper';
 import CircularProgress from '@mui/material/CircularProgress';
 import Alert from '@mui/material/Alert';
+import AlertTitle from '@mui/material/AlertTitle';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import BookmarkSelector from '../../popup/components/shared/BookmarkSelector';
 import { BookmarkSelection, Task, SelectivePushAction } from '../../types/task';
@@ -57,15 +58,58 @@ const SelectivePushExecutor: React.FC<SelectivePushExecutorProps> = ({
 
       if (response.success) {
         setSuccess(true);
+
+        // 写入结果用于 popup toast；失败时不应影响“推送成功”的展示与关闭流程
+        try {
+          await browser.storage.local.set({
+            taskExecutionResult: {
+              taskId: task.id,
+              success: true,
+              timestamp: Date.now(),
+              message: '推送完成',
+            },
+          });
+        } catch (error) {
+          console.warn('写入 taskExecutionResult 失败:', error);
+        }
+
         setTimeout(() => {
           onComplete();
         }, 2000);
       } else {
-        setError(response.error || '推送失败');
+        const message = response.error || '推送失败';
+        setError(message);
+
+        try {
+          await browser.storage.local.set({
+            taskExecutionResult: {
+              taskId: task.id,
+              success: false,
+              timestamp: Date.now(),
+              message,
+            },
+          });
+        } catch (error) {
+          console.warn('写入 taskExecutionResult 失败:', error);
+        }
       }
     } catch (err) {
       console.error('执行选择性推送失败:', err);
-      setError(err instanceof Error ? err.message : '执行推送时发生错误');
+      const message = err instanceof Error ? err.message : '执行推送时发生错误';
+      setError(message);
+
+      try {
+        await browser.storage.local.set({
+          taskExecutionResult: {
+            taskId: task.id,
+            success: false,
+            timestamp: Date.now(),
+            message,
+          },
+        });
+      } catch (error) {
+        console.warn('写入 taskExecutionResult 失败:', error);
+      }
     } finally {
       setExecuting(false);
     }
@@ -115,9 +159,7 @@ const SelectivePushExecutor: React.FC<SelectivePushExecutorProps> = ({
         {/* 成功提示 */}
         {success && (
           <Alert severity="success" sx={{ mb: 2 }}>
-            <Typography variant="body2" sx={{ fontWeight: 500 }}>
-              ✅ 推送成功！
-            </Typography>
+            <AlertTitle sx={{ mb: 0.5 }}>推送成功</AlertTitle>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
               已推送 {selections.length} 个书签到 {action.options.repoName}/{action.options.folderPath || 'bookmarks'}
             </Typography>
@@ -156,11 +198,9 @@ const SelectivePushExecutor: React.FC<SelectivePushExecutorProps> = ({
         </Box>
 
         {/* 选择提示 */}
-        <Box sx={{ mt: 2, p: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
+        <Alert severity="info" sx={{ mt: 2 }}>
+          <AlertTitle sx={{ mb: 0.5 }}>提示</AlertTitle>
           <Typography variant="body2" color="text.secondary">
-            💡 提示:
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
             • 可以选择单个书签或整个文件夹
           </Typography>
           <Typography variant="body2" color="text.secondary">
@@ -169,7 +209,7 @@ const SelectivePushExecutor: React.FC<SelectivePushExecutorProps> = ({
           <Typography variant="body2" color="text.secondary">
             • 选择文件夹会包含其所有子书签
           </Typography>
-        </Box>
+        </Alert>
       </Paper>
     </Box>
   );

@@ -35,7 +35,13 @@ export function useTaskConfigData(
       setLoadError(null);
 
       try {
-        if ((mode === 'edit' || mode === 'execute') && taskId) {
+        if (mode === 'edit' || mode === 'execute') {
+          if (!taskId) {
+            setLoadError('缺少任务ID');
+            setTaskData(null);
+            return;
+          }
+
           // 编辑模式或执行模式：加载指定任务
           const result = await taskService.getTaskById(taskId);
           if (result.success && result.data) {
@@ -44,10 +50,11 @@ export function useTaskConfigData(
             setLoadError(result.error || '加载任务失败');
             setTaskData(null);
           }
-        } else {
-          // 创建模式：使用默认任务
-          setTaskData(createDefaultTask());
+          return;
         }
+
+        // 创建模式：使用默认任务
+        setTaskData(createDefaultTask());
       } catch (err) {
         console.error('加载任务数据时出错:', err);
         setLoadError('加载任务数据时发生错误');

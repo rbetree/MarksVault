@@ -36,7 +36,7 @@ const TaskStatusChip: React.FC<TaskStatusChipProps> = ({ status, size = 'small' 
         return {
           label: '运行中',
           color: 'primary' as const,
-          icon: <SyncIcon />
+          icon: <SyncIcon sx={{ animation: 'mv-task-spin 1s linear infinite' }} />
         };
       case TaskStatus.COMPLETED:
         return {
@@ -69,6 +69,10 @@ const TaskStatusChip: React.FC<TaskStatusChipProps> = ({ status, size = 'small' 
       size={size}
       variant="filled"
       sx={{ 
+        '@keyframes mv-task-spin': {
+          from: { transform: 'rotate(0deg)' },
+          to: { transform: 'rotate(360deg)' },
+        },
         fontWeight: 500,
         fontSize: '10px',
         height: size === 'small' ? '20px' : '24px',

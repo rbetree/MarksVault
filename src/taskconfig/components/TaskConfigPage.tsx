@@ -39,14 +39,9 @@ const TaskConfigPage: React.FC = () => {
    * 处理表单数据变化
    */
   const handleFormChange = (updatedData: Partial<Task>) => {
-    if (formData) {
-      setFormData({
-        ...formData,
-        ...updatedData,
-      });
-      if (saveError) {
-        clearSaveError();
-      }
+    setFormData((prev) => (prev ? { ...prev, ...updatedData } : prev));
+    if (saveError) {
+      clearSaveError();
     }
   };
 
@@ -69,15 +64,20 @@ const TaskConfigPage: React.FC = () => {
       const result = await saveTask(formData);
 
       if (result.success && result.taskId) {
-        // 将保存结果写入chrome.storage.local
-        await browser.storage.local.set({
-          taskConfigResult: {
-            success: true,
-            taskId: result.taskId,
-            mode: mode,
-            timestamp: Date.now(),
-          },
-        });
+        // 将保存结果写入 chrome.storage.local（用于 popup 内展示 toast）；失败时不应阻塞关闭页面
+        try {
+          await browser.storage.local.set({
+            taskConfigResult: {
+              success: true,
+              taskId: result.taskId,
+              mode: mode,
+              taskName: formData.name,
+              timestamp: Date.now(),
+            },
+          });
+        } catch (error) {
+          console.warn('写入 taskConfigResult 失败:', error);
+        }
 
         // 关闭当前页面
         window.close();

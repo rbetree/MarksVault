@@ -5,6 +5,7 @@ import {
   TaskExecutionResult,
   createDefaultTask,
   createDefaultTaskStorage,
+  TriggerType,
   createManualTrigger,
   createBackupAction,
   BackupAction,
@@ -22,8 +23,10 @@ export const SYSTEM_TASK_IDS = {
   BOOKMARKS_RESTORE: 'sys_bookmarks_restore',
 } as const;
 
+const SYSTEM_TASK_ID_SET: ReadonlySet<string> = new Set(Object.values(SYSTEM_TASK_IDS));
+
 export const isSystemTaskId = (taskId: string): boolean => {
-  return Object.values(SYSTEM_TASK_IDS).includes(taskId as any);
+  return SYSTEM_TASK_ID_SET.has(taskId);
 };
 
 /**
@@ -34,6 +37,160 @@ class TaskService {
   private static instance: TaskService;
   // 注意：不使用内存缓存，因为 Service Worker 和页面是不同的执行上下文
   // 每次操作都直接从 chrome.storage 读取，确保数据一致性
+
+  private isPlainObject(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+  }
+
+  private coerceHistory(value: unknown): Task['history'] {
+    if (!this.isPlainObject(value)) {
+      return { executions: [] };
+    }
+
+    const executionsRaw = value['executions'];
+    const executions = Array.isArray(executionsRaw)
+      ? (executionsRaw as TaskExecutionResult[])
+      : [];
+
+    const lastExecutionRaw = value['lastExecution'];
+    const lastExecution = this.isPlainObject(lastExecutionRaw)
+      ? (lastExecutionRaw as unknown as TaskExecutionResult)
+      : undefined;
+
+    return {
+      executions,
+      ...(lastExecution ? { lastExecution } : {}),
+    };
+  }
+
+  private coerceTask(value: unknown): Task | null {
+    if (!this.isPlainObject(value)) return null;
+
+    const idRaw = value['id'];
+    const id = typeof idRaw === 'string' ? idRaw.trim() : '';
+    if (!id) return null;
+
+    const now = Date.now();
+    const base = createDefaultTask();
+
+    const nameRaw = value['name'];
+    const name = typeof nameRaw === 'string' ? nameRaw : base.name;
+
+    const descriptionRaw = value['description'];
+    const description = typeof descriptionRaw === 'string' ? descriptionRaw : '';
+
+    const statusRaw = value['status'];
+    const status =
+      typeof statusRaw === 'string' && (Object.values(TaskStatus) as string[]).includes(statusRaw)
+        ? (statusRaw as TaskStatus)
+        : base.status;
+
+    const createdAtRaw = value['createdAt'];
+    const createdAt = typeof createdAtRaw === 'number' && Number.isFinite(createdAtRaw) ? createdAtRaw : now;
+
+    const updatedAtRaw = value['updatedAt'];
+    const updatedAt = typeof updatedAtRaw === 'number' && Number.isFinite(updatedAtRaw) ? updatedAtRaw : createdAt;
+
+    const triggerRaw = value['trigger'];
+    const trigger =
+      this.isPlainObject(triggerRaw) &&
+      (triggerRaw['type'] === TriggerType.EVENT || triggerRaw['type'] === TriggerType.MANUAL)
+        ? (triggerRaw as unknown as Task['trigger'])
+        : base.trigger;
+
+    const actionRaw = value['action'];
+    const action = this.isPlainObject(actionRaw) ? (actionRaw as unknown as Task['action']) : base.action;
+
+    const history = this.coerceHistory(value['history']);
+
+    return {
+      ...base,
+      id,
+      name,
+      description,
+      status,
+      createdAt,
+      updatedAt,
+      trigger,
+      action,
+      history,
+    };
+  }
+
+  private normalizeTaskStorage(raw: unknown): { taskStorage: TaskStorage; migrated: boolean } {
+    const now = Date.now();
+
+    if (!raw) {
+      return { taskStorage: createDefaultTaskStorage(), migrated: true };
+    }
+
+    // 旧数据：Task[]
+    if (Array.isArray(raw)) {
+      const tasks: Record<string, Task> = {};
+      for (const item of raw) {
+        const task = this.coerceTask(item);
+        if (task) {
+          tasks[task.id] = task;
+        }
+      }
+      return {
+        taskStorage: {
+          tasks,
+          lastUpdated: now,
+        },
+        migrated: true,
+      };
+    }
+
+    // 现行数据：TaskStorage 或缺少 lastUpdated 的 TaskStorage
+    if (this.isPlainObject(raw)) {
+      const tasksRaw = raw['tasks'];
+
+      if (this.isPlainObject(tasksRaw)) {
+        const tasks: Record<string, Task> = {};
+        for (const value of Object.values(tasksRaw)) {
+          const task = this.coerceTask(value);
+          if (task) {
+            tasks[task.id] = task;
+          }
+        }
+
+        const lastUpdatedRaw = raw['lastUpdated'];
+        const lastUpdated =
+          typeof lastUpdatedRaw === 'number' && Number.isFinite(lastUpdatedRaw) ? lastUpdatedRaw : now;
+
+        return {
+          taskStorage: {
+            tasks,
+            lastUpdated,
+          },
+          migrated: !(typeof lastUpdatedRaw === 'number' && Number.isFinite(lastUpdatedRaw)),
+        };
+      }
+
+      // 兜底兼容：可能直接存了 { [taskId]: Task }
+      const tasks: Record<string, Task> = {};
+      let found = false;
+      for (const value of Object.values(raw)) {
+        const task = this.coerceTask(value);
+        if (task) {
+          tasks[task.id] = task;
+          found = true;
+        }
+      }
+      if (found) {
+        return {
+          taskStorage: {
+            tasks,
+            lastUpdated: now,
+          },
+          migrated: true,
+        };
+      }
+    }
+
+    return { taskStorage: createDefaultTaskStorage(), migrated: true };
+  }
 
   /**
    * 私有构造函数，防止直接实例化
@@ -147,20 +304,19 @@ class TaskService {
     try {
       const result = await storageService.getStorageData(TASKS_STORAGE_KEY);
 
-      if (result.success) {
-        // 如果storage中没有数据，则初始化一个默认的任务存储
-        if (!result.data) {
-          const defaultTaskStorage = createDefaultTaskStorage();
-          await this.saveTasks(defaultTaskStorage);
-          return {
-            success: true,
-            data: defaultTaskStorage
-          };
-        }
+      if (!result.success) {
         return result;
       }
 
-      return result;
+      const { taskStorage, migrated } = this.normalizeTaskStorage(result.data as unknown);
+      if (migrated) {
+        await this.saveTasks(taskStorage);
+      }
+
+      return {
+        success: true,
+        data: taskStorage,
+      };
     } catch (error) {
       console.error('获取任务失败:', error);
       return {

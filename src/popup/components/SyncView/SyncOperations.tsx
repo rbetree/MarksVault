@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { browser, type Browser } from 'wxt/browser';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Grid from '@mui/material/Grid';
@@ -17,7 +18,7 @@ import backupService from '../../../services/backup-service';
 import { BackupStatus } from '../../../types/backup';
 import { formatDate } from '../../../utils/date-utils';
 import taskService, { isSystemTaskId } from '../../../services/task-service';
-import { TaskStatus } from '../../../types/task';
+import { Task, TaskStatus } from '../../../types/task';
 
 /**
  * 概览页内容（保留文件名以避免大规模改动）：
@@ -60,47 +61,53 @@ const SyncOperations: React.FC = () => {
     loadData();
   }, [handleBackupStatusUpdate]);
 
-  // 加载任务统计信息（概览展示）
+  const loadTaskStats = useCallback(async () => {
+    try {
+      const result = await taskService.getTasksByStatus();
+      if (!result.success) return;
+
+      const rawData: unknown = result.data;
+      const taskList: Task[] = Array.isArray(rawData) ? (rawData as Task[]) : [];
+
+      const tasks = taskList.filter((t) => t && typeof t.id === 'string' && !isSystemTaskId(t.id));
+
+      const enabled = tasks.filter(t => t.status === TaskStatus.ENABLED).length;
+      const disabled = tasks.filter(t => t.status === TaskStatus.DISABLED).length;
+      const failed = tasks.filter(t => t.status === TaskStatus.FAILED).length;
+
+      const lastExecutionTime = tasks.reduce((max, t) => {
+        const ts = t.history?.lastExecution?.timestamp;
+        return typeof ts === 'number' && ts > max ? ts : max;
+      }, 0);
+
+      setTaskStats({
+        total: tasks.length,
+        enabled,
+        disabled,
+        failed,
+        lastExecutionTime,
+      });
+    } catch (error) {
+      console.error('加载任务统计失败:', error);
+    }
+  }, []);
+
+  // 加载任务统计信息（概览展示） + 监听任务变化
   useEffect(() => {
-    const loadTaskStats = async () => {
-      try {
-        const result = await taskService.getTasksByStatus();
-        if (!result.success) return;
+    void loadTaskStats();
 
-        const rawData = result.data as unknown;
-        const taskList: any[] = Array.isArray(rawData)
-          ? (rawData as any[])
-          : rawData && typeof rawData === 'object' && 'tasks' in (rawData as any)
-            ? (Object.values((rawData as any).tasks ?? {}) as any[])
-            : [];
-
-        const tasks = taskList.filter(
-          (t: any) => t && typeof t.id === 'string' && !isSystemTaskId(t.id)
-        ) as any[];
-
-        const enabled = tasks.filter(t => t.status === TaskStatus.ENABLED).length;
-        const disabled = tasks.filter(t => t.status === TaskStatus.DISABLED).length;
-        const failed = tasks.filter(t => t.status === TaskStatus.FAILED).length;
-
-        const lastExecutionTime = tasks.reduce((max, t) => {
-          const ts = t?.history?.lastExecution?.timestamp;
-          return typeof ts === 'number' && ts > max ? ts : max;
-        }, 0);
-
-        setTaskStats({
-          total: tasks.length,
-          enabled,
-          disabled,
-          failed,
-          lastExecutionTime,
-        });
-      } catch (error) {
-        console.error('加载任务统计失败:', error);
+    const handleStorageChange = (
+      changes: { [key: string]: Browser.storage.StorageChange },
+      areaName: Browser.storage.AreaName
+    ) => {
+      if (areaName === 'local' && changes.tasks_data) {
+        void loadTaskStats();
       }
     };
 
-    loadTaskStats();
-  }, []);
+    browser.storage.onChanged.addListener(handleStorageChange);
+    return () => browser.storage.onChanged.removeListener(handleStorageChange);
+  }, [loadTaskStats]);
 
   // 辅助函数：格式化文件大小
   const formatFileSize = (bytes?: number): string => {
@@ -301,11 +308,11 @@ const SyncOperations: React.FC = () => {
                 </Box>
               </Grid>
               <Grid item xs={6}>
-                <Box sx={{ p: 1.5, bgcolor: 'rgba(76, 175, 80, 0.08)', borderRadius: 1, textAlign: 'center', color: 'success.light' }}>
-                  <Typography variant="h5" sx={{ fontWeight: 'bold' }}>{taskStats.enabled}</Typography>
-                  <Typography variant="caption" sx={{ opacity: 0.8 }}>运行中</Typography>
-                </Box>
-              </Grid>
+                 <Box sx={{ p: 1.5, bgcolor: 'rgba(76, 175, 80, 0.08)', borderRadius: 1, textAlign: 'center', color: 'success.light' }}>
+                   <Typography variant="h5" sx={{ fontWeight: 'bold' }}>{taskStats.enabled}</Typography>
+                   <Typography variant="caption" sx={{ opacity: 0.8 }}>已启用</Typography>
+                 </Box>
+               </Grid>
             </Grid>
 
             <Box sx={{ mt: 2 }}>

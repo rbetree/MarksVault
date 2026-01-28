@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { browser, type Browser } from 'wxt/browser';
 import Box from '@mui/material/Box';
 import Container from '@mui/material/Container';
 import Header from './shared/Header';
@@ -30,6 +31,104 @@ const App: React.FC = () => {
 
   const [currentView, setCurrentView] = useState<NavOption>(initView());
   const toastRef = useRef<ToastRef>(null);
+
+  // 监听 taskconfig/unlisted 页面写入的结果，用于在 popup 内展示 toast
+  useEffect(() => {
+    const MAX_NOTICE_AGE_MS = 60 * 1000;
+
+    const isPlainObject = (value: unknown): value is Record<string, unknown> => {
+      return typeof value === 'object' && value !== null && !Array.isArray(value);
+    };
+
+    const isRecent = (timestamp: unknown): boolean => {
+      if (typeof timestamp !== 'number' || !Number.isFinite(timestamp)) return false;
+      return Date.now() - timestamp <= MAX_NOTICE_AGE_MS;
+    };
+
+    const handleTaskConfigResult = (value: unknown) => {
+      if (!isPlainObject(value)) return;
+
+      const timestamp = value['timestamp'];
+      if (!isRecent(timestamp)) return;
+
+      const success = value['success'] === true;
+      const mode = value['mode'];
+      const taskName = typeof value['taskName'] === 'string' ? value['taskName'] : '';
+
+      if (success) {
+        const verb = mode === 'edit' ? '任务已更新' : '任务已创建';
+        const message = taskName ? `${verb}: ${taskName}` : verb;
+        toastRef.current?.showToast(message, 'success');
+      } else {
+        toastRef.current?.showToast('任务保存失败', 'error');
+      }
+    };
+
+    const handleTaskExecutionResult = (value: unknown) => {
+      if (!isPlainObject(value)) return;
+
+      const timestamp = value['timestamp'];
+      if (!isRecent(timestamp)) return;
+
+      const success = value['success'] === true;
+      const message = typeof value['message'] === 'string'
+        ? value['message']
+        : success
+          ? '任务执行成功'
+          : '任务执行失败';
+
+      toastRef.current?.showToast(message, success ? 'success' : 'error');
+    };
+
+    const clearKey = async (key: 'taskConfigResult' | 'taskExecutionResult') => {
+      try {
+        await browser.storage.local.remove(key);
+      } catch (error) {
+        console.warn(`清理 ${key} 失败:`, error);
+      }
+    };
+
+    const handleStorageChange = (
+      changes: { [key: string]: Browser.storage.StorageChange },
+      areaName: Browser.storage.AreaName
+    ) => {
+      if (areaName !== 'local') return;
+
+      const taskConfigChange = changes.taskConfigResult;
+      if (taskConfigChange?.newValue) {
+        handleTaskConfigResult(taskConfigChange.newValue);
+        void clearKey('taskConfigResult');
+      }
+
+      const taskExecutionChange = changes.taskExecutionResult;
+      if (taskExecutionChange?.newValue) {
+        handleTaskExecutionResult(taskExecutionChange.newValue);
+        void clearKey('taskExecutionResult');
+      }
+    };
+
+    browser.storage.onChanged.addListener(handleStorageChange);
+
+    // popup 打开时，如存在残留结果且仍在有效期内，则展示一次并清理
+    const init = async () => {
+      try {
+        const stored = await browser.storage.local.get(['taskConfigResult', 'taskExecutionResult']);
+        if (stored.taskConfigResult) {
+          handleTaskConfigResult(stored.taskConfigResult);
+          await clearKey('taskConfigResult');
+        }
+        if (stored.taskExecutionResult) {
+          handleTaskExecutionResult(stored.taskExecutionResult);
+          await clearKey('taskExecutionResult');
+        }
+      } catch (error) {
+        console.warn('读取 task result 失败:', error);
+      }
+    };
+    void init();
+
+    return () => browser.storage.onChanged.removeListener(handleStorageChange);
+  }, []);
 
   // GitHub用户状态管理
   const [authStatus, setAuthStatus] = useState<AuthStatus>(AuthStatus.INITIAL);

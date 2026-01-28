@@ -120,12 +120,27 @@ const TaskCard: React.FC<TaskCardProps> = ({
     setExecuting(true);
     try {
       console.log(`手动执行任务: ${task.id}`);
-      await taskExecutor.executeTask(task.id);
-      // 刷新任务列表，显示最新状态
-      onStatusChange?.(task.id, true);
+      const result = await taskExecutor.executeTask(task.id);
+
+      await browser.storage.local.set({
+        taskExecutionResult: {
+          taskId: task.id,
+          success: result.success,
+          timestamp: Date.now(),
+          message: result.success ? '任务执行成功' : (result.error || '任务执行失败'),
+        },
+      });
     } catch (error) {
       console.error('手动执行任务失败:', error);
-      onStatusChange?.(task.id, false);
+
+      await browser.storage.local.set({
+        taskExecutionResult: {
+          taskId: task.id,
+          success: false,
+          timestamp: Date.now(),
+          message: error instanceof Error ? error.message : '任务执行失败',
+        },
+      });
     } finally {
       setExecuting(false);
     }
@@ -265,7 +280,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
                   mb: 0.5,
                   fontSize: '10px',
                   '&:hover': {
-                    backgroundColor: 'rgba(0, 0, 0, 0.04)'
+                    backgroundColor: 'action.hover'
                   },
                   color: execution.success ? 'success.main' : 'error.main'
                 }}
@@ -308,7 +323,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
                     px: 1,
                     py: 0.5,
                     fontSize: '9px',
-                    backgroundColor: 'rgba(0, 0, 0, 0.02)',
+                    backgroundColor: 'action.hover',
                     borderRadius: 1,
                     mt: 0.5
                   }}>
@@ -364,6 +379,19 @@ const TaskCard: React.FC<TaskCardProps> = ({
           <Alert 
             severity="error" 
             icon={<ErrorOutlineIcon fontSize="inherit" />}
+            action={
+              isCredentialError() ? (
+                <Button
+                  color="inherit"
+                  size="small"
+                  onClick={() => {
+                    window.location.hash = 'overview';
+                  }}
+                >
+                  去概览
+                </Button>
+              ) : undefined
+            }
             sx={{ 
               py: 0.2, 
               px: 0.4, 

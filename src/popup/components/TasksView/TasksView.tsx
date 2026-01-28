@@ -8,6 +8,7 @@ import AddIcon from '@mui/icons-material/Add';
 import MenuItem from '@mui/material/MenuItem';
 import Select, { SelectChangeEvent } from '@mui/material/Select';
 import FormControl from '@mui/material/FormControl';
+import CircularProgress from '@mui/material/CircularProgress';
 import Dialog from '@mui/material/Dialog';
 import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
@@ -69,13 +70,8 @@ const TasksView: React.FC<TasksViewProps> = ({
         if (!isMounted) return;
 
         if (result.success) {
-          // 兼容旧数据：result.data 既可能是 Task[]，也可能是 { tasks: Record<string, Task> }
-          const rawData = result.data as unknown;
-          const taskList: Task[] = Array.isArray(rawData)
-            ? (rawData as Task[])
-            : rawData && typeof rawData === 'object' && 'tasks' in (rawData as any)
-              ? (Object.values((rawData as any).tasks ?? {}) as Task[])
-              : [];
+          const rawData: unknown = result.data;
+          const taskList: Task[] = Array.isArray(rawData) ? (rawData as Task[]) : [];
 
           // 过滤掉系统任务
           const filteredTasks = taskList.filter(
@@ -119,7 +115,7 @@ const TasksView: React.FC<TasksViewProps> = ({
 
     browser.storage.onChanged.addListener(handleStorageChange);
     return () => browser.storage.onChanged.removeListener(handleStorageChange);
-  }, [toastRef]);
+  }, []);
 
   // 刷新任务列表
   const refreshTasks = () => {
@@ -258,7 +254,11 @@ const TasksView: React.FC<TasksViewProps> = ({
                 size="small"
                 sx={{ p: 0.5, mr: 1 }}
               >
-                <RefreshIcon fontSize="small" />
+                {isRefreshing ? (
+                  <CircularProgress size={16} color="inherit" />
+                ) : (
+                  <RefreshIcon fontSize="small" />
+                )}
               </IconButton>
             </span>
           </Tooltip>
@@ -293,6 +293,7 @@ const TasksView: React.FC<TasksViewProps> = ({
           isAuthLoading={isAuthLoading}
           onExecuted={refreshTasks}
         />
+
         {renderTasks()}
       </Box>
 
