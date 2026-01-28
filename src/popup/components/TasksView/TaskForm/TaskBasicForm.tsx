@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import TextField from '@mui/material/TextField';
-import Box from '@mui/material/Box';
-import Grid from '@mui/material/Grid';
-import { Task, TaskStatus } from '../../../../types/task';
+import { Task } from '../../../../types/task';
 
 interface TaskBasicFormProps {
   taskData: Task;
@@ -32,8 +30,7 @@ const TaskBasicForm: React.FC<TaskBasicFormProps> = ({ taskData, onChange }) => 
     }
     onChange(
       {
-        name: taskData.name,
-        status: TaskStatus.ENABLED
+        name: taskData.name
       },
       isValid
     );
@@ -60,8 +57,7 @@ const TaskBasicForm: React.FC<TaskBasicFormProps> = ({ taskData, onChange }) => 
     
     onChange(
       {
-        name: newName,
-        status: TaskStatus.ENABLED
+        name: newName
       },
       isValid
     );

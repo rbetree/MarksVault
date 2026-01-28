@@ -54,25 +54,26 @@ const TaskFormContainer: React.FC<TaskFormContainerProps> = ({
   return (
     <Box
       sx={{
-        maxWidth: '1200px', // 适度缩小最大宽度，避免宽屏下左右拉得太开
+        maxWidth: { xs: '100%', md: '1200px' }, // 宽屏下避免左右拉得太开，小屏占满
         margin: '0 auto',
-        width: '100%'
+        width: '100%',
       }}
     >
       <Box
         sx={{
           display: 'flex',
-          gap: 3, // 增加间距以提升层次感
+          flexDirection: { xs: 'column', md: 'row' },
+          gap: { xs: 2, md: 3 }, // 增加间距以提升层次感
           width: '100%',
-          px: 2,
-          pb: 3
+          px: { xs: 1, md: 2 },
+          pb: 3,
         }}
       >
         {/* 左栏：基础信息、触发条件、执行操作选项 */}
         <Box
           sx={{
-            flex: '0 0 360px', // 缩小左侧表单宽度，使其比例更平衡
-            minWidth: 0
+            flex: { xs: '1 1 auto', md: '0 0 360px' }, // 小屏占满，宽屏固定宽度
+            minWidth: 0,
           }}
         >
           {/* 基础信息表单 */}
@@ -160,7 +161,7 @@ const TaskFormContainer: React.FC<TaskFormContainerProps> = ({
         <Box
           sx={{
             flex: 1,
-            minWidth: 0
+            minWidth: 0,
           }}
         >
           <Paper
@@ -168,8 +169,8 @@ const TaskFormContainer: React.FC<TaskFormContainerProps> = ({
             sx={{
               p: 3,
               borderRadius: 2,
-              position: 'sticky',
-              top: 16
+              position: { xs: 'static', md: 'sticky' },
+              top: { md: 16 },
             }}
           >
             <Typography

@@ -30,7 +30,8 @@ const TaskConfigHeader: React.FC<TaskConfigHeaderProps> = ({
   onSave,
   onCancel,
 }) => {
-  const title = mode === 'create' ? '新建任务' : `编辑任务：${taskName || ''}`;
+  const title =
+    mode === 'create' ? '新建任务' : taskName ? `编辑任务：${taskName}` : '编辑任务';
 
   return (
     <AppBar position="static" elevation={1}>

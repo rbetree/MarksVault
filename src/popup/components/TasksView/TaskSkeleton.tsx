@@ -3,7 +3,6 @@ import Box from '@mui/material/Box';
 import Skeleton from '@mui/material/Skeleton';
 
 interface TaskSkeletonProps {
-  mode?: 'card';
   count?: number;
 }
 
@@ -12,7 +11,6 @@ interface TaskSkeletonProps {
  * 提供卡片视图模式的加载占位符
  */
 const TaskSkeleton: React.FC<TaskSkeletonProps> = ({
-  mode = 'card',
   count = 3
 }) => {
   const renderCardSkeleton = (key: number) => (

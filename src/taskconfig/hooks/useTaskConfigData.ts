@@ -6,8 +6,10 @@ import { TaskConfigMode } from './useUrlParams';
 interface UseTaskConfigDataResult {
   taskData: Task | null;
   loading: boolean;
-  error: string | null;
+  loadError: string | null;
   saving: boolean;
+  saveError: string | null;
+  clearSaveError: () => void;
   saveTask: (task: Task) => Promise<{ success: boolean; taskId?: string; error?: string }>;
 }
 
@@ -22,14 +24,15 @@ export function useTaskConfigData(
 ): UseTaskConfigDataResult {
   const [taskData, setTaskData] = useState<Task | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // 加载任务数据
   useEffect(() => {
     const loadTask = async () => {
       setLoading(true);
-      setError(null);
+      setLoadError(null);
 
       try {
         if ((mode === 'edit' || mode === 'execute') && taskId) {
@@ -38,7 +41,7 @@ export function useTaskConfigData(
           if (result.success && result.data) {
             setTaskData(result.data);
           } else {
-            setError(result.error || '加载任务失败');
+            setLoadError(result.error || '加载任务失败');
             setTaskData(null);
           }
         } else {
@@ -47,7 +50,7 @@ export function useTaskConfigData(
         }
       } catch (err) {
         console.error('加载任务数据时出错:', err);
-        setError('加载任务数据时发生错误');
+        setLoadError('加载任务数据时发生错误');
         setTaskData(null);
       } finally {
         setLoading(false);
@@ -62,7 +65,7 @@ export function useTaskConfigData(
     task: Task
   ): Promise<{ success: boolean; taskId?: string; error?: string }> => {
     setSaving(true);
-    setError(null);
+    setSaveError(null);
 
     try {
       let result;
@@ -84,7 +87,7 @@ export function useTaskConfigData(
         };
       } else {
         const errorMsg = result.error || '保存任务失败';
-        setError(errorMsg);
+        setSaveError(errorMsg);
         return {
           success: false,
           error: errorMsg,
@@ -93,7 +96,7 @@ export function useTaskConfigData(
     } catch (err) {
       console.error('保存任务时出错:', err);
       const errorMsg = '保存任务时发生错误';
-      setError(errorMsg);
+      setSaveError(errorMsg);
       return {
         success: false,
         error: errorMsg,
@@ -103,11 +106,15 @@ export function useTaskConfigData(
     }
   };
 
+  const clearSaveError = () => setSaveError(null);
+
   return {
     taskData,
     loading,
-    error,
+    loadError,
     saving,
+    saveError,
+    clearSaveError,
     saveTask,
   };
 }

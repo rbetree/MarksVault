@@ -342,7 +342,7 @@ const BookmarkSelector: React.FC<BookmarkSelectorProps> = ({
 
         {isFolder && hasChildren && isExpanded && (
           <Box>
-            {node.children!.map(child => renderBookmarkNode(child, depth + 1))}
+            {(node.children ?? []).map(child => renderBookmarkNode(child, depth + 1))}
           </Box>
         )}
       </Box>

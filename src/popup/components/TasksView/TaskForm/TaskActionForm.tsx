@@ -9,13 +9,11 @@ import TextField from '@mui/material/TextField';
 import Grid from '@mui/material/Grid';
 import Checkbox from '@mui/material/Checkbox';
 import Button from '@mui/material/Button';
-import Chip from '@mui/material/Chip';
 import Paper from '@mui/material/Paper';
 import Card from '@mui/material/Card';
 import CardContent from '@mui/material/CardContent';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import DeleteIcon from '@mui/icons-material/Delete';
-import FormHelperText from '@mui/material/FormHelperText';
 import IconButton from '@mui/material/IconButton';
 import BackupIcon from '@mui/icons-material/Backup';
 import CleaningServicesIcon from '@mui/icons-material/CleaningServices';
@@ -418,10 +416,9 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({
     // organizeByDomain 字段逻辑已移除
     } else if (field.startsWith('filters.')) {
       const filterField = field.split('.')[1];
-      if (!newOperations[index].filters) {
-        newOperations[index].filters = {};
-      }
-      (newOperations[index].filters! as any)[filterField] = value;
+      const nextFilters = newOperations[index].filters ?? {};
+      (nextFilters as any)[filterField] = value;
+      newOperations[index].filters = nextFilters;
     } else if (field === 'target') {
       // 处理目标文件夹选择
       if (value) {
@@ -1009,7 +1006,7 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({
       <Box>
         <Grid container spacing={2}>
           {actionTypeOptions.map((option) => (
-            <Grid item xs={4} key={option.type}>
+            <Grid item xs={6} sm={4} key={option.type}>
               <Card
                 sx={{
                   cursor: 'pointer',
@@ -1059,7 +1056,7 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({
     <Box>
       <Grid container spacing={2} sx={{ mb: 2 }}>
         {actionTypeOptions.map((option) => (
-          <Grid item xs={4} key={option.type}>
+          <Grid item xs={6} sm={4} key={option.type}>
             <Card
               sx={{
                 cursor: 'pointer',

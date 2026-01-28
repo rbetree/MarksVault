@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { browser } from 'wxt/browser';
 import Card from '@mui/material/Card';
 import CardContent from '@mui/material/CardContent';
-import CardActions from '@mui/material/CardActions';
 import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
 import Button from '@mui/material/Button';
@@ -10,7 +9,7 @@ import Box from '@mui/material/Box';
 import Collapse from '@mui/material/Collapse';
 import Divider from '@mui/material/Divider';
 import List from '@mui/material/List';
-import ListItem from '@mui/material/ListItem';
+import ListItemButton from '@mui/material/ListItemButton';
 import ListItemText from '@mui/material/ListItemText';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -19,10 +18,7 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
-import AccessTimeIcon from '@mui/icons-material/AccessTime';
-import EventIcon from '@mui/icons-material/Event';
 import HistoryIcon from '@mui/icons-material/History';
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
@@ -32,7 +28,7 @@ import Tooltip from '@mui/material/Tooltip';
 import Chip from '@mui/material/Chip';
 import CircularProgress from '@mui/material/CircularProgress';
 import Alert from '@mui/material/Alert';
-import { Task, TaskStatus, TriggerType, TaskExecutionResult, EventType, ActionType, BackupAction } from '../../../types/task';
+import { Task, TaskStatus, TriggerType, ActionType, BackupAction } from '../../../types/task';
 import TaskStatusChip from './TaskStatusChip';
 import TaskTriggerInfo from './TaskTriggerInfo';
 import TaskActionInfo from './TaskActionInfo';
@@ -187,14 +183,6 @@ const TaskCard: React.FC<TaskCardProps> = ({
   const canExecuteTask = task.status !== TaskStatus.RUNNING &&
                          task.status !== TaskStatus.DISABLED;
   
-  // 获取下次执行时间显示
-  const getNextExecutionTime = () => {
-    // 事件触发器没有下次执行时间概念
-    return null;
-  };
-  
-  const nextExecutionTime = getNextExecutionTime();
-
   // 创建自定义样式对象，去除下边距
   const noBottomPaddingStyles = {
     pb: 0,
@@ -256,7 +244,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
     
     return (
       <List disablePadding>
-        {visibleExecutions.map((execution, index) => {
+        {visibleExecutions.map((execution) => {
           const isExpanded = expandedHistory === execution.timestamp.toString();
           const executionTime = new Date(execution.timestamp);
           const formattedTime = executionTime.toLocaleString('zh-CN', { 
@@ -269,8 +257,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
           
           return (
             <React.Fragment key={execution.timestamp}>
-              <ListItem 
-                disablePadding
+              <ListItemButton
                 sx={{
                   py: 0.5,
                   px: 0.5,
@@ -283,7 +270,6 @@ const TaskCard: React.FC<TaskCardProps> = ({
                   color: execution.success ? 'success.main' : 'error.main'
                 }}
                 onClick={() => handleHistoryItemClick(execution.timestamp)}
-                button
               >
                 <ListItemIcon sx={{ minWidth: 24 }}>
                   {execution.success ? 
@@ -313,7 +299,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
                     }
                   </Box>
                 )}
-              </ListItem>
+              </ListItemButton>
               
               {/* 展开的详情内容 */}
               {(execution.details || execution.error) && (

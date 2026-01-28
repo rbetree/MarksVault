@@ -21,7 +21,8 @@ const TaskConfigPage: React.FC = () => {
   const { mode, taskId } = useUrlParams();
 
   // 加载任务数据
-  const { taskData, loading, error, saving, saveTask } = useTaskConfigData(mode, taskId);
+  const { taskData, loading, loadError, saving, saveError, clearSaveError, saveTask } =
+    useTaskConfigData(mode, taskId);
 
   // 表单状态
   const [formData, setFormData] = useState<Task | null>(null);
@@ -43,6 +44,9 @@ const TaskConfigPage: React.FC = () => {
         ...formData,
         ...updatedData,
       });
+      if (saveError) {
+        clearSaveError();
+      }
     }
   };
 
@@ -112,12 +116,12 @@ const TaskConfigPage: React.FC = () => {
   }
 
   // 错误状态
-  if (error) {
+  if (loadError) {
     return (
       <Box sx={taskConfigStyles.pageContainer}>
         <Box sx={taskConfigStyles.errorContainer}>
           <Alert severity="error" sx={{ maxWidth: 600 }}>
-            {error}
+            {loadError}
           </Alert>
         </Box>
       </Box>
@@ -192,6 +196,11 @@ const TaskConfigPage: React.FC = () => {
 
       {/* 内容区域 */}
       <Box sx={taskConfigStyles.contentArea}>
+        {saveError && (
+          <Alert severity="error" sx={{ mb: 2, maxWidth: 1200, width: '100%' }}>
+            {saveError}
+          </Alert>
+        )}
         <TaskFormContainer
           taskData={formData}
           onChange={handleFormChange}
