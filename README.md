@@ -11,17 +11,12 @@
 [![License](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](https://www.gnu.org/licenses/agpl-3.0.html)
 [![GitHub stars](https://img.shields.io/github/stars/rbetree/MarksVault)](https://github.com/rbetree/MarksVault/stargazers)
 
->MarksVault 是为现代浏览器设计的高级书签管理扩展。它旨在解决浏览器原生书签功能的局限性，为用户提供更强大、更灵活的书签管理体验。通过将书签数据安全地存储在用户自己的GitHub私有仓库中，确保您的数据安全且完全受您控制。
+> MarksVault 是为现代浏览器设计的高级书签管理扩展。它旨在解决浏览器原生书签功能的局限性，为用户提供更强大、更灵活的书签管理体验。
+> 通过将书签数据安全地存储在用户自己的 GitHub 私有仓库中，确保您的数据安全且完全受您控制。
 
-## 📑 目录
-
-- [UI预览](#ui预览)
-- [技术栈](#技术栈)
-- [功能](#功能)
-- [项目结构](#项目结构)
-- [安装指南](#安装指南)
-- [具体使用](#具体使用)
-- [Star-Histor](#Star-History)
+<div align="center">
+  <img src="public/assets/images/marksvault_summary.png" alt="MarksVault Infographic" width="700">
+</div>
 
 ## 👀 UI预览
 
@@ -45,7 +40,7 @@
 | 分类 | 核心技术 |
 |------|---------|
 | **前端核心** | React 18.2.0, TypeScript 5.0.4, Material-UI(MUI) 5.13.0 |
-| **扩展APIs** | Chrome Manifest V3, Bookmarks API, Storage API, Tabs API, Runtime API |
+| **扩展APIs** | Chrome/Edge Manifest V3, Firefox Manifest V2, Bookmarks API, Storage API, Tabs API, Runtime API |
 | **状态管理** | React Context API + Hooks |
 | **外部集成** | GitHub API (仓库操作与内容管理) |
 | **构建与测试** | WXT（Vite）, ESLint 8.40.0, Jest 29.5.0 |
@@ -60,15 +55,15 @@
 - **基础编辑** - 支持书签基本信息编辑
 
 ### 🔄 云端同步与备份
-- **GitHub集成** - 使用您自己的GitHub私有仓库安全存储书签
+- **GitHub 集成** - 使用您自己的 GitHub 私有仓库安全存储书签
 - **概览页** - 展示 GitHub 连接状态、备份统计、任务概览等信息
 - **手动备份/恢复** - 在任务页「快捷操作」一键备份/恢复（恢复需二次确认）
-- **推送书签** - 支持将书签推送到指定GitHub仓库
-- **项目集成** - 与[menav](https://github.com/rbetree/menav)项目集成
+- **推送书签** - 支持将书签推送到指定 GitHub 仓库
+- **项目集成** - 与 [menav](https://github.com/rbetree/menav) 项目集成
 
->[menav](https://github.com/rbetree/menav)是一个使用github pages托管的个人导航站，欢迎fork使用
+> [menav](https://github.com/rbetree/menav) 是一个使用 GitHub Pages 托管的个人导航站；可自动化上传书签到 [menav](https://github.com/rbetree/menav) 中自动构建书签页，欢迎 fork 使用
 
->与本项目集成，可自动化上传书签到[menav](https://github.com/rbetree/menav)项目，并自动构建书签页
+> 
 
 ### ⏱️ 自动化任务系统
 - **任务管理** - 创建、编辑、删除和启用/禁用自定义任务
@@ -142,17 +137,16 @@ wxt.config.ts             # WXT 配置（manifest/构建）
    ```bash
    npm install
    ```
-3. 构建扩展
+3. 启动开发模式（推荐用于本地调试）
    ```bash
-   npm run build
+   npm run dev
    ```
-4. 在Chrome浏览器中加载扩展:
-   - 打开 `chrome://extensions/`
-   - 启用"开发者模式"
-   - 点击"加载已解压的扩展程序"
-   - 选择项目中的`.output/chrome-mv3`目录
+4. 在浏览器中加载扩展:
+   - Chrome/Chromium：打开 `chrome://extensions/` → 启用"开发者模式" → 加载 `.output/chrome-mv3-dev`
+   - Edge：加载 `.output/edge-mv3-dev`
+   - Firefox：在 `about:debugging#/runtime/this-firefox` 中加载 `.output/firefox-mv2-dev/manifest.json`
 
-> Edge：选择 `.output/edge-mv3`；Firefox：在 `about:debugging#/runtime/this-firefox` 中加载 `.output/firefox-mv2/manifest.json`。
+> 需要生产构建时运行 `npm run build`（输出到 `.output/chrome-mv3`），Edge/Firefox 对应为 `.output/edge-mv3` / `.output/firefox-mv2`。
 
 
 ## 📝 具体使用
@@ -182,6 +176,50 @@ wxt.config.ts             # WXT 配置（manifest/构建）
 
 ### 3. 愉快使用
 
-## Star-History
+## 🧑‍💻 开发与调试
+
+```bash
+npm run dev          # Chrome（默认）
+npm run dev:edge     # Edge
+npm run dev:firefox  # Firefox
+```
+
+> WXT 的 dev 模式会生成 `.output/*-dev/` 目录（用于浏览器加载并支持热更新）。
+
+## 📦 构建与发布
+
+```bash
+npm run build         # 生产构建（Chrome）
+npm run build:edge    # 生产构建（Edge）
+npm run build:firefox # 生产构建（Firefox）
+npm run build:all     # 构建全部浏览器
+
+npm run zip:all       # 生成发布用 zip（全部浏览器）
+```
+
+## ✅ 测试与质量
+
+```bash
+npm run typecheck
+npm run lint
+npm test
+```
+
+## 🔐 隐私与权限
+
+- 数据存储：GitHub Token 存在 `browser.storage.sync`（便于跨设备），其余业务数据在 `browser.storage.local`。
+- 权限最小化：仅使用 `bookmarks` / `storage`（Chromium 额外使用 `favicon` 读取网站图标）及 GitHub API 的 `https://api.github.com/*` 访问权限。
+
+## 📚 更多文档
+
+- 开发/架构：[docs/background-architecture.md](docs/background-architecture.md)
+- 上架/发布：[docs/STORE_SUBMISSION_GUIDE.md](docs/STORE_SUBMISSION_GUIDE.md)、[docs/STORE_PUBLISHING_GUIDE.md](docs/STORE_PUBLISHING_GUIDE.md)
+- 升级说明：[docs/UPGRADE_GUIDE.md](docs/UPGRADE_GUIDE.md)
+
+## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=rbetree/MarksVault&type=Date)](https://www.star-history.com/#rbetree/MarksVault&Date)
+
+## License
+
+本项目采用 [AGPL-3.0](LICENSE) 开源协议。
