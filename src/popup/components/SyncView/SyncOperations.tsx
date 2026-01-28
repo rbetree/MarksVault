@@ -1,48 +1,30 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import Box from '@mui/material/Box';
-import Paper from '@mui/material/Paper';
 import Typography from '@mui/material/Typography';
-import Divider from '@mui/material/Divider';
 import Grid from '@mui/material/Grid';
-import CardHeader from '@mui/material/CardHeader';
 import IconButton from '@mui/material/IconButton';
 import Tooltip from '@mui/material/Tooltip';
 import CircularProgress from '@mui/material/CircularProgress';
-import Avatar from '@mui/material/Avatar';
 import Button from '@mui/material/Button';
-import Alert from '@mui/material/Alert';
-import Fade from '@mui/material/Fade';
-import LogoutIcon from '@mui/icons-material/Logout';
 import GitHubIcon from '@mui/icons-material/GitHub';
 import AssessmentIcon from '@mui/icons-material/Assessment';
-import StorageIcon from '@mui/icons-material/Storage';
-import BookmarkIcon from '@mui/icons-material/Bookmark';
-import FolderIcon from '@mui/icons-material/Folder';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import TaskAltIcon from '@mui/icons-material/TaskAlt';
 import DashboardCard from '../shared/DashboardCard';
+import Skeleton from '@mui/material/Skeleton';
 
-
-import { GitHubUser } from '../../../types/github';
-import { ToastRef } from '../shared/Toast';
 import backupService from '../../../services/backup-service';
 import { BackupStatus } from '../../../types/backup';
 import { formatDate } from '../../../utils/date-utils';
 import taskService, { isSystemTaskId } from '../../../services/task-service';
 import { TaskStatus } from '../../../types/task';
 
-interface SyncOperationsProps {
-  user: GitHubUser;
-  onLogout: () => Promise<void>;
-  toastRef?: React.RefObject<ToastRef>;
-}
-
 /**
  * 概览页内容（保留文件名以避免大规模改动）：
  * - 仅展示 GitHub 连接状态、备份统计信息等“信息可视化”
  * - 备份/恢复等“操作”统一迁移到任务页
  */
-const SyncOperations: React.FC<SyncOperationsProps> = ({ user, onLogout }) => {
+const SyncOperations: React.FC = () => {
   const [backupStatus, setBackupStatus] = useState<BackupStatus>({});
   const [isStatsLoading, setIsStatsLoading] = useState(true);
   const [isStatsUpdating, setIsStatsUpdating] = useState(false);
@@ -65,13 +47,9 @@ const SyncOperations: React.FC<SyncOperationsProps> = ({ user, onLogout }) => {
       try {
         setIsStatsLoading(true);
 
-        // 使用缓存优先策略加载备份状态；如为缓存则后台更新
-        const status = await backupService.getBackupStatus(false, handleBackupStatusUpdate);
+        // 打开概览页时优先使用缓存数据，避免每次打开都请求 GitHub
+        const status = await backupService.getBackupStatus(false);
         setBackupStatus(status);
-
-        if (status.stats?.isFromCache) {
-          setIsStatsUpdating(true);
-        }
       } catch (error) {
         console.error('加载概览数据失败:', error);
       } finally {
@@ -89,7 +67,14 @@ const SyncOperations: React.FC<SyncOperationsProps> = ({ user, onLogout }) => {
         const result = await taskService.getTasksByStatus();
         if (!result.success) return;
 
-        const tasks = (result.data as any[]).filter(
+        const rawData = result.data as unknown;
+        const taskList: any[] = Array.isArray(rawData)
+          ? (rawData as any[])
+          : rawData && typeof rawData === 'object' && 'tasks' in (rawData as any)
+            ? (Object.values((rawData as any).tasks ?? {}) as any[])
+            : [];
+
+        const tasks = taskList.filter(
           (t: any) => t && typeof t.id === 'string' && !isSystemTaskId(t.id)
         ) as any[];
 
@@ -137,208 +122,160 @@ const SyncOperations: React.FC<SyncOperationsProps> = ({ user, onLogout }) => {
     }
   };
 
-  const StatsSkeletonCard = () => (
-    <Box
-      sx={{
-        mb: 2,
-        bgcolor: 'transparent',
-        borderRadius: 1,
-        position: 'relative',
-        border: '1px solid rgba(255, 255, 255, 0.05)',
-      }}
-    >
-      <CardHeader
-        avatar={<AssessmentIcon color="primary" />}
-        title="备份统计信息"
-        titleTypographyProps={{ variant: 'subtitle1' }}
-        action={
-          <Tooltip title="正在加载数据">
-            <Box sx={{ display: 'inline-flex' }}>
-              <CircularProgress size={18} />
-            </Box>
-          </Tooltip>
-        }
-        sx={{ pb: 0 }}
-      />
-      <Box sx={{ pt: 1, px: 2, pb: 2 }}>
-        <Typography variant="body2" color="text.secondary">
-          正在加载统计信息...
-        </Typography>
-      </Box>
-    </Box>
-  );
-
   return (
     <Box sx={{ m: 0 }}>
-      {/* 操作迁移提示 */}
-      <Alert
-        severity="info"
-        icon={<TaskAltIcon fontSize="inherit" />}
-        sx={{
-          mb: 2,
-          py: 0,
-          borderRadius: 2,
-          bgcolor: 'rgba(2, 136, 209, 0.08)',
-          border: '1px solid rgba(2, 136, 209, 0.2)',
-          '& .MuiAlert-message': { fontSize: '0.85rem' }
-        }}
-        action={
-          <Button
-            color="info"
-            size="small"
-            onClick={() => {
-              window.location.hash = 'tasks';
-            }}
-            sx={{ textTransform: 'none', fontWeight: 600 }}
-          >
-            去任务
-          </Button>
-        }
-      >
-        备份/恢复等操作已迁移到“任务”页，概览仅展示统计信息
-      </Alert>
+      {/* 顶部间距 */}
+      <Box sx={{ height: 8 }} />
 
       <Grid container spacing={2}>
-        {/* GitHub 连接信息 */}
-        <Grid item xs={12}>
-          <DashboardCard
-            contentSx={{ p: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
-          >
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0 }}>
-              <Avatar src={user.avatar_url} sx={{ width: 40, height: 40, border: '2px solid rgba(255,255,255,0.1)' }} />
-              <Box sx={{ minWidth: 0 }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 600, lineHeight: 1.2 }} noWrap>
-                  {user.name || user.login}
-                </Typography>
-                <Typography variant="caption" color="text.secondary" noWrap>
-                  @{user.login}
-                </Typography>
-              </Box>
-            </Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              <Tooltip title="前往 GitHub 主页">
-                <IconButton
-                  size="small"
-                  component="a"
-                  href={user.html_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main', bgcolor: 'rgba(255,255,255,0.05)' } }}
-                >
-                  <GitHubIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="断开连接">
-                <IconButton
-                  size="small"
-                  onClick={onLogout}
-                  sx={{ color: 'text.secondary', '&:hover': { color: 'error.main', bgcolor: 'error.dark' } }}
-                >
-                  <LogoutIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-            </Box>
-          </DashboardCard>
-        </Grid>
-
         {/* 备份统计信息 */}
         <Grid item xs={12} sm={6}>
-          {isStatsLoading ? (
-            <StatsSkeletonCard />
-          ) : (
-            <Fade in={true} timeout={400}>
-              <Box> {/* Wrap in Box to make it a valid JSX child if DashboardCard is used directly or Grid item needs distinct child */}
-                <DashboardCard
-                  title="备份统计"
-                  icon={<AssessmentIcon />}
-                  action={
-                    <Tooltip title="刷新统计数据">
-                      <IconButton
-                        size="small"
-                        onClick={handleRefreshStats}
-                        disabled={isStatsUpdating}
-                        sx={{ p: 0.5 }}
-                      >
-                        {isStatsUpdating ? (
-                          <CircularProgress size={16} color="inherit" />
-                        ) : (
-                          <RefreshIcon fontSize="small" />
-                        )}
-                      </IconButton>
-                    </Tooltip>
-                  }
-                  sx={{ height: '100%' }}
-                >
-                  <Grid container spacing={2}>
-                    <Grid item xs={4}>
-                      <Box sx={{ textAlign: 'center' }}>
-                        <Typography variant="h4" sx={{ fontWeight: 600, fontSize: '1.5rem', mb: 0.5, color: 'primary.main' }}>
-                          {backupStatus.stats ? backupStatus.stats.totalBackups ?? 0 : 0}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          总备份
-                        </Typography>
-                      </Box>
-                    </Grid>
-                    <Grid item xs={4}>
-                      <Box sx={{ textAlign: 'center' }}>
-                        <Typography variant="h4" sx={{ fontWeight: 600, fontSize: '1.5rem', mb: 0.5 }}>
-                          {backupStatus.stats ? backupStatus.stats.totalBookmarks ?? 0 : 0}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          书签
-                        </Typography>
-                      </Box>
-                    </Grid>
-                    <Grid item xs={4}>
-                      <Box sx={{ textAlign: 'center' }}>
-                        <Typography variant="h4" sx={{ fontWeight: 600, fontSize: '1.5rem', mb: 0.5 }}>
-                          {backupStatus.stats ? backupStatus.stats.totalFolders ?? 0 : 0}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          文件夹
-                        </Typography>
-                      </Box>
-                    </Grid>
-                  </Grid>
-
-                  <Box sx={{ mt: 2, pt: 2, borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}>
-                    {backupStatus.lastBackupTime ? (
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                        <Typography variant="caption" color="text.secondary">上次备份</Typography>
-                        <Typography variant="caption" color="text.primary">{formatDate(backupStatus.lastBackupTime)}</Typography>
-                      </Box>
+          <DashboardCard
+            title="备份统计"
+            icon={<AssessmentIcon />}
+            action={
+              <Tooltip title={isStatsLoading ? '正在加载数据' : '刷新统计数据'}>
+                <span style={{ display: 'inline-flex' }}>
+                  <IconButton
+                    size="small"
+                    onClick={handleRefreshStats}
+                    disabled={isStatsLoading || isStatsUpdating}
+                    sx={{ p: 0.5 }}
+                  >
+                    {isStatsLoading || isStatsUpdating ? (
+                      <CircularProgress size={16} color="inherit" />
                     ) : (
-                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>暂无备份记录</Typography>
+                      <RefreshIcon fontSize="small" />
                     )}
+                  </IconButton>
+                </span>
+              </Tooltip>
+            }
+            sx={{ height: '100%' }}
+          >
+            <Grid container spacing={2}>
+              <Grid item xs={4}>
+                <Box sx={{ textAlign: 'center' }}>
+                  {isStatsLoading ? (
+                    <Skeleton variant="text" width={36} height={32} sx={{ mx: 'auto' }} />
+                  ) : (
+                    <Typography
+                      variant="h4"
+                      sx={{ fontWeight: 600, fontSize: '1.5rem', mb: 0.5, color: 'primary.main' }}
+                    >
+                      {backupStatus.stats ? backupStatus.stats.totalBackups ?? 0 : 0}
+                    </Typography>
+                  )}
+                  <Typography variant="caption" color="text.secondary">
+                    总备份
+                  </Typography>
+                </Box>
+              </Grid>
+              <Grid item xs={4}>
+                <Box sx={{ textAlign: 'center' }}>
+                  {isStatsLoading ? (
+                    <Skeleton variant="text" width={36} height={32} sx={{ mx: 'auto' }} />
+                  ) : (
+                    <Typography variant="h4" sx={{ fontWeight: 600, fontSize: '1.5rem', mb: 0.5 }}>
+                      {backupStatus.stats ? backupStatus.stats.totalBookmarks ?? 0 : 0}
+                    </Typography>
+                  )}
+                  <Typography variant="caption" color="text.secondary">
+                    书签
+                  </Typography>
+                </Box>
+              </Grid>
+              <Grid item xs={4}>
+                <Box sx={{ textAlign: 'center' }}>
+                  {isStatsLoading ? (
+                    <Skeleton variant="text" width={36} height={32} sx={{ mx: 'auto' }} />
+                  ) : (
+                    <Typography variant="h4" sx={{ fontWeight: 600, fontSize: '1.5rem', mb: 0.5 }}>
+                      {backupStatus.stats ? backupStatus.stats.totalFolders ?? 0 : 0}
+                    </Typography>
+                  )}
+                  <Typography variant="caption" color="text.secondary">
+                    文件夹
+                  </Typography>
+                </Box>
+              </Grid>
+            </Grid>
 
-                    {backupStatus.stats?.fileSize !== undefined && (
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <Typography variant="caption" color="text.secondary">最新大小</Typography>
-                        <Typography variant="caption" color="text.primary">{formatFileSize(backupStatus.stats.fileSize)}</Typography>
-                      </Box>
-                    )}
+            <Box sx={{ mt: 2, pt: 2, borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}>
+              {isStatsLoading ? (
+                <>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                    <Typography variant="caption" color="text.secondary">
+                      上次备份
+                    </Typography>
+                    <Skeleton variant="text" width={96} height={16} />
+                  </Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Typography variant="caption" color="text.secondary">
+                      最新大小
+                    </Typography>
+                    <Skeleton variant="text" width={64} height={16} />
+                  </Box>
+                </>
+              ) : (
+                <>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                    <Typography variant="caption" color="text.secondary">上次备份</Typography>
+                    <Typography variant="caption" color="text.primary">
+                      {backupStatus.lastBackupTime ? formatDate(backupStatus.lastBackupTime) : '暂无'}
+                    </Typography>
                   </Box>
 
-                  {backupStatus.backupFileUrl && (
-                    <Button
-                      fullWidth
-                      variant="outlined"
-                      size="small"
-                      startIcon={<GitHubIcon fontSize="small" />}
-                      component="a"
-                      href={backupStatus.backupFileUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      sx={{ mt: 2, textTransform: 'none', fontSize: '0.8rem', borderColor: 'rgba(255,255,255,0.1)', color: 'text.secondary', '&:hover': { borderColor: 'primary.main', color: 'primary.main' } }}
-                    >
-                      查看最新备份
-                    </Button>
-                  )}
-                </DashboardCard>
-              </Box>
-            </Fade>
-          )}
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Typography variant="caption" color="text.secondary">最新大小</Typography>
+                    <Typography variant="caption" color="text.primary">
+                      {formatFileSize(backupStatus.stats?.fileSize)}
+                    </Typography>
+                  </Box>
+                </>
+              )}
+            </Box>
+
+            {isStatsLoading ? (
+              <Button
+                fullWidth
+                variant="outlined"
+                size="small"
+                disabled
+                startIcon={<GitHubIcon fontSize="small" />}
+                sx={{ mt: 2, textTransform: 'none', fontSize: '0.8rem', borderColor: 'rgba(255,255,255,0.1)', color: 'text.secondary' }}
+              >
+                <Skeleton variant="text" width={84} height={16} />
+              </Button>
+            ) : (
+              backupStatus.backupFileUrl ? (
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  size="small"
+                  startIcon={<GitHubIcon fontSize="small" />}
+                  component="a"
+                  href={backupStatus.backupFileUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  sx={{ mt: 2, textTransform: 'none', fontSize: '0.8rem', borderColor: 'rgba(255,255,255,0.1)', color: 'text.secondary', '&:hover': { borderColor: 'primary.main', color: 'primary.main' } }}
+                >
+                  查看最新备份
+                </Button>
+              ) : (
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  size="small"
+                  disabled
+                  startIcon={<GitHubIcon fontSize="small" />}
+                  sx={{ mt: 2, textTransform: 'none', fontSize: '0.8rem', borderColor: 'rgba(255,255,255,0.1)', color: 'text.secondary' }}
+                >
+                  暂无备份
+                </Button>
+              )
+            )}
+          </DashboardCard>
         </Grid>
 
         {/* 任务统计 */}
