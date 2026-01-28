@@ -30,7 +30,7 @@ const HeaderPaper = styled(Paper)(({ theme }) => ({
 }));
 
 interface PageLayoutProps {
-  title: string;
+  title: ReactNode;
   children: ReactNode;
   actions?: ReactNode;
   contentSx?: object;
@@ -40,20 +40,24 @@ const PageLayout: React.FC<PageLayoutProps> = ({ title, children, actions, conte
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', ...contentSx }}>
       <HeaderContainer>
-        <Box sx={{ flex: 1, mr: 1, minWidth: 0 }}>
+        <Box sx={{ flex: 1, mr: actions ? 1 : 0, minWidth: 0 }}>
           <HeaderPaper sx={{ justifyContent: 'flex-start' }}>
-            <Typography
-              variant="subtitle2"
-              noWrap
-              sx={{
-                fontWeight: 600,
-                fontSize: '0.95rem',
-                color: 'text.primary',
-                letterSpacing: '0.02em',
-              }}
-            >
-              {title}
-            </Typography>
+            {typeof title === 'string' ? (
+              <Typography
+                variant="subtitle2"
+                noWrap
+                sx={{
+                  fontWeight: 600,
+                  fontSize: '0.95rem',
+                  color: 'text.primary',
+                  letterSpacing: '0.02em',
+                }}
+              >
+                {title}
+              </Typography>
+            ) : (
+              title
+            )}
           </HeaderPaper>
         </Box>
 
@@ -70,6 +74,7 @@ const PageLayout: React.FC<PageLayoutProps> = ({ title, children, actions, conte
         sx={{
           flexGrow: 1,
           px: 0.5,
+          pb: 10, // Add bottom padding to ensure content is not hidden behind FABs or bottom edge
           overflowY: 'auto',
           overflowX: 'hidden',
           display: 'flex',
