@@ -3,15 +3,6 @@ import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import FilterAltOffIcon from '@mui/icons-material/FilterAltOff';
-import AddCircleIcon from '@mui/icons-material/AddCircle';
-import Divider from '@mui/material/Divider';
-import List from '@mui/material/List';
-import ListItem from '@mui/material/ListItem';
-import ListItemIcon from '@mui/material/ListItemIcon';
-import ListItemText from '@mui/material/ListItemText';
-import BackupIcon from '@mui/icons-material/Backup';
-import CleaningServicesIcon from '@mui/icons-material/CleaningServices';
-import EventRepeatIcon from '@mui/icons-material/EventRepeat';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 
 interface EmptyTaskListProps {
@@ -86,44 +77,6 @@ const EmptyTaskList: React.FC<EmptyTaskListProps> = ({ filtered = false }) => {
             </Typography>
             <KeyboardArrowDownIcon color="primary" fontSize="small" sx={{ transform: 'rotate(315deg)' }} />
           </Box>
-
-          <Divider sx={{ width: '100%', my: 2 }} />
-
-          <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, alignSelf: 'flex-start' }}>
-            您可以创建的任务示例:
-          </Typography>
-
-          <List sx={{ width: '100%', bgcolor: 'transparent' }}>
-            <ListItem>
-              <ListItemIcon>
-                <BackupIcon color="primary" />
-              </ListItemIcon>
-              <ListItemText
-                primary="定时备份书签"
-                secondary="每天或每周自动将书签备份到GitHub，确保数据安全"
-              />
-            </ListItem>
-
-            <ListItem>
-              <ListItemIcon>
-                <CleaningServicesIcon color="secondary" />
-              </ListItemIcon>
-              <ListItemText
-                primary="自动整理书签"
-                secondary="定期清理失效链接，整理分类，保持书签列表整洁有序"
-              />
-            </ListItem>
-
-            <ListItem>
-              <ListItemIcon>
-                <EventRepeatIcon color="info" />
-              </ListItemIcon>
-              <ListItemText
-                primary="定制化自动任务"
-                secondary="根据您的需求创建自定义任务，提高书签管理效率"
-              />
-            </ListItem>
-          </List>
         </>
       )}
     </Box>

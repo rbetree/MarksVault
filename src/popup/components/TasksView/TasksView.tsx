@@ -63,14 +63,22 @@ const TasksView: React.FC<TasksViewProps> = ({
         setError(null);
 
         const result = filterStatus === 'all'
-          ? await taskService.getTasks()
+          ? await taskService.getTasksByStatus()
           : await taskService.getTasksByStatus(filterStatus);
 
         if (!isMounted) return;
 
         if (result.success) {
+          // 兼容旧数据：result.data 既可能是 Task[]，也可能是 { tasks: Record<string, Task> }
+          const rawData = result.data as unknown;
+          const taskList: Task[] = Array.isArray(rawData)
+            ? (rawData as Task[])
+            : rawData && typeof rawData === 'object' && 'tasks' in (rawData as any)
+              ? (Object.values((rawData as any).tasks ?? {}) as Task[])
+              : [];
+
           // 过滤掉系统任务
-          const filteredTasks = (result.data as Task[]).filter(
+          const filteredTasks = taskList.filter(
             t => t && typeof t.id === 'string' && !isSystemTaskId(t.id)
           );
           setTasks(filteredTasks);
@@ -98,8 +106,12 @@ const TasksView: React.FC<TasksViewProps> = ({
 
   // 监听存储变化，自动刷新任务列表
   useEffect(() => {
-    const handleStorageChange = (changes: Browser.Storage.StorageAreaOnChangedChangesType, areaName: string) => {
-      if (areaName === 'local' && changes.tasks) {
+    const handleStorageChange = (
+      changes: { [key: string]: Browser.storage.StorageChange },
+      areaName: Browser.storage.AreaName
+    ) => {
+      // 任务存储 key 为 tasks_data（见 task-service.ts）
+      if (areaName === 'local' && changes.tasks_data) {
         // 只有当任务数据真的发生变化时才刷新
         setRefreshTrigger(prev => prev + 1);
       }
