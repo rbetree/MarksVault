@@ -353,7 +353,7 @@ const SettingsActions: React.FC<SettingsActionsProps> = ({ toastRef }) => {
   };
 
   return (
-    <Box sx={{ height: '100%', overflow: 'auto', pb: 2 }}>
+    <Box sx={{ pb: 2 }}>
       <Alert 
         severity="warning" 
         sx={{ 
