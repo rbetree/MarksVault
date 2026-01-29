@@ -32,6 +32,13 @@ interface FlattenedItem {
   path: number[]; // 在嵌套结构中的路径 [parentIndex, childIndex, ...]
 }
 
+const isDev = process.env.NODE_ENV === 'development';
+
+const debugLog = (...args: unknown[]) => {
+  if (!isDev) return;
+  globalThis.console.log(...args);
+};
+
 /**
  * 书签选择器组件
  * 支持混合选择书签和文件夹,并支持拖放重新排序
@@ -96,7 +103,7 @@ const BookmarkSelector: React.FC<BookmarkSelectorProps> = ({
         ids.push(...collectAllChildIds(child));
       });
     }
-    console.log('[BookmarkSelector] collectAllChildIds:', {
+    debugLog('[BookmarkSelector] collectAllChildIds:', {
       nodeId: node.id,
       nodeTitle: node.title,
       hasChildren: !!node.children,
@@ -109,7 +116,7 @@ const BookmarkSelector: React.FC<BookmarkSelectorProps> = ({
 
   // 将节点转换为 BookmarkSelection
   const nodeToSelection = (node: Browser.bookmarks.BookmarkTreeNode): BookmarkSelection => {
-    console.log('[BookmarkSelector] nodeToSelection called:', {
+    debugLog('[BookmarkSelector] nodeToSelection called:', {
       nodeId: node.id,
       nodeTitle: node.title,
       nodeType: node.url ? 'bookmark' : 'folder',
@@ -126,7 +133,7 @@ const BookmarkSelector: React.FC<BookmarkSelectorProps> = ({
 
     if (node.children && node.children.length > 0) {
       selection.children = node.children.map(child => nodeToSelection(child));
-      console.log('[BookmarkSelector] nodeToSelection created children:', {
+      debugLog('[BookmarkSelector] nodeToSelection created children:', {
         parentId: node.id,
         parentTitle: node.title,
         childrenCount: selection.children.length
@@ -156,7 +163,7 @@ const BookmarkSelector: React.FC<BookmarkSelectorProps> = ({
     const newSelectedIds = new Set(selectedIds);
     const allIds = collectAllChildIds(node);
 
-    console.log('[BookmarkSelector] Toggle selection:', {
+    debugLog('[BookmarkSelector] Toggle selection:', {
       nodeId: node.id,
       nodeTitle: node.title,
       nodeType: node.url ? 'bookmark' : 'folder',
@@ -174,7 +181,7 @@ const BookmarkSelector: React.FC<BookmarkSelectorProps> = ({
       allIds.forEach(id => newSelectedIds.add(id));
     }
 
-    console.log('[BookmarkSelector] After toggle:', {
+    debugLog('[BookmarkSelector] After toggle:', {
       newSelectedIdsSize: newSelectedIds.size,
       newSelectedIds: Array.from(newSelectedIds)
     });
@@ -234,7 +241,7 @@ const BookmarkSelector: React.FC<BookmarkSelectorProps> = ({
 
   // 将ID集合转换为BookmarkSelection数组
   const convertToSelections = (ids: Set<string>) => {
-    console.log('[BookmarkSelector] convertToSelections start:', {
+    debugLog('[BookmarkSelector] convertToSelections start:', {
       idsCount: ids.size,
       ids: Array.from(ids)
     });
@@ -245,7 +252,7 @@ const BookmarkSelector: React.FC<BookmarkSelectorProps> = ({
     ids.forEach(id => {
       const node = findNode(bookmarkTree, id);
       if (!node) {
-        console.log('[BookmarkSelector] Node not found:', id);
+        debugLog('[BookmarkSelector] Node not found:', id);
         return;
       }
 
@@ -260,7 +267,7 @@ const BookmarkSelector: React.FC<BookmarkSelectorProps> = ({
           // 如果当前ID在其他节点的子ID列表中，且不是该节点本身
           if (childIds.includes(id) && selectedId !== id) {
             isChildOfSelected = true;
-            console.log('[BookmarkSelector] Skipping child node:', {
+            debugLog('[BookmarkSelector] Skipping child node:', {
               childId: id,
               childTitle: node.title,
               parentId: selectedId,
@@ -275,7 +282,7 @@ const BookmarkSelector: React.FC<BookmarkSelectorProps> = ({
       if (!isChildOfSelected) {
         const selection = nodeToSelection(node);
         selections.push(selection);
-        console.log('[BookmarkSelector] Added selection:', {
+        debugLog('[BookmarkSelector] Added selection:', {
           id: selection.id,
           title: selection.title,
           type: selection.type,
@@ -285,7 +292,7 @@ const BookmarkSelector: React.FC<BookmarkSelectorProps> = ({
       }
     });
 
-    console.log('[BookmarkSelector] convertToSelections result:', {
+    debugLog('[BookmarkSelector] convertToSelections result:', {
       selectionsCount: selections.length,
       selections: selections.map(s => ({ id: s.id, title: s.title, type: s.type }))
     });

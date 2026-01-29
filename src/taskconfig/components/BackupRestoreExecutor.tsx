@@ -126,15 +126,19 @@ const BackupRestoreExecutor: React.FC<BackupRestoreExecutorProps> = ({ task, onC
 
       setSuccess(true);
 
-      // 通知 popup 刷新任务列表/提示（如果 popup 仍打开）
-      await browser.storage.local.set({
-        taskExecutionResult: {
-          taskId: task.id,
-          success: true,
-          timestamp: Date.now(),
-          message: '恢复完成',
-        },
-      });
+      // 通知 popup 刷新任务列表/提示（如果 popup 仍打开）；失败不影响“恢复成功”的展示与关闭流程
+      try {
+        await browser.storage.local.set({
+          taskExecutionResult: {
+            taskId: task.id,
+            success: true,
+            timestamp: Date.now(),
+            message: '恢复完成',
+          },
+        });
+      } catch (error) {
+        console.warn('写入 taskExecutionResult 失败:', error);
+      }
 
       setTimeout(() => onComplete(), 1200);
     } catch (e) {
@@ -142,14 +146,18 @@ const BackupRestoreExecutor: React.FC<BackupRestoreExecutorProps> = ({ task, onC
       const message = e instanceof Error ? e.message : '恢复失败';
       setError(message);
 
-      await browser.storage.local.set({
-        taskExecutionResult: {
-          taskId: task.id,
-          success: false,
-          timestamp: Date.now(),
-          message,
-        },
-      });
+      try {
+        await browser.storage.local.set({
+          taskExecutionResult: {
+            taskId: task.id,
+            success: false,
+            timestamp: Date.now(),
+            message,
+          },
+        });
+      } catch (error) {
+        console.warn('写入 taskExecutionResult 失败:', error);
+      }
     } finally {
       setExecuting(false);
     }
@@ -321,4 +329,3 @@ const BackupRestoreExecutor: React.FC<BackupRestoreExecutorProps> = ({ task, onC
 };
 
 export default BackupRestoreExecutor;
-

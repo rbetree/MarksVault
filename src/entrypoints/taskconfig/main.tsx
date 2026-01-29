@@ -1,7 +1,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import CssBaseline from '@mui/material/CssBaseline';
 import { ThemeProvider } from '../../popup/contexts/ThemeContext';
+import ErrorBoundary from '../../popup/components/shared/ErrorBoundary';
 import TaskConfigPage from '../../taskconfig/components/TaskConfigPage';
 
 const container = document.getElementById('root');
@@ -14,8 +14,9 @@ const root = createRoot(container);
 root.render(
   <React.StrictMode>
     <ThemeProvider>
-      <CssBaseline />
-      <TaskConfigPage />
+      <ErrorBoundary>
+        <TaskConfigPage />
+      </ErrorBoundary>
     </ThemeProvider>
   </React.StrictMode>
 );

@@ -190,7 +190,7 @@ const SelectivePushExecutor: React.FC<SelectivePushExecutorProps> = ({
           <Button
             variant="contained"
             onClick={handleExecute}
-            disabled={executing || selections.length === 0}
+            disabled={executing || success || selections.length === 0}
             startIcon={executing ? <CircularProgress size={16} /> : null}
           >
             {executing ? '推送中...' : '执行推送'}
