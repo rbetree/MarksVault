@@ -1,11 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import Box from '@mui/material/Box';
-import Paper from '@mui/material/Paper';
-import Typography from '@mui/material/Typography';
+import Grid from '@mui/material/Grid';
 import TaskBasicForm from '../../popup/components/TasksView/TaskForm/TaskBasicForm';
 import TaskTriggerForm from '../../popup/components/TasksView/TaskForm/TaskTriggerForm';
 import TaskActionForm from '../../popup/components/TasksView/TaskForm/TaskActionForm';
 import { Task } from '../../types/task';
+import { ConfigCard } from './ConfigCard';
+
+// Icons
+import EditIcon from '@mui/icons-material/Edit';
+import TimerIcon from '@mui/icons-material/Timer';
+import CategoryIcon from '@mui/icons-material/Category';
+import SettingsIcon from '@mui/icons-material/Settings';
 
 interface TaskFormContainerProps {
   taskData: Task;
@@ -14,8 +20,8 @@ interface TaskFormContainerProps {
 }
 
 /**
- * 任务表单容器组件
- * 整合三个子表单：基础信息、触发条件、执行操作
+ * 任务表单容器组件 - Redesigned
+ * Uses a responsive grid layout with ConfigCards
  */
 const TaskFormContainer: React.FC<TaskFormContainerProps> = ({
   taskData,
@@ -52,146 +58,66 @@ const TaskFormContainer: React.FC<TaskFormContainerProps> = ({
   };
 
   return (
-    <Box
-      sx={{
-        maxWidth: { xs: '100%', md: '1200px' }, // 宽屏下避免左右拉得太开，小屏占满
-        margin: '0 auto',
-        width: '100%',
-      }}
-    >
-      <Box
-        sx={{
-          display: 'flex',
-          flexDirection: { xs: 'column', md: 'row' },
-          gap: { xs: 2, md: 3 }, // 增加间距以提升层次感
-          width: '100%',
-          px: { xs: 1, md: 2 },
-          pb: 3,
-        }}
-      >
-        {/* 左栏：基础信息、触发条件、执行操作选项 */}
-        <Box
-          sx={{
-            flex: { xs: '1 1 auto', md: '0 0 360px' }, // 小屏占满，宽屏固定宽度
-            minWidth: 0,
-          }}
-        >
-          {/* 基础信息表单 */}
-          <Paper
-            elevation={1}
-            sx={{
-              p: 3,
-              mb: 2,
-              borderRadius: 2
-            }}
+    <Box sx={{ width: '100%' }}>
+      <Grid container spacing={3}>
+        {/* Row 1: Basic Info, Trigger, Action Type */}
+        <Grid item xs={12} md={4}>
+          <ConfigCard
+            title="基础信息"
+            icon={<EditIcon fontSize="small" />}
+            description="设置任务名称"
           >
-            <Typography
-              variant="h6"
-              sx={{
-                mb: 2,
-                fontSize: '1.1rem',
-                fontWeight: 500,
-                color: 'text.primary'
-              }}
-            >
-              基础信息
-            </Typography>
             <TaskBasicForm
               taskData={taskData}
               onChange={handleBasicInfoChange}
             />
-          </Paper>
+          </ConfigCard>
+        </Grid>
 
-          {/* 触发条件表单 */}
-          <Paper
-            elevation={1}
-            sx={{
-              p: 3,
-              mb: 2,
-              borderRadius: 2
-            }}
+        <Grid item xs={12} md={4}>
+          <ConfigCard
+            title="触发条件"
+            icon={<TimerIcon fontSize="small" />}
+            description="何时运行此任务"
           >
-            <Typography
-              variant="h6"
-              sx={{
-                mb: 2,
-                fontSize: '1.1rem',
-                fontWeight: 500,
-                color: 'text.primary'
-              }}
-            >
-              触发条件
-            </Typography>
             <TaskTriggerForm
               trigger={taskData.trigger}
               onChange={handleTriggerChange}
               currentAction={taskData.action}
             />
-          </Paper>
+          </ConfigCard>
+        </Grid>
 
-          {/* 执行操作选项 */}
-          <Paper
-            elevation={1}
-            sx={{
-              p: 3,
-              mb: 2,
-              borderRadius: 2
-            }}
+        <Grid item xs={12} md={4}>
+          <ConfigCard
+            title="操作类型"
+            icon={<CategoryIcon fontSize="small" />}
+            description="选择执行的操作"
           >
-            <Typography
-              variant="h6"
-              sx={{
-                mb: 2,
-                fontSize: '1.1rem',
-                fontWeight: 500,
-                color: 'text.primary'
-              }}
-            >
-              执行操作
-            </Typography>
             <TaskActionForm
               action={taskData.action}
               onChange={handleActionChange}
               showDetailsInSeparateColumn={true}
             />
-          </Paper>
-        </Box>
+          </ConfigCard>
+        </Grid>
 
-        {/* 右栏：执行操作详细配置 */}
-        <Box
-          sx={{
-            flex: 1,
-            minWidth: 0,
-          }}
-        >
-          <Paper
-            elevation={1}
-            sx={{
-              p: 3,
-              borderRadius: 2,
-              position: { xs: 'static', md: 'sticky' },
-              top: { md: 16 },
-            }}
+        {/* Row 2: Action Details */}
+        <Grid item xs={12}>
+          <ConfigCard
+            title="详细配置"
+            icon={<SettingsIcon fontSize="small" />}
+            description="配置选定操作的具体参数"
+            sx={{ minHeight: 400 }}
           >
-            <Typography
-              variant="h6"
-              sx={{
-                mb: 2,
-                fontSize: '1.1rem',
-                fontWeight: 500,
-                color: 'text.primary'
-              }}
-            >
-              操作详细配置
-            </Typography>
             <TaskActionForm
               action={taskData.action}
               onChange={handleActionChange}
               showOnlyDetails={true}
             />
-          </Paper>
-        </Box>
-      </Box>
+          </ConfigCard>
+        </Grid>
+      </Grid>
     </Box>
   );
 };

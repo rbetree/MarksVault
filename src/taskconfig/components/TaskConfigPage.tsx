@@ -3,7 +3,11 @@ import { browser } from 'wxt/browser';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import CircularProgress from '@mui/material/CircularProgress';
-import TaskConfigHeader from './TaskConfigHeader';
+import Button from '@mui/material/Button';
+import SaveIcon from '@mui/icons-material/Save';
+import Typography from '@mui/material/Typography';
+import Fade from '@mui/material/Fade';
+
 import TaskFormContainer from './TaskFormContainer';
 import SelectivePushExecutor from './SelectivePushExecutor';
 import BackupRestoreExecutor from './BackupRestoreExecutor';
@@ -13,7 +17,7 @@ import { Task, ActionType, BackupAction } from '../../types/task';
 import { taskConfigStyles } from '../styles/taskConfigStyles';
 
 /**
- * 任务配置页面主组件
+ * 任务配置页面主组件 - Redesigned
  * 整合URL参数解析、数据加载、表单管理和保存逻辑
  */
 const TaskConfigPage: React.FC = () => {
@@ -109,7 +113,7 @@ const TaskConfigPage: React.FC = () => {
     return (
       <Box sx={taskConfigStyles.pageContainer}>
         <Box sx={taskConfigStyles.loadingContainer}>
-          <CircularProgress size={48} />
+          <CircularProgress size={48} thickness={4} sx={{ color: 'primary.main' }} />
         </Box>
       </Box>
     );
@@ -120,9 +124,12 @@ const TaskConfigPage: React.FC = () => {
     return (
       <Box sx={taskConfigStyles.pageContainer}>
         <Box sx={taskConfigStyles.errorContainer}>
-          <Alert severity="error" sx={{ maxWidth: 600 }}>
+          <Alert severity="error" variant="filled" sx={{ maxWidth: 600, width: '100%', borderRadius: 2 }}>
             {loadError}
           </Alert>
+          <Button variant="outlined" color="inherit" onClick={() => window.location.reload()}>
+            重试
+          </Button>
         </Box>
       </Box>
     );
@@ -133,7 +140,7 @@ const TaskConfigPage: React.FC = () => {
     return (
       <Box sx={taskConfigStyles.pageContainer}>
         <Box sx={taskConfigStyles.loadingContainer}>
-          <CircularProgress size={48} />
+          <CircularProgress size={48} thickness={4} />
         </Box>
       </Box>
     );
@@ -182,30 +189,97 @@ const TaskConfigPage: React.FC = () => {
   }
 
   // 创建/编辑模式：渲染任务表单
-  return (
-    <Box sx={taskConfigStyles.pageContainer}>
-      {/* 头部 */}
-      <TaskConfigHeader
-        mode={mode}
-        taskName={formData.name}
-        isFormValid={isFormValid}
-        isSaving={saving}
-        onSave={handleSave}
-        onCancel={handleCancel}
-      />
+  const title = mode === 'create' ? '新建任务' : '编辑任务';
+  const subtitle = formData.name || '未命名任务';
 
-      {/* 内容区域 */}
+  return (
+    <Box sx={taskConfigStyles.root}>
+      {/* Premium Header */}
+      <Box sx={taskConfigStyles.headerOuter}>
+        <Box sx={taskConfigStyles.headerInner}>
+          <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+            <Typography variant="h6" component="h1" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
+              {title}
+            </Typography>
+            <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 500 }}>
+              {subtitle}
+            </Typography>
+          </Box>
+
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <Button
+              variant="text"
+              onClick={handleCancel}
+              disabled={saving}
+              sx={{
+                color: 'text.secondary',
+                fontWeight: 600,
+                px: 3,
+                borderRadius: 20,
+                '&:hover': {
+                  bgcolor: 'rgba(255,255,255,0.05)',
+                  color: 'text.primary',
+                },
+              }}
+            >
+              取消
+            </Button>
+
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={saving ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
+              onClick={handleSave}
+              disabled={!isFormValid || saving}
+              sx={{
+                px: 4,
+                py: 1,
+                borderRadius: 20,
+                fontWeight: 600,
+                boxShadow: '0 4px 14px 0 rgba(0,118,255,0.39)',
+                transition: 'all 0.2s ease',
+                '&:hover': {
+                  transform: 'translateY(-1px)',
+                  boxShadow: '0 6px 20px rgba(0,118,255,0.23)',
+                },
+                '&:active': {
+                  transform: 'translateY(0)',
+                },
+                '&.Mui-disabled': {
+                  bgcolor: 'rgba(255,255,255,0.08)',
+                  color: 'rgba(255,255,255,0.3)',
+                  boxShadow: 'none',
+                }
+              }}
+            >
+              {saving ? '保存中...' : '保存更改'}
+            </Button>
+          </Box>
+        </Box>
+      </Box>
+
+      {/* Content Area */}
       <Box sx={taskConfigStyles.contentArea}>
-        {saveError && (
-          <Alert severity="error" sx={{ mb: 2, maxWidth: 1200, width: '100%' }}>
-            {saveError}
-          </Alert>
-        )}
-        <TaskFormContainer
-          taskData={formData}
-          onChange={handleFormChange}
-          onValidityChange={handleValidityChange}
-        />
+        <Fade in={true} timeout={500}>
+          <Box sx={taskConfigStyles.maxWidthContainer}>
+            {saveError && (
+              <Alert 
+                severity="error" 
+                variant="filled"
+                sx={{ mb: 4, borderRadius: 2 }}
+                onClose={clearSaveError}
+              >
+                {saveError}
+              </Alert>
+            )}
+
+            <TaskFormContainer
+              taskData={formData}
+              onChange={handleFormChange}
+              onValidityChange={handleValidityChange}
+            />
+          </Box>
+        </Fade>
       </Box>
     </Box>
   );
