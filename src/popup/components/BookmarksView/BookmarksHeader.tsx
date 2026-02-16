@@ -6,6 +6,7 @@ import IconButton from '@mui/material/IconButton';
 import ClearIcon from '@mui/icons-material/Clear';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ViewToggleButton from './ViewToggleButton';
+import { getInputValueFromEventTarget } from './search-input-utils';
 
 interface BookmarksHeaderProps {
     // Navigation props
@@ -91,6 +92,7 @@ export const BookmarksHeaderActions: React.FC<Omit<BookmarksHeaderProps, 'parent
 }) => {
     const [inputValue, setInputValue] = useState(searchText);
     const isComposingRef = useRef(false);
+    const inputRef = useRef<HTMLInputElement | null>(null);
 
     useEffect(() => {
         if (!isComposingRef.current) {
@@ -102,9 +104,9 @@ export const BookmarksHeaderActions: React.FC<Omit<BookmarksHeaderProps, 'parent
         isComposingRef.current = true;
     };
 
-    const handleCompositionEnd = (e: React.CompositionEvent<HTMLInputElement>) => {
+    const handleCompositionEnd = (e: React.CompositionEvent) => {
         isComposingRef.current = false;
-        const value = (e.currentTarget.value ?? '') as string;
+        const value = getInputValueFromEventTarget(e.target, inputRef.current?.value ?? inputValue);
         setInputValue(value);
         onSearch(value);
     };
@@ -140,6 +142,7 @@ export const BookmarksHeaderActions: React.FC<Omit<BookmarksHeaderProps, 'parent
                 }}
                 placeholder="搜索..."
                 value={inputValue}
+                inputRef={inputRef}
                 onChange={handleSearchChange}
                 onCompositionStart={handleCompositionStart}
                 onCompositionEnd={handleCompositionEnd}
