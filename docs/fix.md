@@ -9,7 +9,7 @@
 4. [x] `[High] 多处硬编码 Chrome 书签 ID（"0"/"1"），与 Firefox 结构不兼容`
 5. [x] `[High] 后台服务初始化失败会被吞掉并缓存，当前 SW 生命周期内不会重试`
 6. [x] `[High] task 持久化成功状态可能被误报`
-7. [ ] `[Medium] 通用存储读取会把合法 falsy 值误判为 null`
+7. [x] `[Medium] 通用存储读取会把合法 falsy 值误判为 null`
 8. [ ] `[Medium] validate 功能当前是“模拟成功”，不是实际校验`
 9. [ ] `[Medium] 推送 HTML 时逐条串行抓 favicon，容易触发执行超时`
 10. [ ] `[Low] 版本与文档信息存在不一致`
@@ -149,3 +149,15 @@
   - `npm run typecheck`：通过。
   - `npm test -- --runInBand src/services/task-service.test.ts`：通过（2/2，覆盖“失败不误报”“成功返回成功”）。
   - `npm run lint -- src/services/task-service.ts src/services/task-service.test.ts`：通过（项目现存 28 条 warning，无新增 error）。
+
+### 7. 存储读取把合法 falsy 值误判为 null（已完成）
+- 修复文件：
+  - `src/utils/storage-service.ts`
+  - `src/utils/storage-service.test.ts`
+- 实现说明：
+  - `getStorageData` 由 `result[key] || null` 改为基于 `hasOwnProperty` 判断键是否存在。
+  - 保留 `false/0/''` 等合法值；仅在 key 不存在时返回 `null`。
+- 验证与测试（2026-02-16）：
+  - `npm run typecheck`：通过。
+  - `npm test -- --runInBand src/utils/storage-service.test.ts`：通过（4/4，覆盖 false/0/''/缺失 key）。
+  - `npm run lint -- src/utils/storage-service.ts src/utils/storage-service.test.ts`：通过（项目现存 28 条 warning，无新增 error）。

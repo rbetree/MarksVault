@@ -440,9 +440,10 @@ class StorageService {
   async getStorageData(key: string): Promise<StorageResult> {
     try {
       const result = await browser.storage.local.get(key);
+      const hasKey = Object.prototype.hasOwnProperty.call(result, key);
       return {
         success: true,
-        data: result[key] || null
+        data: hasKey ? result[key] : null
       };
     } catch (error) {
       console.error(`获取存储数据 ${key} 失败:`, error);
