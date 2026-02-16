@@ -325,8 +325,13 @@ class OrganizeService {
     for (const bookmark of filteredBookmarks) {
       try {
         // 调用Chrome API删除书签
-        await bookmarkService.removeBookmark(bookmark.id);
-        successCount++;
+        const result = await bookmarkService.removeBookmark(bookmark.id);
+        if (result.success) {
+          successCount++;
+        } else {
+          errorCount++;
+          console.error(`删除书签 ${bookmark.id} 失败:`, result.error);
+        }
       } catch (error) {
         console.error(`删除书签 ${bookmark.id} 失败:`, error);
         errorCount++;
@@ -389,11 +394,15 @@ class OrganizeService {
         newName = newName.replace(/{index}/g, (successCount + 1).toString());
         
         // 调用Chrome API更新书签
-        await bookmarkService.updateBookmark(bookmark.id, {
+        const result = await bookmarkService.updateBookmark(bookmark.id, {
           title: newName
         });
-        
-        successCount++;
+        if (result.success) {
+          successCount++;
+        } else {
+          errorCount++;
+          console.error(`重命名书签 ${bookmark.id} 失败:`, result.error);
+        }
       } catch (error) {
         console.error(`重命名书签 ${bookmark.id} 失败:`, error);
         errorCount++;
@@ -494,10 +503,15 @@ class OrganizeService {
         // 检查书签标题是否已经包含该标签
         if (!bookmark.title.startsWith(tagPrefix)) {
           // 调用Chrome API更新书签标题，添加标签前缀
-          await bookmarkService.updateBookmark(bookmark.id, {
+          const result = await bookmarkService.updateBookmark(bookmark.id, {
             title: tagPrefix + bookmark.title
           });
-          successCount++;
+          if (result.success) {
+            successCount++;
+          } else {
+            errorCount++;
+            console.error(`为书签 ${bookmark.id} 添加标签失败:`, result.error);
+          }
         } else {
           // 标签已存在，算作处理成功
           successCount++;
