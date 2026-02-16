@@ -51,7 +51,7 @@ import triggerService from '../services/trigger-service';
 import {
   ensureServicesInitializedForTesting,
   resetServicesInitStateForTesting,
-} from './background';
+} from '../entrypoints/background';
 
 describe('background 初始化门闩', () => {
   const mockedTaskService = taskService as jest.Mocked<typeof taskService>;
