@@ -32,6 +32,55 @@ class BackupService {
   }
 
   /**
+   * 解析书签备份文件名中的时间戳（bookmarks_backup_YYYYMMDDHHMMSS.json）
+   */
+  private parseBookmarksBackupTimestamp(filename: string): number {
+    const match = filename.match(/bookmarks_backup_(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})\.json/);
+    if (!match) return 0;
+
+    const [, year, month, day, hour, minute, second] = match;
+    return new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}`).getTime();
+  }
+
+  /**
+   * 是否为“带时间戳”的书签备份文件
+   */
+  private isTimestampedBookmarksBackupFile(filename: string): boolean {
+    return this.parseBookmarksBackupTimestamp(filename) > 0;
+  }
+
+  /**
+   * 解析“最新书签备份文件路径”
+   * 优先选择时间戳备份文件；若不存在，回退到历史的 latest 文件名。
+   */
+  private async resolveLatestBookmarksBackupFilePath(
+    credentials: GitHubCredentials,
+    username: string
+  ): Promise<string> {
+    const files = await githubService.getRepositoryFiles(
+      credentials,
+      username,
+      DEFAULT_BACKUP_REPO,
+      'bookmarks'
+    );
+
+    const timestampedFiles = files.filter(file => this.isTimestampedBookmarksBackupFile(file.name));
+    if (timestampedFiles.length > 0) {
+      return timestampedFiles.sort(
+        (a, b) => this.parseBookmarksBackupTimestamp(b.name) - this.parseBookmarksBackupTimestamp(a.name)
+      )[0].path;
+    }
+
+    // 兼容历史逻辑：若仓库中存在 latest 文件，仍支持恢复。
+    const latestFile = files.find(file => file.name === LATEST_BACKUP_PATH);
+    if (latestFile) {
+      return latestFile.path;
+    }
+
+    throw new Error('未找到可恢复的书签备份文件，请先进行备份');
+  }
+
+  /**
    * 创建书签备份
    * @returns 序列化的书签备份数据
    */
@@ -465,7 +514,7 @@ class BackupService {
       // 2. 获取备份文件内容
       const filePath = useTimestampedFile && timestampedFilePath
         ? (timestampedFilePath.startsWith('bookmarks/') ? timestampedFilePath : `bookmarks/${timestampedFilePath}`)
-        : `bookmarks/${LATEST_BACKUP_PATH}`;
+        : await this.resolveLatestBookmarksBackupFilePath(credentials, username);
 
       const fileData = await githubService.getFileContent(
         credentials,
