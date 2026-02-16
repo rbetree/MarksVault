@@ -14,6 +14,8 @@ import { browser } from 'wxt/browser';
 import DashboardCard from '../shared/DashboardCard';
 
 const AboutSettings: React.FC = () => {
+    const extensionVersion = browser.runtime.getManifest().version;
+
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             {/* 头部信息 */}
@@ -27,7 +29,7 @@ const AboutSettings: React.FC = () => {
                     <Box sx={{ ml: 2, flex: 1 }}>
                         <Typography variant="h6" fontWeight="bold" sx={{ lineHeight: 1.2, mb: 0.5 }}>MarksVault</Typography>
                         <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                            <Chip label="v0.1.1" size="small" color="primary" sx={{ fontSize: '0.7rem', height: 20, mr: 1.5 }} />
+                            <Chip label={`v${extensionVersion}`} size="small" color="primary" sx={{ fontSize: '0.7rem', height: 20, mr: 1.5 }} />
                             <Link
                                 href="#"
                                 onClick={(e) => { e.preventDefault(); browser.tabs.create({ url: 'https://github.com/rbetree/MarksVault' }); }}

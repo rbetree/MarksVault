@@ -212,9 +212,7 @@ npm test
 
 ## 📚 更多文档
 
-- 开发/架构：[docs/background-architecture.md](docs/background-architecture.md)
-- 上架/发布：[docs/STORE_SUBMISSION_GUIDE.md](docs/STORE_SUBMISSION_GUIDE.md)、[docs/STORE_PUBLISHING_GUIDE.md](docs/STORE_PUBLISHING_GUIDE.md)
-- 升级说明：[docs/UPGRADE_GUIDE.md](docs/UPGRADE_GUIDE.md)
+- 修复记录与审计轨迹：[docs/fix.md](docs/fix.md)
 
 ## Star History
 

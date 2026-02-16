@@ -12,7 +12,7 @@
 7. [x] `[Medium] 通用存储读取会把合法 falsy 值误判为 null`
 8. [x] `[Medium] validate 功能当前是“模拟成功”，不是实际校验`
 9. [x] `[Medium] 推送 HTML 时逐条串行抓 favicon，容易触发执行超时`
-10. [ ] `[Low] 版本与文档信息存在不一致`
+10. [x] `[Low] 版本与文档信息存在不一致`
 
 **发现（按严重级别）**
 1. `[Critical] 默认“恢复最新备份”路径与实际备份产物不一致，恢复流程默认会失败。`  
@@ -187,3 +187,14 @@
   - `npm run typecheck`：通过。
   - `npm test -- --runInBand src/services/backup-service.test.ts`：通过（7/7，新增“按域名去重预加载”场景）。
   - `npm run lint -- src/services/backup-service.ts src/services/backup-service.test.ts`：通过（项目现存 26 条 warning，无新增 error）。
+
+### 10. 版本与文档信息不一致（已完成）
+- 修复文件：
+  - `src/popup/components/SettingsView/AboutSettings.tsx`
+  - `README.md`
+- 实现说明：
+  - 关于页版本号改为动态读取 `browser.runtime.getManifest().version`，避免与 `package.json` 版本漂移。
+  - README “更多文档”移除失效链接，改为仅指向仓库中真实存在的 `docs/fix.md`。
+- 验证与测试（2026-02-16）：
+  - `npm run typecheck`：通过。
+  - `npm run lint -- src/popup/components/SettingsView/AboutSettings.tsx`：通过（项目现存 26 条 warning，无新增 error）。
