@@ -1,5 +1,6 @@
 // 书签项类型定义
 import { browser, type Browser } from 'wxt/browser';
+import { getBookmarkFuzzyScoreByNormalizedQuery, normalizeSearchText } from './bookmark-search-utils';
 
 export interface BookmarkItem {
   id: string;
@@ -21,6 +22,60 @@ export interface BookmarkResult {
 }
 
 class BookmarkService {
+  // 搜索索引缓存：避免每次输入都全量拉取书签树。
+  private readonly SEARCH_INDEX_TTL = 20 * 1000; // 20 秒
+  private readonly MAX_SEARCH_RESULTS = 200;
+  private searchIndexCache: { items: BookmarkItem[]; timestamp: number } | null = null;
+
+  private invalidateSearchIndexCache(): void {
+    this.searchIndexCache = null;
+  }
+
+  private toBookmarkItem(node: Browser.bookmarks.BookmarkTreeNode): BookmarkItem {
+    return {
+      id: node.id,
+      parentId: node.parentId,
+      title: node.title,
+      url: node.url,
+      dateAdded: node.dateAdded,
+      dateGroupModified: node.dateGroupModified,
+      index: node.index,
+      isFolder: !node.url
+    };
+  }
+
+  private flattenBookmarkTreeToList(nodes: Browser.bookmarks.BookmarkTreeNode[]): BookmarkItem[] {
+    const list: BookmarkItem[] = [];
+
+    const walk = (currentNodes: Browser.bookmarks.BookmarkTreeNode[]) => {
+      for (const node of currentNodes) {
+        list.push(this.toBookmarkItem(node));
+        if (node.children && node.children.length > 0) {
+          walk(node.children);
+        }
+      }
+    };
+
+    walk(nodes);
+    return list;
+  }
+
+  private async getSearchIndexItems(): Promise<BookmarkItem[]> {
+    const now = Date.now();
+    if (this.searchIndexCache && now - this.searchIndexCache.timestamp < this.SEARCH_INDEX_TTL) {
+      return this.searchIndexCache.items;
+    }
+
+    const tree = await browser.bookmarks.getTree();
+    const items = this.flattenBookmarkTreeToList(tree);
+    this.searchIndexCache = {
+      items,
+      timestamp: now
+    };
+
+    return items;
+  }
+
   /**
    * 获取所有书签
    * @returns Promise<BookmarkResult>
@@ -201,6 +256,7 @@ class BookmarkService {
   async createBookmark(bookmark: { parentId?: string; title: string; url: string }): Promise<BookmarkResult> {
     try {
       const newBookmark = await browser.bookmarks.create(bookmark);
+      this.invalidateSearchIndexCache();
       return {
         success: true,
         data: {
@@ -230,6 +286,7 @@ class BookmarkService {
   async createFolder(folder: { parentId?: string; title: string }): Promise<BookmarkResult> {
     try {
       const newFolder = await browser.bookmarks.create(folder);
+      this.invalidateSearchIndexCache();
       return {
         success: true,
         data: {
@@ -259,6 +316,7 @@ class BookmarkService {
   async updateBookmark(id: string, changes: { title?: string; url?: string }): Promise<BookmarkResult> {
     try {
       const updatedBookmark = await browser.bookmarks.update(id, changes);
+      this.invalidateSearchIndexCache();
       return {
         success: true,
         data: {
@@ -286,6 +344,7 @@ class BookmarkService {
   async removeBookmark(id: string): Promise<BookmarkResult> {
     try {
       await browser.bookmarks.remove(id);
+      this.invalidateSearchIndexCache();
       return {
         success: true
       };
@@ -306,6 +365,7 @@ class BookmarkService {
   async removeBookmarkTree(id: string): Promise<BookmarkResult> {
     try {
       await browser.bookmarks.removeTree(id);
+      this.invalidateSearchIndexCache();
       return {
         success: true
       };
@@ -327,6 +387,7 @@ class BookmarkService {
   async moveBookmark(id: string, destination: { parentId?: string; index?: number }): Promise<BookmarkResult> {
     try {
       const movedBookmark = await browser.bookmarks.move(id, destination);
+      this.invalidateSearchIndexCache();
       return {
         success: true,
         data: {
@@ -354,25 +415,56 @@ class BookmarkService {
    */
   async searchBookmarks(query: string): Promise<BookmarkResult> {
     try {
-      if (!query.trim()) {
+      const normalizedQuery = normalizeSearchText(query);
+      if (!normalizedQuery) {
         return {
           success: true,
           data: []
         };
       }
 
-      const results = await browser.bookmarks.search(query);
+      const [nativeResults, searchPool] = await Promise.all([
+        browser.bookmarks.search(normalizedQuery),
+        this.getSearchIndexItems()
+      ]);
+
+      const candidateMap = new Map<string, { item: BookmarkItem; score: number }>();
+
+      const addOrUpdateCandidate = (item: BookmarkItem, score: number) => {
+        const existing = candidateMap.get(item.id);
+        if (!existing || score > existing.score) {
+          candidateMap.set(item.id, { item, score });
+        }
+      };
+
+      // 原生搜索命中结果始终保留，并给予更高优先级。
+      for (const node of nativeResults) {
+        const item = this.toBookmarkItem(node);
+        const score = 1000 + getBookmarkFuzzyScoreByNormalizedQuery(normalizedQuery, item.title, item.url);
+        addOrUpdateCandidate(item, score);
+      }
+
+      // 全量索引做模糊召回，补齐原生搜索无法命中的结果。
+      for (const item of searchPool) {
+        const score = getBookmarkFuzzyScoreByNormalizedQuery(normalizedQuery, item.title, item.url);
+        if (score <= 0) {
+          continue;
+        }
+        addOrUpdateCandidate(item, score);
+      }
+
+      const sortedCandidates = [...candidateMap.values()].sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        if (a.item.isFolder !== b.item.isFolder) return a.item.isFolder ? -1 : 1;
+        const aTitleLength = a.item.title.length;
+        const bTitleLength = b.item.title.length;
+        if (aTitleLength !== bTitleLength) return aTitleLength - bTitleLength;
+        return (b.item.dateAdded ?? 0) - (a.item.dateAdded ?? 0);
+      });
+
       return {
         success: true,
-        data: results.map(node => ({
-          id: node.id,
-          parentId: node.parentId,
-          title: node.title,
-          url: node.url,
-          dateAdded: node.dateAdded,
-          index: node.index,
-          isFolder: !node.url
-        }))
+        data: sortedCandidates.slice(0, this.MAX_SEARCH_RESULTS).map(candidate => candidate.item)
       };
     } catch (error) {
       console.error('搜索书签失败:', error);
