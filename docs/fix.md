@@ -11,7 +11,7 @@
 6. [x] `[High] task 持久化成功状态可能被误报`
 7. [x] `[Medium] 通用存储读取会把合法 falsy 值误判为 null`
 8. [x] `[Medium] validate 功能当前是“模拟成功”，不是实际校验`
-9. [ ] `[Medium] 推送 HTML 时逐条串行抓 favicon，容易触发执行超时`
+9. [x] `[Medium] 推送 HTML 时逐条串行抓 favicon，容易触发执行超时`
 10. [ ] `[Low] 版本与文档信息存在不一致`
 
 **发现（按严重级别）**
@@ -174,3 +174,16 @@
   - `npm run typecheck`：通过。
   - `npm test -- --runInBand src/services/organize-service.test.ts`：通过（5/5，新增 validate 的 HTTP 失败与回退场景）。
   - `npm run lint -- src/services/organize-service.ts src/services/organize-service.test.ts`：通过（项目现存 26 条 warning，无新增 error）。
+
+### 9. HTML 推送时 favicon 串行抓取导致超时（已完成）
+- 修复文件：
+  - `src/services/backup-service.ts`
+  - `src/services/backup-service.test.ts`
+- 实现说明：
+  - 新增 favicon 预加载流程：先遍历书签，按域名去重后并发抓取（并发上限 6）。
+  - 图标抓取增加 5 秒超时控制，避免单个站点阻塞整体导出。
+  - HTML 生成阶段改为读取预加载缓存，不再在递归过程中逐条 `await` 网络请求。
+- 验证与测试（2026-02-16）：
+  - `npm run typecheck`：通过。
+  - `npm test -- --runInBand src/services/backup-service.test.ts`：通过（7/7，新增“按域名去重预加载”场景）。
+  - `npm run lint -- src/services/backup-service.ts src/services/backup-service.test.ts`：通过（项目现存 26 条 warning，无新增 error）。

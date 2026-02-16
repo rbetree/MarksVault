@@ -21,6 +21,8 @@ export enum BackupType {
 
 class BackupService {
   private static instance: BackupService;
+  private readonly FAVICON_FETCH_TIMEOUT_MS = 5000;
+  private readonly FAVICON_PREFETCH_CONCURRENCY = 6;
 
   private constructor() { }
 
@@ -975,8 +977,11 @@ class BackupService {
    * @returns Base64 编码的 PNG 图标数据或 null
    */
   private async fetchIconAsBase64(url: string): Promise<string | null> {
+    const controller = new AbortController();
+    const timeoutHandle = setTimeout(() => controller.abort(), this.FAVICON_FETCH_TIMEOUT_MS);
+
     try {
-      const response = await fetch(url);
+      const response = await fetch(url, { signal: controller.signal });
       const blob = await response.blob();
 
       // 如果已经是 PNG 格式，直接转换
@@ -1030,7 +1035,81 @@ class BackupService {
     } catch (error) {
       console.warn('获取图标失败:', error);
       return null;
+    } finally {
+      clearTimeout(timeoutHandle);
     }
+  }
+
+  private getFaviconCacheKey(url: string): string {
+    try {
+      return new URL(url).hostname.toLowerCase();
+    } catch {
+      return url;
+    }
+  }
+
+  private collectBookmarksWithUrl(items: BookmarkItem[]): BookmarkItem[] {
+    const result: BookmarkItem[] = [];
+
+    const walk = (nodes: BookmarkItem[]) => {
+      for (const node of nodes) {
+        if (!node.isFolder && node.url) {
+          result.push(node);
+        }
+
+        if (node.children && node.children.length > 0) {
+          walk(node.children);
+        }
+      }
+    };
+
+    walk(items);
+    return result;
+  }
+
+  private async preloadFaviconIcons(bookmarks: BookmarkItem[]): Promise<Map<string, string>> {
+    const bookmarksWithUrl = this.collectBookmarksWithUrl(bookmarks);
+    if (bookmarksWithUrl.length === 0) {
+      return new Map();
+    }
+
+    const faviconByKey = new Map<string, string>();
+    const faviconUrlByKey = new Map<string, string>();
+
+    for (const bookmark of bookmarksWithUrl) {
+      if (!bookmark.url) continue;
+      const faviconKey = this.getFaviconCacheKey(bookmark.url);
+      if (faviconUrlByKey.has(faviconKey)) continue;
+
+      const faviconUrl = getFaviconUrl(bookmark.url);
+      if (!faviconUrl) continue;
+      faviconUrlByKey.set(faviconKey, faviconUrl);
+    }
+
+    const faviconKeys = Array.from(faviconUrlByKey.keys());
+    let cursor = 0;
+
+    const worker = async () => {
+      while (cursor < faviconKeys.length) {
+        const faviconKey = faviconKeys[cursor++];
+        const faviconUrl = faviconUrlByKey.get(faviconKey);
+        if (!faviconUrl) continue;
+
+        try {
+          const iconData = await this.fetchIconAsBase64(faviconUrl);
+          if (iconData && iconData.startsWith('data:image/')) {
+            faviconByKey.set(faviconKey, iconData);
+          }
+        } catch (error) {
+          console.warn('预加载 favicon 失败:', faviconUrl, error);
+        }
+      }
+    };
+
+    const workerCount = Math.min(this.FAVICON_PREFETCH_CONCURRENCY, faviconKeys.length);
+    await Promise.all(Array.from({ length: workerCount }, () => worker()));
+
+    return faviconByKey;
   }
 
   /**
@@ -1045,6 +1124,7 @@ class BackupService {
     }
 
     const bookmarks = bookmarksResult.data as BookmarkItem[];
+    const faviconByKey = await this.preloadFaviconIcons(bookmarks);
 
     // 创建标准的HTML书签格式
     let html = '<!DOCTYPE NETSCAPE-Bookmark-file-1>\n';
@@ -1096,18 +1176,13 @@ class BackupService {
           // 书签项 - 只添加 ADD_DATE 和 ICON 属性（不添加 LAST_MODIFIED）
           const addDate = item.dateAdded ? Math.floor(item.dateAdded / 1000) : Math.floor(Date.now() / 1000);
 
-          // 获取 ICON - 保持 PNG 格式
+          // 从预加载缓存读取 ICON，避免逐条串行网络请求。
           let iconAttr = '';
           try {
-            const faviconUrl = getFaviconUrl(item.url);
-            if (faviconUrl) {
-              const iconData = await this.fetchIconAsBase64(faviconUrl);
-              if (iconData) {
-                // 确保使用 PNG 格式
-                if (iconData.startsWith('data:image/')) {
-                  iconAttr = ` ICON="${iconData}"`;
-                }
-              }
+            const faviconKey = this.getFaviconCacheKey(item.url);
+            const iconData = faviconByKey.get(faviconKey);
+            if (iconData) {
+              iconAttr = ` ICON="${iconData}"`;
             }
           } catch (error) {
             console.warn('Failed to fetch icon for', item.url, error);

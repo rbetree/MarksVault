@@ -271,4 +271,37 @@ describe('backup-service 恢复路径选择', () => {
       url: 'https://example.com',
     });
   });
+
+  test('HTML 图标预加载应按域名去重，避免重复抓取', async () => {
+    const service = backupService as any;
+    const fetchIconSpy = jest
+      .spyOn(service, 'fetchIconAsBase64')
+      .mockResolvedValue('data:image/png;base64,AAA');
+
+    const faviconMap = await service.preloadFaviconIcons([
+      {
+        id: '1',
+        title: 'A-1',
+        url: 'https://a.example.com/path-1',
+        isFolder: false,
+      },
+      {
+        id: '2',
+        title: 'A-2',
+        url: 'https://a.example.com/path-2',
+        isFolder: false,
+      },
+      {
+        id: '3',
+        title: 'B-1',
+        url: 'https://b.example.com/path-1',
+        isFolder: false,
+      },
+    ]);
+
+    expect(fetchIconSpy).toHaveBeenCalledTimes(2);
+    expect(faviconMap.size).toBe(2);
+
+    fetchIconSpy.mockRestore();
+  });
 });
