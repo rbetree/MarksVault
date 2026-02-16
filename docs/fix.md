@@ -10,7 +10,7 @@
 5. [x] `[High] 后台服务初始化失败会被吞掉并缓存，当前 SW 生命周期内不会重试`
 6. [x] `[High] task 持久化成功状态可能被误报`
 7. [x] `[Medium] 通用存储读取会把合法 falsy 值误判为 null`
-8. [ ] `[Medium] validate 功能当前是“模拟成功”，不是实际校验`
+8. [x] `[Medium] validate 功能当前是“模拟成功”，不是实际校验`
 9. [ ] `[Medium] 推送 HTML 时逐条串行抓 favicon，容易触发执行超时`
 10. [ ] `[Low] 版本与文档信息存在不一致`
 
@@ -161,3 +161,16 @@
   - `npm run typecheck`：通过。
   - `npm test -- --runInBand src/utils/storage-service.test.ts`：通过（4/4，覆盖 false/0/''/缺失 key）。
   - `npm run lint -- src/utils/storage-service.ts src/utils/storage-service.test.ts`：通过（项目现存 28 条 warning，无新增 error）。
+
+### 8. validate 为模拟结果而非真实校验（已完成）
+- 修复文件：
+  - `src/services/organize-service.ts`
+  - `src/services/organize-service.test.ts`
+- 实现说明：
+  - `validateBookmarks` 改为真实 URL 可用性检测，不再返回固定“全部正常”。
+  - 校验策略：先 `HEAD` 请求；若被拦截/失败则回退 `GET + no-cors`；内置超时控制（8s）与并发上限（5）。
+  - 判定策略：`404/410/5xx` 视为异常，其他可达状态视为可用，并返回异常详情摘要。
+- 验证与测试（2026-02-16）：
+  - `npm run typecheck`：通过。
+  - `npm test -- --runInBand src/services/organize-service.test.ts`：通过（5/5，新增 validate 的 HTTP 失败与回退场景）。
+  - `npm run lint -- src/services/organize-service.ts src/services/organize-service.test.ts`：通过（项目现存 26 条 warning，无新增 error）。

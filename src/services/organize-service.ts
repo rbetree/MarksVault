@@ -38,6 +38,8 @@ export interface OrganizeResult {
  */
 class OrganizeService {
   private static instance: OrganizeService;
+  private readonly VALIDATION_TIMEOUT_MS = 8000;
+  private readonly VALIDATION_CONCURRENCY = 5;
   
   /**
    * 私有构造函数，防止直接实例化
@@ -53,6 +55,74 @@ class OrganizeService {
       OrganizeService.instance = new OrganizeService();
     }
     return OrganizeService.instance;
+  }
+
+  private async fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
+    const controller = new AbortController();
+    const timeoutHandle = setTimeout(() => controller.abort(), this.VALIDATION_TIMEOUT_MS);
+
+    try {
+      return await fetch(url, {
+        ...init,
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeoutHandle);
+    }
+  }
+
+  private isReachableStatus(status: number): boolean {
+    // 404/410 明确不存在；5xx 为服务端异常，视为不可用。
+    if (status === 404 || status === 410) {
+      return false;
+    }
+    if (status >= 500) {
+      return false;
+    }
+    return true;
+  }
+
+  private async validateBookmarkUrl(url: string): Promise<{ valid: boolean; reason?: string }> {
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(url);
+    } catch (error) {
+      return { valid: false, reason: 'URL 格式无效' };
+    }
+
+    if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+      return { valid: false, reason: `不支持的协议: ${parsedUrl.protocol}` };
+    }
+
+    try {
+      const headResponse = await this.fetchWithTimeout(url, {
+        method: 'HEAD',
+        redirect: 'follow',
+        cache: 'no-store',
+      });
+
+      if (this.isReachableStatus(headResponse.status)) {
+        return { valid: true };
+      }
+
+      return { valid: false, reason: `HTTP ${headResponse.status}` };
+    } catch (headError) {
+      try {
+        // 某些站点会拒绝 HEAD/CORS；回退到 no-cors GET，能连通即视为可访问。
+        await this.fetchWithTimeout(url, {
+          method: 'GET',
+          mode: 'no-cors',
+          redirect: 'follow',
+          cache: 'no-store',
+        });
+        return { valid: true };
+      } catch (getError) {
+        return {
+          valid: false,
+          reason: getError instanceof Error ? getError.message : String(getError),
+        };
+      }
+    }
   }
   
   /**
@@ -436,17 +506,52 @@ class OrganizeService {
         error: undefined
       };
     }
-    
+
+    const bookmarksToValidate = filteredBookmarks.filter(bookmark => Boolean(bookmark.url));
+    if (bookmarksToValidate.length === 0) {
+      return {
+        success: true,
+        processedCount: 0,
+        details: '没有可验证 URL 的书签',
+        error: undefined
+      };
+    }
+
     let validCount = 0;
     let invalidCount = 0;
-    
-    // 由于浏览器扩展不能直接发送HTTP请求验证URL，
-    // 此处返回一个模拟结果，实际实现需要使用fetch API或其他方式
+    const invalidDetails: string[] = [];
+    let cursor = 0;
+
+    const worker = async () => {
+      while (cursor < bookmarksToValidate.length) {
+        const bookmark = bookmarksToValidate[cursor++];
+        if (!bookmark || !bookmark.url) {
+          continue;
+        }
+
+        const validationResult = await this.validateBookmarkUrl(bookmark.url);
+        if (validationResult.valid) {
+          validCount++;
+        } else {
+          invalidCount++;
+          invalidDetails.push(
+            `"${bookmark.title}" (${bookmark.url}): ${validationResult.reason || '不可访问'}`
+          );
+        }
+      }
+    };
+
+    const workerCount = Math.min(this.VALIDATION_CONCURRENCY, bookmarksToValidate.length);
+    await Promise.all(Array.from({ length: workerCount }, () => worker()));
+
     return {
-      success: true,
-      processedCount: filteredBookmarks.length,
-      details: `已验证 ${filteredBookmarks.length} 个书签，状态都正常[模拟结果]`,
-      error: undefined
+      success: invalidCount === 0,
+      processedCount: bookmarksToValidate.length,
+      details: `已验证 ${bookmarksToValidate.length} 个书签，正常 ${validCount} 个，异常 ${invalidCount} 个`
+        + (invalidDetails.length > 0
+          ? `。异常详情: ${invalidDetails.slice(0, 5).join('; ')}`
+          : ''),
+      error: invalidCount > 0 ? `${invalidCount} 个书签验证失败` : undefined
     };
   }
   

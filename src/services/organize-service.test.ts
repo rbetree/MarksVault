@@ -12,6 +12,7 @@ jest.mock('../utils/bookmark-service', () => ({
 
 describe('organize-service 失败处理', () => {
   const mockedBookmarkService = bookmarkService as jest.Mocked<typeof bookmarkService>;
+  const mockedFetch = jest.fn();
 
   const bookmarkTree: BookmarkItem[] = [
     {
@@ -32,6 +33,7 @@ describe('organize-service 失败处理', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    (globalThis as any).fetch = mockedFetch;
     mockedBookmarkService.getAllBookmarks.mockResolvedValue({
       success: true,
       data: bookmarkTree,
@@ -40,6 +42,11 @@ describe('organize-service 失败处理', () => {
     mockedBookmarkService.updateBookmark.mockResolvedValue({
       success: true,
       data: { id: 'bookmark-1' },
+    } as any);
+    mockedFetch.mockReset();
+    mockedFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
     } as any);
   });
 
@@ -97,5 +104,46 @@ describe('organize-service 失败处理', () => {
     expect(result.success).toBe(false);
     expect(result.processedCount).toBe(0);
     expect(result.error).toContain('添加标签失败');
+  });
+
+  test('validate 分支应基于真实 HTTP 状态返回失败', async () => {
+    mockedFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 404,
+    } as any);
+
+    const [result] = await organizeService.organizeBookmarks([
+      {
+        operation: 'validate',
+        filters: { pattern: 'example.com' },
+      },
+    ]);
+
+    expect(result.success).toBe(false);
+    expect(result.processedCount).toBe(1);
+    expect(result.error).toContain('验证失败');
+    expect(result.details).toContain('异常 1 个');
+  });
+
+  test('validate 分支在 HEAD 失败时应回退 GET(no-cors)', async () => {
+    mockedFetch
+      .mockRejectedValueOnce(new Error('HEAD blocked'))
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 0,
+      } as any);
+
+    const [result] = await organizeService.organizeBookmarks([
+      {
+        operation: 'validate',
+        filters: { pattern: 'example.com' },
+      },
+    ]);
+
+    expect(result.success).toBe(true);
+    expect(result.processedCount).toBe(1);
+    expect(mockedFetch).toHaveBeenCalledTimes(2);
+    expect(mockedFetch.mock.calls[0][1].method).toBe('HEAD');
+    expect(mockedFetch.mock.calls[1][1].method).toBe('GET');
   });
 });
