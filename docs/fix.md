@@ -7,7 +7,7 @@
 2. [x] `[Critical] 书签恢复流程存在“静默失败后仍返回成功”的数据一致性问题`
 3. [x] `[High] organize 任务的 delete/rename/tag 分支同样忽略底层失败结果`
 4. [x] `[High] 多处硬编码 Chrome 书签 ID（"0"/"1"），与 Firefox 结构不兼容`
-5. [ ] `[High] 后台服务初始化失败会被吞掉并缓存，当前 SW 生命周期内不会重试`
+5. [x] `[High] 后台服务初始化失败会被吞掉并缓存，当前 SW 生命周期内不会重试`
 6. [ ] `[High] task 持久化成功状态可能被误报`
 7. [ ] `[Medium] 通用存储读取会把合法 falsy 值误判为 null`
 8. [ ] `[Medium] validate 功能当前是“模拟成功”，不是实际校验`
@@ -124,3 +124,16 @@
   - `npm run typecheck`：通过。
   - `npm test -- --runInBand src/services/backup-service.test.ts`：通过（6/6，新增 Firefox `toolbar` 场景）。
   - `npm run lint -- src/utils/bookmark-service.ts src/services/backup-service.ts src/services/backup-service.test.ts src/popup/components/BookmarksView/BookmarksView.tsx`：通过（项目现存 28 条 warning，无新增 error）。
+
+### 5. 后台初始化失败后同 SW 生命周期不重试（已完成）
+- 修复文件：
+  - `src/entrypoints/background.ts`
+  - `src/entrypoints/background.test.ts`
+- 实现说明：
+  - 初始化 promise 增加失败回收：初始化抛错时会将缓存 promise 清空，后续事件可再次触发初始化。
+  - 新增 `ensureServicesInitializedOrLog`，各事件入口在初始化失败时会安全跳过，避免在未就绪状态继续执行核心逻辑。
+  - 暴露测试专用方法 `ensureServicesInitializedForTesting` / `resetServicesInitStateForTesting`，用于验证门闩行为。
+- 验证与测试（2026-02-16）：
+  - `npm run typecheck`：通过。
+  - `npm test -- --runInBand src/entrypoints/background.test.ts`：通过（2/2，覆盖“失败后重试”“并发单次初始化”）。
+  - `npm run lint -- src/entrypoints/background.ts src/entrypoints/background.test.ts`：通过（项目现存 28 条 warning，无新增 error）。

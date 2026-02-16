@@ -12,25 +12,21 @@ import { createDefaultTaskStorage, EventType } from '../types/task';
  * 初始化所有后台服务
  */
 async function initializeServices() {
-  try {
-    console.log('正在初始化 MarksVault 服务...');
+  console.log('正在初始化 MarksVault 服务...');
 
-    // 初始化任务服务
-    await taskService.init();
-    console.log('任务服务初始化完成');
+  // 初始化任务服务
+  await taskService.init();
+  console.log('任务服务初始化完成');
 
-    // 初始化任务执行引擎
-    await taskExecutor.init();
-    console.log('任务执行引擎初始化完成');
+  // 初始化任务执行引擎
+  await taskExecutor.init();
+  console.log('任务执行引擎初始化完成');
 
-    // 初始化触发器服务
-    await triggerService.init();
-    console.log('触发器服务初始化完成');
+  // 初始化触发器服务
+  await triggerService.init();
+  console.log('触发器服务初始化完成');
 
-    console.log('MarksVault 服务初始化完成');
-  } catch (error) {
-    console.error('服务初始化失败:', error);
-  }
+  console.log('MarksVault 服务初始化完成');
 }
 
 let servicesInitPromise: Promise<void> | null = null;
@@ -43,9 +39,31 @@ let servicesInitPromise: Promise<void> | null = null;
  */
 async function ensureServicesInitialized() {
   if (!servicesInitPromise) {
-    servicesInitPromise = initializeServices();
+    servicesInitPromise = initializeServices().catch((error) => {
+      // 初始化失败后允许后续事件重试，避免在当前 SW 生命周期内永久卡死。
+      servicesInitPromise = null;
+      throw error;
+    });
   }
   await servicesInitPromise;
+}
+
+async function ensureServicesInitializedOrLog(context: string): Promise<boolean> {
+  try {
+    await ensureServicesInitialized();
+    return true;
+  } catch (error) {
+    console.error(`[${context}] 服务初始化失败，本次事件跳过:`, error);
+    return false;
+  }
+}
+
+export async function ensureServicesInitializedForTesting(): Promise<void> {
+  await ensureServicesInitialized();
+}
+
+export function resetServicesInitStateForTesting(): void {
+  servicesInitPromise = null;
 }
 
 export default defineBackground({
@@ -74,7 +92,7 @@ export default defineBackground({
       }
 
       // 使用统一的服务初始化函数
-      await ensureServicesInitialized();
+      await ensureServicesInitializedOrLog('onInstalled');
     });
 
     // 监听浏览器启动事件
@@ -82,7 +100,9 @@ export default defineBackground({
       console.log('浏览器启动，初始化 MarksVault 服务...');
 
       // 使用统一的服务初始化函数
-      await ensureServicesInitialized();
+      if (!await ensureServicesInitializedOrLog('onStartup')) {
+        return;
+      }
 
       // 触发浏览器启动事件
       await triggerService.handleEventTrigger(EventType.BROWSER_STARTUP);
@@ -90,22 +110,30 @@ export default defineBackground({
 
     // 监听书签事件 - 统一触发书签变更事件
     browser.bookmarks.onCreated.addListener(async (id, bookmark) => {
-      await ensureServicesInitialized();
+      if (!await ensureServicesInitializedOrLog('bookmarks.onCreated')) {
+        return;
+      }
       await triggerService.handleEventTrigger(EventType.BOOKMARK_CHANGED, { id, bookmark });
     });
 
     browser.bookmarks.onRemoved.addListener(async (id, removeInfo) => {
-      await ensureServicesInitialized();
+      if (!await ensureServicesInitializedOrLog('bookmarks.onRemoved')) {
+        return;
+      }
       await triggerService.handleEventTrigger(EventType.BOOKMARK_CHANGED, { id, removeInfo });
     });
 
     browser.bookmarks.onChanged.addListener(async (id, changeInfo) => {
-      await ensureServicesInitialized();
+      if (!await ensureServicesInitializedOrLog('bookmarks.onChanged')) {
+        return;
+      }
       await triggerService.handleEventTrigger(EventType.BOOKMARK_CHANGED, { id, changeInfo });
     });
 
     browser.bookmarks.onMoved.addListener(async (id, moveInfo) => {
-      await ensureServicesInitialized();
+      if (!await ensureServicesInitializedOrLog('bookmarks.onMoved')) {
+        return;
+      }
       await triggerService.handleEventTrigger(EventType.BOOKMARK_CHANGED, { id, moveInfo });
     });
 
@@ -120,7 +148,9 @@ export default defineBackground({
     browser.runtime.onMessage.addListener(async (message) => {
       if (message?.type !== 'EXECUTE_SELECTIVE_PUSH') return;
 
-      await ensureServicesInitialized();
+      if (!await ensureServicesInitializedOrLog('runtime.onMessage:EXECUTE_SELECTIVE_PUSH')) {
+        return { success: false, error: '后台服务尚未准备就绪，请稍后重试' };
+      }
 
       const taskId = message?.payload?.taskId as unknown;
       const selections = message?.payload?.selections as unknown;
