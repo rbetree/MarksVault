@@ -4,7 +4,7 @@
 
 ## 修复进度（按顺序）
 1. [x] `[Critical] 默认“恢复最新备份”路径与实际备份产物不一致`
-2. [ ] `[Critical] 书签恢复流程存在“静默失败后仍返回成功”的数据一致性问题`
+2. [x] `[Critical] 书签恢复流程存在“静默失败后仍返回成功”的数据一致性问题`
 3. [ ] `[High] organize 任务的 delete/rename/tag 分支同样忽略底层失败结果`
 4. [ ] `[High] 多处硬编码 Chrome 书签 ID（"0"/"1"），与 Firefox 结构不兼容`
 5. [ ] `[High] 后台服务初始化失败会被吞掉并缓存，当前 SW 生命周期内不会重试`
@@ -81,4 +81,17 @@
 - 验证与测试（2026-02-16）：
   - `npm run typecheck`：通过。
   - `npm test -- --runInBand src/services/backup-service.test.ts`：通过（3/3）。
+  - `npm run lint -- src/services/backup-service.ts src/services/backup-service.test.ts`：通过（项目现存 28 条 warning，无新增 error）。
+
+### 2. 书签恢复静默失败后仍返回成功（已完成）
+- 修复文件：
+  - `src/services/backup-service.ts`
+  - `src/services/backup-service.test.ts`
+- 实现说明：
+  - 恢复时删除旧书签不再忽略返回值；`removeBookmarkTree` 返回 `success:false` 会立即抛错并终止恢复。
+  - 递归创建流程不再“失败后 continue”；`createFolder/createBookmark` 失败会抛错并终止恢复。
+  - folder 创建成功但缺少 `data.id` 也视为失败，避免后续写入到无效父节点。
+- 验证与测试（2026-02-16）：
+  - `npm run typecheck`：通过。
+  - `npm test -- --runInBand src/services/backup-service.test.ts`：通过（5/5，新增“删除失败中断”“创建失败中断”）。
   - `npm run lint -- src/services/backup-service.ts src/services/backup-service.test.ts`：通过（项目现存 28 条 warning，无新增 error）。

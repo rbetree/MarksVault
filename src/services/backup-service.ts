@@ -625,9 +625,8 @@ class BackupService {
                 title: item.title
               });
 
-              if (!folderResult.success) {
-                console.error(`创建文件夹 ${item.title} 失败:`, folderResult.error);
-                continue;
+              if (!folderResult.success || !folderResult.data?.id) {
+                throw new Error(`创建文件夹失败: ${item.title} (${folderResult.error || '未知错误'})`);
               }
 
               // 递归创建子书签
@@ -636,15 +635,20 @@ class BackupService {
               }
             } else if (item.url) {
               // 创建书签
-              await bookmarkService.createBookmark({
+              const bookmarkResult = await bookmarkService.createBookmark({
                 parentId,
                 title: item.title,
                 url: item.url
               });
+
+              if (!bookmarkResult.success) {
+                throw new Error(`创建书签失败: ${item.title} (${bookmarkResult.error || '未知错误'})`);
+              }
             }
           } catch (itemError) {
-            console.error(`处理书签项 ${item.title} 时出错:`, itemError);
-            // 继续处理下一项
+            throw new Error(
+              `处理书签项 ${item.title} 时失败: ${itemError instanceof Error ? itemError.message : String(itemError)}`
+            );
           }
         }
       };
@@ -653,7 +657,10 @@ class BackupService {
       // 先移除现有书签
       try {
         for (const child of bookmarkBar.children || []) {
-          await bookmarkService.removeBookmarkTree(child.id);
+          const removeResult = await bookmarkService.removeBookmarkTree(child.id);
+          if (!removeResult.success) {
+            throw new Error(`删除现有书签失败: ${child.title || child.id} (${removeResult.error || '未知错误'})`);
+          }
         }
         console.log('成功清除现有书签');
 
