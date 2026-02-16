@@ -6,7 +6,7 @@
 1. [x] `[Critical] 默认“恢复最新备份”路径与实际备份产物不一致`
 2. [x] `[Critical] 书签恢复流程存在“静默失败后仍返回成功”的数据一致性问题`
 3. [x] `[High] organize 任务的 delete/rename/tag 分支同样忽略底层失败结果`
-4. [ ] `[High] 多处硬编码 Chrome 书签 ID（"0"/"1"），与 Firefox 结构不兼容`
+4. [x] `[High] 多处硬编码 Chrome 书签 ID（"0"/"1"），与 Firefox 结构不兼容`
 5. [ ] `[High] 后台服务初始化失败会被吞掉并缓存，当前 SW 生命周期内不会重试`
 6. [ ] `[High] task 持久化成功状态可能被误报`
 7. [ ] `[Medium] 通用存储读取会把合法 falsy 值误判为 null`
@@ -108,3 +108,19 @@
   - `npm run typecheck`：通过。
   - `npm test -- --runInBand src/services/organize-service.test.ts`：通过（3/3，覆盖 delete/rename/tag 失败分支）。
   - `npm run lint -- src/services/organize-service.ts src/services/organize-service.test.ts`：通过（项目现存 28 条 warning，无新增 error）。
+
+### 4. 硬编码书签根/书签栏 ID 导致 Firefox 不兼容（已完成）
+- 修复文件：
+  - `src/utils/bookmark-service.ts`
+  - `src/popup/components/BookmarksView/BookmarksView.tsx`
+  - `src/services/backup-service.ts`
+  - `src/services/backup-service.test.ts`
+- 实现说明：
+  - 新增统一“书签栏识别”能力：`isBookmarkBarNode` / `findBookmarkBar`，支持 Chrome/Edge 的 `id=1` 与 Firefox `toolbar...` 前缀。
+  - `BookmarksView` 初始化改为“先轻量 `getChildren('0')`，失败回退 `getBookmarkRoots`”，避免只依赖 Chrome 根 ID。
+  - 路径解析新增可配置根节点终止条件（`bookmarkRootNodeId`），兼容 Firefox 根节点 ID。
+  - 书签恢复与 HTML 生成均复用统一识别逻辑，移除重复硬编码判断。
+- 验证与测试（2026-02-16）：
+  - `npm run typecheck`：通过。
+  - `npm test -- --runInBand src/services/backup-service.test.ts`：通过（6/6，新增 Firefox `toolbar` 场景）。
+  - `npm run lint -- src/utils/bookmark-service.ts src/services/backup-service.ts src/services/backup-service.test.ts src/popup/components/BookmarksView/BookmarksView.tsx`：通过（项目现存 28 条 warning，无新增 error）。

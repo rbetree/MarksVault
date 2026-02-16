@@ -21,6 +21,42 @@ export interface BookmarkResult {
   error?: string;
 }
 
+const BOOKMARK_BAR_TITLES = new Set([
+  '书签栏',
+  '書籤列',
+  'bookmarks bar',
+  'bookmark bar',
+  'bookmarks toolbar',
+  'bookmark toolbar',
+]);
+
+/**
+ * 判断节点是否可能为“书签栏”
+ * 兼容 Chrome/Edge 固定 ID 与 Firefox toolbar 前缀。
+ */
+export const isBookmarkBarNode = (item: Pick<BookmarkItem, 'id' | 'title'>): boolean => {
+  const normalizedId = item.id.toLowerCase();
+  if (normalizedId === '1' || normalizedId.startsWith('toolbar')) {
+    return true;
+  }
+
+  const normalizedTitle = item.title.trim().toLowerCase();
+  return BOOKMARK_BAR_TITLES.has(normalizedTitle);
+};
+
+/**
+ * 在根节点列表中找到最可能的“书签栏”节点。
+ */
+export const findBookmarkBar = (roots: BookmarkItem[]): BookmarkItem | undefined => {
+  if (!Array.isArray(roots) || roots.length === 0) {
+    return undefined;
+  }
+
+  return roots.find(root => isBookmarkBarNode(root))
+    ?? roots.find(root => root.isFolder)
+    ?? roots[0];
+};
+
 class BookmarkService {
   // 搜索索引缓存：避免每次输入都全量拉取书签树。
   private readonly SEARCH_INDEX_TTL = 20 * 1000; // 20 秒

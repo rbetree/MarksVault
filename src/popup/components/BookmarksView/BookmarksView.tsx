@@ -5,7 +5,7 @@ import BookmarkList from './BookmarkList';
 import PageLayout from '../shared/PageLayout';
 import { BookmarksHeader } from './BookmarksHeader';
 import { ToastRef } from '../shared/Toast';
-import bookmarkService, { BookmarkItem, BookmarkResult } from '../../../utils/bookmark-service';
+import bookmarkService, { BookmarkItem, BookmarkResult, findBookmarkBar } from '../../../utils/bookmark-service';
 import storageService, { UserSettings } from '../../../utils/storage-service';
 
 interface BookmarksViewProps {
@@ -25,6 +25,7 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
   const [folderStack, setFolderStack] = useState<BookmarkItem[]>([]);
   const [viewType, setViewType] = useState<'list' | 'grid'>('grid'); // 默认使用网格视图
   const [bookmarkBarId, setBookmarkBarId] = useState<string | null>(null); // 添加书签栏ID状态变量
+  const [bookmarkRootNodeId, setBookmarkRootNodeId] = useState<string | null>(null); // 根节点ID（Chrome为0，Firefox通常为root开头）
   const bookmarksMap = useRef<Map<string, BookmarkItem>>(new Map());
   const fullIndexBuiltRef = useRef(false);
   const isBuildingFullIndexRef = useRef(false);
@@ -32,6 +33,7 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
   // 事件回调需要拿到最新状态，避免闭包过期
   const currentFolderIdRef = useRef<string | null>(null);
   const bookmarkBarIdRef = useRef<string | null>(null);
+  const bookmarkRootNodeIdRef = useRef<string | null>(null);
   const folderStackRef = useRef<BookmarkItem[]>([]);
   const currentFolderItemsRef = useRef<BookmarkItem[]>([]);
   const isSearchingRef = useRef(false);
@@ -65,6 +67,10 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
   }, [bookmarkBarId]);
 
   useEffect(() => {
+    bookmarkRootNodeIdRef.current = bookmarkRootNodeId;
+  }, [bookmarkRootNodeId]);
+
+  useEffect(() => {
     folderStackRef.current = folderStack;
   }, [folderStack]);
 
@@ -86,21 +92,37 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
     const initQuickStart = async () => {
       setIsLoading(true);
       try {
-        const rootsResult = await bookmarkService.getFolderChildren('0');
+        // 优先走轻量 getChildren("0")（Chrome/Edge），失败时回退到 getTree 根解析（Firefox 兼容）。
+        let rootsResult = await bookmarkService.getFolderChildren('0');
+        let rootNodeId: string | null = '0';
+        if (!rootsResult.success || !Array.isArray(rootsResult.data) || rootsResult.data.length === 0) {
+          rootsResult = await bookmarkService.getBookmarkRoots();
+          rootNodeId = null;
+        }
+
         if (!rootsResult.success || !Array.isArray(rootsResult.data) || rootsResult.data.length === 0) {
           toastRef.current?.showToast(rootsResult.error || '获取书签根目录失败', 'error');
           setIsLoading(false);
           return;
         }
 
-        // 根节点 children 通常为："1"(书签栏) / "2"(其他书签) / "3"(移动设备书签)
         const roots = rootsResult.data as BookmarkItem[];
+        if (!rootNodeId) {
+          rootNodeId = roots.find(root => typeof root.parentId === 'string')?.parentId || null;
+        }
         // 先把根节点信息写入索引（此时仍是“部分索引”，不会阻止后续空闲期构建全量索引）
         roots.forEach(root => {
           upsertBookmarkInMap(root);
         });
-        const bookmarkBar = roots.find(r => r.id === '1') ?? roots[0];
+        const bookmarkBar = findBookmarkBar(roots);
+        if (!bookmarkBar) {
+          toastRef.current?.showToast('找不到书签栏目录', 'error');
+          setIsLoading(false);
+          return;
+        }
+
         if (!isUnmountedRef.current) {
+          setBookmarkRootNodeId(rootNodeId);
           setBookmarkBarId(bookmarkBar.id);
           // currentFolderId 仍用 null 表示“根视图”，实际展示为 bookmarkBarId 的 children
           void restoreLastFolder(bookmarkBar.id);
@@ -385,7 +407,7 @@ const BookmarksView: React.FC<BookmarksViewProps> = ({ toastRef }) => {
 
       if (node.title) titles.push(node.title);
       currentId = node.parentId;
-      if (!currentId || currentId === '0') break;
+      if (!currentId || currentId === '0' || currentId === bookmarkRootNodeIdRef.current) break;
     }
 
     const path = titles.reverse().join(' / ');

@@ -1,6 +1,6 @@
 import { BookmarkBackup, BackupResult, BackupStatus } from '../types/backup';
 import { GitHubCredentials } from '../utils/storage-service';
-import { BookmarkItem } from '../utils/bookmark-service';
+import { BookmarkItem, findBookmarkBar, isBookmarkBarNode } from '../utils/bookmark-service';
 import bookmarkService from '../utils/bookmark-service';
 import githubService from './github-service';
 import storageService from '../utils/storage-service';
@@ -543,17 +543,8 @@ class BackupService {
       const roots = rootsResult.data;
       console.log('浏览器书签根:', JSON.stringify(roots.map((r: BookmarkItem) => ({ id: r.id, title: r.title }))));
 
-      // 找到书签栏 - 优先使用ID为1的(Chrome书签栏)
-      let bookmarkBar = roots.find((root: BookmarkItem) => root.id === '1');
-
-      // 如果通过ID找不到，尝试通过标题找(可能有本地化差异)
-      if (!bookmarkBar) {
-        const possibleTitles = ['书签栏', 'Bookmarks Bar', 'Bookmarks bar', 'Bookmark Bar'];
-        bookmarkBar = roots.find((root: BookmarkItem) =>
-          possibleTitles.includes(root.title)
-        );
-      }
-
+      // 兼容 Chrome/Edge/Firefox：按 ID + 标题双策略识别书签栏。
+      const bookmarkBar = findBookmarkBar(roots);
       if (!bookmarkBar) {
         throw new Error('找不到书签栏，无法恢复书签');
       }
@@ -565,9 +556,9 @@ class BackupService {
       let bookmarksToRestore: BookmarkItem[] = [];
 
       // 尝试方法1: 查找标题为"书签栏"的项
-      const bookmarkBarInBackup = backupData.bookmarks
-        .flatMap((root: BookmarkItem) => root.children || [])
-        .find((item: BookmarkItem) => ['书签栏', 'Bookmarks Bar', 'Bookmarks bar', 'Bookmark Bar'].includes(item.title));
+      const bookmarkBarInBackup = findBookmarkBar(
+        backupData.bookmarks.flatMap((root: BookmarkItem) => root.children || [])
+      );
 
       if (bookmarkBarInBackup && bookmarkBarInBackup.children) {
         console.log('方法1: 从备份中找到书签栏:', bookmarkBarInBackup.title);
@@ -1067,13 +1058,7 @@ class BackupService {
 
     // 判断是否为书签栏文件夹
     const isBookmarkBar = (item: BookmarkItem): boolean => {
-      // 通过ID判断（Chrome/Edge书签栏ID为'1'）
-      if (item.id === '1') {
-        return true;
-      }
-      // 通过标题判断
-      const bookmarkBarTitles = ['書籤列', '书签栏', 'Bookmarks Bar', 'Bookmarks bar', 'Bookmark Bar'];
-      return bookmarkBarTitles.includes(item.title);
+      return isBookmarkBarNode(item);
     };
 
     // 递归生成书签HTML（异步）

@@ -21,6 +21,28 @@ jest.mock('../utils/storage-service', () => ({
 
 jest.mock('../utils/bookmark-service', () => ({
   __esModule: true,
+  isBookmarkBarNode: jest.fn((item: { id: string; title: string }) => {
+    const normalizedId = item.id.toLowerCase();
+    if (normalizedId === '1' || normalizedId.startsWith('toolbar')) {
+      return true;
+    }
+    const normalizedTitle = item.title.trim().toLowerCase();
+    return ['书签栏', '書籤列', 'bookmarks bar', 'bookmark bar', 'bookmarks toolbar', 'bookmark toolbar']
+      .includes(normalizedTitle);
+  }),
+  findBookmarkBar: jest.fn((roots: Array<{ id: string; title: string; isFolder?: boolean }>) => {
+    if (!Array.isArray(roots) || roots.length === 0) {
+      return undefined;
+    }
+    return roots.find(root => {
+      const normalizedId = root.id.toLowerCase();
+      const normalizedTitle = root.title.trim().toLowerCase();
+      return normalizedId === '1'
+        || normalizedId.startsWith('toolbar')
+        || ['书签栏', '書籤列', 'bookmarks bar', 'bookmark bar', 'bookmarks toolbar', 'bookmark toolbar']
+          .includes(normalizedTitle);
+    }) ?? roots.find(root => root.isFolder) ?? roots[0];
+  }),
   default: {
     getBookmarkRoots: jest.fn(),
     removeBookmarkTree: jest.fn(),
@@ -189,5 +211,64 @@ describe('backup-service 恢复路径选择', () => {
 
     expect(result.success).toBe(false);
     expect(result.error).toContain('创建书签失败');
+  });
+
+  test('Firefox 书签栏ID（toolbar前缀）应能被正确识别', async () => {
+    const firefoxBackupContent = JSON.stringify({
+      timestamp: 1735600000000,
+      metadata: {
+        totalBookmarks: 1,
+      },
+      bookmarks: [
+        {
+          id: 'root________',
+          title: '',
+          isFolder: true,
+          children: [
+            {
+              id: 'toolbar_____',
+              title: 'Bookmarks Toolbar',
+              isFolder: true,
+              children: [
+                {
+                  id: '2',
+                  title: 'Example',
+                  url: 'https://example.com',
+                  isFolder: false,
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    mockedGitHub.getRepositoryFiles.mockResolvedValue([
+      {
+        name: 'bookmarks_backup_20250202020202.json',
+        path: 'bookmarks/bookmarks_backup_20250202020202.json',
+      } as any,
+    ]);
+    mockedGitHub.getFileContent.mockResolvedValue({ content: firefoxBackupContent } as any);
+    mockedBookmark.getBookmarkRoots.mockResolvedValue({
+      success: true,
+      data: [
+        {
+          id: 'toolbar_____',
+          title: 'Bookmarks Toolbar',
+          isFolder: true,
+          children: [],
+        },
+      ],
+    } as any);
+
+    const result = await backupService.restoreFromGitHub(credentials, username);
+
+    expect(result.success).toBe(true);
+    expect(mockedBookmark.createBookmark).toHaveBeenCalledWith({
+      parentId: 'toolbar_____',
+      title: 'Example',
+      url: 'https://example.com',
+    });
   });
 });
