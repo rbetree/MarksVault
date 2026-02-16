@@ -8,7 +8,7 @@
 3. [x] `[High] organize 任务的 delete/rename/tag 分支同样忽略底层失败结果`
 4. [x] `[High] 多处硬编码 Chrome 书签 ID（"0"/"1"），与 Firefox 结构不兼容`
 5. [x] `[High] 后台服务初始化失败会被吞掉并缓存，当前 SW 生命周期内不会重试`
-6. [ ] `[High] task 持久化成功状态可能被误报`
+6. [x] `[High] task 持久化成功状态可能被误报`
 7. [ ] `[Medium] 通用存储读取会把合法 falsy 值误判为 null`
 8. [ ] `[Medium] validate 功能当前是“模拟成功”，不是实际校验`
 9. [ ] `[Medium] 推送 HTML 时逐条串行抓 favicon，容易触发执行超时`
@@ -137,3 +137,15 @@
   - `npm run typecheck`：通过。
   - `npm test -- --runInBand src/entrypoints/background.test.ts`：通过（2/2，覆盖“失败后重试”“并发单次初始化”）。
   - `npm run lint -- src/entrypoints/background.ts src/entrypoints/background.test.ts`：通过（项目现存 28 条 warning，无新增 error）。
+
+### 6. task 持久化成功状态误报（已完成）
+- 修复文件：
+  - `src/services/task-service.ts`
+  - `src/services/task-service.test.ts`
+- 实现说明：
+  - `saveTasks` 改为显式检查 `storageService.setStorageData` 返回值。
+  - 当存储层返回 `success:false` 时，直接向上返回失败与错误信息，不再误报 `success:true`。
+- 验证与测试（2026-02-16）：
+  - `npm run typecheck`：通过。
+  - `npm test -- --runInBand src/services/task-service.test.ts`：通过（2/2，覆盖“失败不误报”“成功返回成功”）。
+  - `npm run lint -- src/services/task-service.ts src/services/task-service.test.ts`：通过（项目现存 28 条 warning，无新增 error）。

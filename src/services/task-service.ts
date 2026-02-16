@@ -683,7 +683,13 @@ class TaskService {
   private async saveTasks(taskStorage: TaskStorage): Promise<StorageResult> {
     try {
       // 直接保存到 chrome.storage，不使用内存缓存
-      await storageService.setStorageData(TASKS_STORAGE_KEY, taskStorage);
+      const saveResult = await storageService.setStorageData(TASKS_STORAGE_KEY, taskStorage);
+      if (!saveResult.success) {
+        return {
+          success: false,
+          error: saveResult.error || '保存任务失败: 存储层返回失败'
+        };
+      }
 
       return {
         success: true
