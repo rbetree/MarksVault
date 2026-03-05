@@ -6,7 +6,6 @@ import IconButton from '@mui/material/IconButton';
 import ClearIcon from '@mui/icons-material/Clear';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ViewToggleButton from './ViewToggleButton';
-import { getInputValueFromEventTarget } from './search-input-utils';
 
 interface BookmarksHeaderProps {
     // Navigation props
@@ -92,7 +91,6 @@ export const BookmarksHeaderActions: React.FC<Omit<BookmarksHeaderProps, 'parent
 }) => {
     const [inputValue, setInputValue] = useState(searchText);
     const isComposingRef = useRef(false);
-    const inputRef = useRef<HTMLInputElement | null>(null);
 
     useEffect(() => {
         if (!isComposingRef.current) {
@@ -104,14 +102,14 @@ export const BookmarksHeaderActions: React.FC<Omit<BookmarksHeaderProps, 'parent
         isComposingRef.current = true;
     };
 
-    const handleCompositionEnd = (e: React.CompositionEvent) => {
+    const handleCompositionEnd = (e: React.CompositionEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         isComposingRef.current = false;
-        const value = getInputValueFromEventTarget(e.target, inputRef.current?.value ?? inputValue);
+        const value = e.currentTarget.value;
         setInputValue(value);
         onSearch(value);
     };
 
-    const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const value = e.target.value;
         const nativeIsComposing = (e.nativeEvent as any)?.isComposing;
 
@@ -142,11 +140,13 @@ export const BookmarksHeaderActions: React.FC<Omit<BookmarksHeaderProps, 'parent
                 }}
                 placeholder="搜索..."
                 value={inputValue}
-                inputRef={inputRef}
                 onChange={handleSearchChange}
-                onCompositionStart={handleCompositionStart}
-                onCompositionEnd={handleCompositionEnd}
                 onBlur={handleSearchBlur}
+                inputProps={{
+                    // 组合输入事件绑定到真实 input，避免 e.target 非输入节点导致取值异常
+                    onCompositionStart: handleCompositionStart,
+                    onCompositionEnd: handleCompositionEnd
+                }}
             />
             {inputValue && (
                 <IconButton sx={{ p: 0.5 }} aria-label="清除" onClick={clearSearch}>
