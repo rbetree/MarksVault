@@ -6,6 +6,7 @@ import { browser } from 'wxt/browser';
 import taskExecutor from '../services/task-executor';
 import taskService from '../services/task-service';
 import triggerService from '../services/trigger-service';
+import { warmupBookmarkFavicons } from '../services/favicon-warmup-service';
 import { createDefaultTaskStorage, EventType } from '../types/task';
 
 /**
@@ -144,62 +145,91 @@ export default defineBackground({
     //   await triggerService.handleEventTrigger(EventType.EXTENSION_CLICKED, { tab });
     // });
 
-    // 监听来自书签选择页面的执行请求
-    browser.runtime.onMessage.addListener(async (message) => {
-      if (message?.type !== 'EXECUTE_SELECTIVE_PUSH') return;
+    // 监听来自页面的消息（Chrome 需要 sendResponse + return true 才能异步响应）
+    browser.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+      if (!message?.type) return;
 
-      if (!await ensureServicesInitializedOrLog('runtime.onMessage:EXECUTE_SELECTIVE_PUSH')) {
-        return { success: false, error: '后台服务尚未准备就绪，请稍后重试' };
-      }
-
-      const taskId = message?.payload?.taskId as unknown;
-      const selections = message?.payload?.selections as unknown;
-
-      try {
-        // 数据校验
-        if (!taskId || typeof taskId !== 'string') {
-          return { success: false, error: '无效的任务ID' };
-        }
-        if (!Array.isArray(selections) || selections.length === 0) {
-          return { success: false, error: '未选择任何书签' };
-        }
-
-        console.log('收到选择性推送请求:', { taskId, selectionsCount: selections.length });
-
-        // 加载任务数据
-        const taskResult = await taskService.getTaskById(taskId);
-        if (!taskResult.success || !taskResult.data) {
-          return { success: false, error: '任务不存在' };
-        }
-
-        const task = taskResult.data;
-
-        // 创建带有 selections 的临时任务对象
-        const taskWithSelections = {
-          ...task,
-          action: {
-            ...task.action,
-            options: {
-              ...task.action.options,
-              selections,
-            },
-          },
-        };
-
-        // 使用 executeTaskWithData 执行，直接传入包含 selections 的任务对象
-        const result = await taskExecutor.executeTaskWithData(taskWithSelections);
-
-        if (result.success) return { success: true };
-
-        console.error('选择性推送失败:', result.error);
-        return { success: false, error: result.error };
-      } catch (error) {
-        console.error('执行选择性推送时出错:', error);
-        return {
+      const respondError = (error: unknown) => {
+        sendResponse({
           success: false,
-          error: error instanceof Error ? error.message : '未知错误',
-        };
+          error: error instanceof Error ? error.message : String(error),
+        });
+      };
+
+      if (message.type === 'EXECUTE_SELECTIVE_PUSH') {
+        void (async () => {
+          if (!await ensureServicesInitializedOrLog('runtime.onMessage:EXECUTE_SELECTIVE_PUSH')) {
+            return { success: false, error: '后台服务尚未准备就绪，请稍后重试' };
+          }
+
+          const taskId = message?.payload?.taskId as unknown;
+          const selections = message?.payload?.selections as unknown;
+
+          // 数据校验
+          if (!taskId || typeof taskId !== 'string') {
+            return { success: false, error: '无效的任务ID' };
+          }
+          if (!Array.isArray(selections) || selections.length === 0) {
+            return { success: false, error: '未选择任何书签' };
+          }
+
+          console.log('收到选择性推送请求:', { taskId, selectionsCount: selections.length });
+
+          // 加载任务数据
+          const taskResult = await taskService.getTaskById(taskId);
+          if (!taskResult.success || !taskResult.data) {
+            return { success: false, error: '任务不存在' };
+          }
+
+          const task = taskResult.data;
+
+          // 创建带有 selections 的临时任务对象
+          const taskWithSelections = {
+            ...task,
+            action: {
+              ...task.action,
+              options: {
+                ...task.action.options,
+                selections,
+              },
+            },
+          };
+
+          // 使用 executeTaskWithData 执行，直接传入包含 selections 的任务对象
+          const result = await taskExecutor.executeTaskWithData(taskWithSelections);
+
+          if (result.success) return { success: true };
+
+          console.error('选择性推送失败:', result.error);
+          return { success: false, error: result.error };
+        })()
+          .then((response) => sendResponse(response))
+          .catch(respondError);
+
+        return true;
       }
+
+      if (message.type === 'WARMUP_BOOKMARK_FAVICONS') {
+        void (async () => {
+          // 该操作不依赖任务系统，但仍尽量在服务就绪后执行，以保持后台行为一致
+          await ensureServicesInitializedOrLog('runtime.onMessage:WARMUP_BOOKMARK_FAVICONS');
+
+          const scope = message?.payload?.scope as unknown;
+          const scopeValue = scope === 'all' ? 'all' : 'bookmark_bar';
+
+          const result = await warmupBookmarkFavicons({
+            scope: scopeValue,
+          });
+
+          return { success: result.success, data: result, error: result.error };
+        })()
+          .then((response) => sendResponse(response))
+          .catch(respondError);
+
+        return true;
+      }
+
+      return;
     });
   },
 });

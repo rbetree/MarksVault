@@ -54,6 +54,20 @@ const createOnChanged = () => {
   };
 };
 
+const createEvent = () => {
+  const listeners = new Set<any>();
+  return {
+    addListener: (listener: any) => listeners.add(listener),
+    removeListener: (listener: any) => listeners.delete(listener),
+    _emit: (...args: any[]) => {
+      listeners.forEach((fn) => fn(...args));
+    },
+  };
+};
+
+let nextTabId = 1;
+let nextWindowId = 1;
+
 export const browser = {
   runtime: {
     getURL: (path: string) => `chrome-extension://__jest__${path}`,
@@ -64,7 +78,13 @@ export const browser = {
     onChanged: createOnChanged(),
   },
   tabs: {
-    create: async () => undefined,
+    onUpdated: createEvent(),
+    create: async () => ({ id: nextTabId++ }),
+    remove: async () => undefined,
+  },
+  windows: {
+    create: async () => ({ id: nextWindowId++ }),
+    remove: async () => undefined,
   },
   bookmarks: {
     getTree: async () => [],

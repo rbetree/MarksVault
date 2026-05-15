@@ -17,9 +17,9 @@ import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolder';
 import UpdateIcon from '@mui/icons-material/Update';
 import LinkIcon from '@mui/icons-material/Link';
 import { BookmarkItem as BookmarkItemType } from '../../../utils/bookmark-service';
-import { getFaviconUrl } from '../../../utils/favicon-service';
 import { styled } from '@mui/material/styles';
 import { useBookmarkDragDrop } from './useBookmarkDragDrop';
+import { useFavicon } from './useFavicon';
 
 // 添加可拖放的文件夹样式
 const DropTargetFolder = styled(ListItemButton)(({ theme }) => ({
@@ -111,11 +111,14 @@ const BookmarkItem: React.FC<BookmarkItemProps> = ({
   onMoveBookmark
 }) => {
   const [menuAnchorPosition, setMenuAnchorPosition] = useState<{ top: number; left: number } | null>(null);
-  const [iconUrl, setIconUrl] = useState<string>('');
-  const [iconError, setIconError] = useState<boolean>(false);
   const isMenuOpen = Boolean(menuAnchorPosition);
   const [pathTitle, setPathTitle] = useState<string>('');
   const resolvingPathRef = useRef(false);
+
+  const { iconUrl, iconError, handleIconError } = useFavicon({
+    url: bookmark.url,
+    isFolder: bookmark.isFolder,
+  });
 
   // 文件夹子项数量：优先使用已加载树上的 children.length（禁止在 item 级别额外打 API）
   const folderItemCount = bookmark.isFolder && Array.isArray(bookmark.children)
@@ -161,14 +164,6 @@ const BookmarkItem: React.FC<BookmarkItemProps> = ({
     index,
     onMoveBookmark
   });
-
-  useEffect(() => {
-    if (!bookmark.isFolder && bookmark.url) {
-      setIconUrl(getFaviconUrl(bookmark.url));
-      setIconError(false);
-    }
-  }, [bookmark.url, bookmark.isFolder]);
-
 
   const handleContextMenu = (event: React.MouseEvent) => {
     event.preventDefault();
@@ -246,10 +241,6 @@ const BookmarkItem: React.FC<BookmarkItemProps> = ({
     event.stopPropagation();
     handleMenuClose();
     onUpdateToCurrentUrl?.(bookmark.id);
-  };
-
-  const handleIconError = () => {
-    setIconError(true);
   };
 
   return (

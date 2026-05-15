@@ -1,4 +1,30 @@
 import { defineConfig } from 'wxt';
+import fs from 'node:fs';
+import path from 'node:path';
+
+/**
+ * 读取 Chromium 扩展固定 key（用于稳定扩展 ID / 持久化 storage.sync 数据）
+ *
+ * 背景：Chrome/Edge 的 `chrome.storage.sync` 以“扩展 ID”为命名空间。
+ * 如果你每次构建后加载的是不同目录（导致扩展 ID 变化），就会表现为“token 需要重新配置”。
+ *
+ * 用法（二选一）：
+ * 1) 环境变量：MARKSVAULT_EXTENSION_KEY=...
+ * 2) 本地文件（推荐）：build-temp/extension-key.txt（已在 .gitignore 中忽略）
+ */
+const readChromiumExtensionKey = (): string | undefined => {
+  const envKey = (process.env.MARKSVAULT_EXTENSION_KEY || '').trim();
+  if (envKey) return envKey;
+
+  try {
+    const filePath = path.resolve(process.cwd(), 'build-temp', 'extension-key.txt');
+    if (!fs.existsSync(filePath)) return undefined;
+    const value = fs.readFileSync(filePath, 'utf8').trim();
+    return value || undefined;
+  } catch {
+    return undefined;
+  }
+};
 
 export default defineConfig({
   srcDir: 'src',
@@ -40,8 +66,9 @@ export default defineConfig({
   },
   manifest: (env) => {
     const isFirefox = env.browser === 'firefox';
+    const extensionKey = isFirefox ? undefined : readChromiumExtensionKey();
 
-    return {
+    const manifest: any = {
       name: 'MarksVault',
       description: '智能管理、整理和安全备份您的书签数据',
       // Firefox 不支持 Chromium 的 `_favicon` 端点，也不需要 `favicon` 权限，避免 AMO 审核噪音
@@ -71,5 +98,11 @@ export default defineConfig({
             ],
           }),
     };
+
+    if (extensionKey) {
+      manifest.key = extensionKey;
+    }
+
+    return manifest;
   },
 });

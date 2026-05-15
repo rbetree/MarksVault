@@ -1,5 +1,7 @@
 import React from 'react';
 import Box from '@mui/material/Box';
+import Alert from '@mui/material/Alert';
+import Button from '@mui/material/Button';
 import IconButton from '@mui/material/IconButton';
 import Tooltip from '@mui/material/Tooltip';
 import GitHubIcon from '@mui/icons-material/GitHub';
@@ -17,13 +19,17 @@ interface SyncViewProps {
   user: GitHubUser | null;
   onAuth: (credentials: GitHubCredentials) => Promise<void>;
   isLoading: boolean;
+  storedCredentials?: GitHubCredentials | null;
+  errorMessage?: string;
 }
 
 const SyncView: React.FC<SyncViewProps> = ({
   authStatus,
   user,
   onAuth,
-  isLoading
+  isLoading,
+  storedCredentials = null,
+  errorMessage = ''
 }) => {
   // 显示加载指示器
   if (isLoading) {
@@ -60,6 +66,24 @@ const SyncView: React.FC<SyncViewProps> = ({
         <SyncOperations />
       ) : (
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'center', p: 2 }}>
+          {errorMessage ? (
+            <Alert severity="warning" sx={{ mb: 1 }}>
+              {errorMessage}
+            </Alert>
+          ) : null}
+
+          {storedCredentials ? (
+            <Button
+              variant="outlined"
+              size="small"
+              onClick={() => onAuth(storedCredentials)}
+              disabled={authStatus === AuthStatus.AUTHENTICATING}
+              sx={{ mb: 1, textTransform: 'none' }}
+            >
+              使用已保存 Token 重试连接
+            </Button>
+          ) : null}
+
           <GitHubAuth
             onAuth={onAuth}
             authStatus={authStatus}

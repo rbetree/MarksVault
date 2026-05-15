@@ -1,5 +1,17 @@
 import { GitHubCredentials, GitHubUser } from '../types/github';
 
+export class GitHubApiError extends Error {
+  public readonly status: number;
+  public readonly data?: unknown;
+
+  constructor(status: number, message: string, data?: unknown) {
+    super(message);
+    this.name = 'GitHubApiError';
+    this.status = status;
+    this.data = data;
+  }
+}
+
 export class GitHubService {
   private static instance: GitHubService;
   private baseUrl = 'https://api.github.com';
@@ -26,7 +38,14 @@ export class GitHubService {
       });
       
       if (!response.ok) {
-        throw new Error(`GitHub API error: ${response.status}`);
+        let errorData: unknown = undefined;
+        try {
+          errorData = await response.json();
+        } catch {
+          // ignore
+        }
+
+        throw new GitHubApiError(response.status, `GitHub API error: ${response.status}`, errorData);
       }
       
       const userData = await response.json();
@@ -351,4 +370,4 @@ export class GitHubService {
   }
 }
 
-export default GitHubService.getInstance(); 
+export default GitHubService.getInstance();

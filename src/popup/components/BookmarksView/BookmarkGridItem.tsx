@@ -18,8 +18,8 @@ import UpdateIcon from '@mui/icons-material/Update';
 import LinkIcon from '@mui/icons-material/Link';
 import { styled } from '@mui/material/styles';
 import { BookmarkItem as BookmarkItemType } from '../../../utils/bookmark-service';
-import { getFaviconUrl } from '../../../utils/favicon-service';
 import { useBookmarkDragDrop } from './useBookmarkDragDrop';
+import { useFavicon } from './useFavicon';
 
 // 样式化组件
 const GridItemContainer = styled(Box)(({ theme }) => ({
@@ -127,16 +127,14 @@ const BookmarkGridItem: React.FC<BookmarkGridItemProps> = ({
   onMoveBookmark
 }) => {
   const [menuAnchorPosition, setMenuAnchorPosition] = useState<{ top: number; left: number } | null>(null);
-  const [iconUrl, setIconUrl] = useState<string>('');
-  const [iconError, setIconError] = useState<boolean>(false);
   const isMenuOpen = Boolean(menuAnchorPosition);
   const [pathTitle, setPathTitle] = useState<string>('');
   const resolvingPathRef = useRef(false);
 
-  // 文件夹子项数量：优先使用已加载树上的 children.length（禁止在 item 级别额外打 API）
-  const folderItemCount = bookmark.isFolder && Array.isArray(bookmark.children)
-    ? bookmark.children.length
-    : null;
+  const { iconUrl, iconError, handleIconError } = useFavicon({
+    url: bookmark.url,
+    isFolder: bookmark.isFolder,
+  });
 
   // 搜索态：hover 时懒计算路径并写入 title tooltip
   useEffect(() => {
@@ -177,15 +175,6 @@ const BookmarkGridItem: React.FC<BookmarkGridItemProps> = ({
     index,
     onMoveBookmark
   });
-
-  // 加载网站图标
-  useEffect(() => {
-    if (!bookmark.isFolder && bookmark.url) {
-      setIconUrl(getFaviconUrl(bookmark.url));
-      setIconError(false);
-    }
-  }, [bookmark.url, bookmark.isFolder]);
-
 
   const handleContextMenu = (event: React.MouseEvent) => {
     event.preventDefault();
@@ -262,11 +251,6 @@ const BookmarkGridItem: React.FC<BookmarkGridItemProps> = ({
     event.stopPropagation();
     handleMenuClose();
     onUpdateToCurrentUrl?.(bookmark.id);
-  };
-
-  // 处理图标加载失败
-  const handleIconError = () => {
-    setIconError(true);
   };
 
   return (

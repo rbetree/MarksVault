@@ -36,8 +36,10 @@ export const getFaviconUrl = (url: string): string => {
     // Firefox 不支持该端点，直接回退到 Google favicon 服务
     const isFirefox = typeof navigator !== 'undefined' && /Firefox/i.test(navigator.userAgent);
     if (!isFirefox) {
-      const baseUrl = browser.runtime.getURL('/');
-      return `${baseUrl}_favicon/?pageUrl=${encodeURIComponent(url)}&size=32`;
+      // 注意：`runtime.getURL` 的入参应为相对路径，避免传入 '/' 导致部分环境出现双斜杠（`//`）。
+      const baseUrl = browser.runtime.getURL('');
+      const baseWithSlash = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+      return `${baseWithSlash}_favicon/?pageUrl=${encodeURIComponent(url)}&size=32`;
     }
 
     // Firefox：使用 Google favicon 服务（图片加载失败时 UI 会自动回退到默认图标）
@@ -63,7 +65,8 @@ export const getFaviconUrl = (url: string): string => {
  * @param url 网站URL
  * @returns Promise<string> 返回颜色代码
  */
-export const getWebsiteThemeColor = async (url: string): Promise<string> => {
+export const getWebsiteThemeColor = async (_url: string): Promise<string> => {
+  void _url;
   // 这里可以实现获取网站主题色的逻辑
   // 默认返回一个占位色
   return '#f0f0f0';

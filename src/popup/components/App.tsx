@@ -13,8 +13,9 @@ import SettingsView from './SettingsView/SettingsView';
 import { AuthStatus, GitHubUser } from '../../types/github';
 import { GitHubCredentials } from '../../utils/storage-service';
 import storageService from '../../utils/storage-service';
-import githubService from '../../services/github-service';
+import githubService, { GitHubApiError } from '../../services/github-service';
 import { StyledEngineProvider } from '@mui/material/styles';
+import { FaviconRefreshProvider } from './shared/FaviconRefreshContext';
 
 const App: React.FC = () => {
   const getViewFromHash = (hash: string): NavOption => {
@@ -134,6 +135,8 @@ const App: React.FC = () => {
   const [authStatus, setAuthStatus] = useState<AuthStatus>(AuthStatus.INITIAL);
   const [user, setUser] = useState<GitHubUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [storedCredentials, setStoredCredentials] = useState<GitHubCredentials | null>(null);
+  const [authErrorMessage, setAuthErrorMessage] = useState<string>('');
 
   // 同步 hash 导航（支持页面内跳转/外部 deep link）
   useEffect(() => {
@@ -153,20 +156,40 @@ const App: React.FC = () => {
         const credentialsResult = await storageService.getGitHubCredentials();
 
         if (credentialsResult.success && credentialsResult.data) {
+          const creds = credentialsResult.data as GitHubCredentials;
+          setStoredCredentials(creds);
           try {
-            const userData = await githubService.validateCredentials(credentialsResult.data);
+            const userData = await githubService.validateCredentials(creds);
             setUser(userData);
             setAuthStatus(AuthStatus.AUTHENTICATED);
+            setAuthErrorMessage('');
           } catch (error) {
-            console.error('Stored credentials are invalid:', error);
-            setAuthStatus(AuthStatus.INITIAL);
-            await storageService.clearGitHubCredentials();
+            const isInvalidToken =
+              (error instanceof GitHubApiError && error.status === 401)
+              || (typeof (error as any)?.status === 'number' && (error as any).status === 401)
+              || (error instanceof Error && error.message.includes('GitHub API error: 401'));
+
+            if (isInvalidToken) {
+              console.error('Stored credentials are invalid:', error);
+              setAuthStatus(AuthStatus.INITIAL);
+              setAuthErrorMessage('GitHub 凭据无效或已过期，请重新授权');
+              setStoredCredentials(null);
+              await storageService.clearGitHubCredentials();
+              return;
+            }
+
+            // 网络异常 / 限流等：不清空 token，允许用户稍后重试
+            console.warn('Stored credentials validation failed (kept):', error);
+            setAuthStatus(AuthStatus.FAILED);
+            setAuthErrorMessage('无法验证 GitHub 凭据（可能网络异常或限流）。token 已保留，可稍后重试。');
           }
         } else {
+          setStoredCredentials(null);
           setAuthStatus(AuthStatus.INITIAL);
         }
       } catch (error) {
         console.error('Error checking auth status:', error);
+        setStoredCredentials(null);
         setAuthStatus(AuthStatus.INITIAL);
       } finally {
         setIsLoading(false);
@@ -179,12 +202,14 @@ const App: React.FC = () => {
   // 处理认证
   const handleAuth = async (credentials: GitHubCredentials) => {
     setAuthStatus(AuthStatus.AUTHENTICATING);
+    setAuthErrorMessage('');
 
     try {
       const userData = await githubService.validateCredentials(credentials);
 
       // 存储有效的凭据
       await storageService.saveGitHubCredentials(credentials);
+      setStoredCredentials(credentials);
 
       setUser(userData);
       setAuthStatus(AuthStatus.AUTHENTICATED);
@@ -193,6 +218,17 @@ const App: React.FC = () => {
     } catch (error) {
       console.error('Authentication failed:', error);
       setAuthStatus(AuthStatus.FAILED);
+      if (error instanceof GitHubApiError) {
+        if (error.status === 401) {
+          setAuthErrorMessage('GitHub Token 无效（401），请重新创建并粘贴');
+        } else if (error.status === 403) {
+          setAuthErrorMessage('GitHub 拒绝访问（403），可能触发限流或权限不足');
+        } else {
+          setAuthErrorMessage(`GitHub 认证失败（${error.status}）`);
+        }
+      } else {
+        setAuthErrorMessage(error instanceof Error ? error.message : 'GitHub 认证失败');
+      }
     }
   };
 
@@ -201,7 +237,9 @@ const App: React.FC = () => {
     try {
       await storageService.clearGitHubCredentials();
       setUser(null);
+      setStoredCredentials(null);
       setAuthStatus(AuthStatus.INITIAL);
+      setAuthErrorMessage('');
       toastRef?.current?.showToast('已断开GitHub连接', 'info');
     } catch (error) {
       console.error('Logout failed:', error);
@@ -231,6 +269,8 @@ const App: React.FC = () => {
             user={user}
             onAuth={handleAuth}
             isLoading={isLoading}
+            storedCredentials={storedCredentials}
+            errorMessage={authErrorMessage}
           />
         );
       case 'settings':
@@ -249,44 +289,46 @@ const App: React.FC = () => {
 
   return (
     <StyledEngineProvider injectFirst>
-      <ErrorBoundary>
-        <Box
-          sx={{
-            display: 'flex',
-            flexDirection: 'column',
-            height: '100vh',
-            width: '100%',
-            overflow: 'hidden',
-          }}
-        >
-          <Header
-            user={user}
-            onLogout={handleLogout}
-          />
-
-          <Container
-            disableGutters
-            maxWidth={false}
+      <FaviconRefreshProvider>
+        <ErrorBoundary>
+          <Box
             sx={{
-              flexGrow: 1,
-              overflow: 'auto', // 统一所有页面的滚动行为
               display: 'flex',
               flexDirection: 'column',
-              pb: 7, // 为所有页面添加底部导航栏的高度间距
-              px: 0, // 由各页面布局组件控制内边距（确保顶部栏贴边）
+              height: '100vh',
+              width: '100%',
+              overflow: 'hidden',
             }}
           >
-            {renderContent()}
-          </Container>
+            <Header
+              user={user}
+              onLogout={handleLogout}
+            />
 
-          <AppBottomNavigation
-            value={currentView}
-            onChange={handleNavChange}
-          />
+            <Container
+              disableGutters
+              maxWidth={false}
+              sx={{
+                flexGrow: 1,
+                overflow: 'auto', // 统一所有页面的滚动行为
+                display: 'flex',
+                flexDirection: 'column',
+                pb: 7, // 为所有页面添加底部导航栏的高度间距
+                px: 0, // 由各页面布局组件控制内边距（确保顶部栏贴边）
+              }}
+            >
+              {renderContent()}
+            </Container>
 
-          <Toast ref={toastRef} />
-        </Box>
-      </ErrorBoundary>
+            <AppBottomNavigation
+              value={currentView}
+              onChange={handleNavChange}
+            />
+
+            <Toast ref={toastRef} />
+          </Box>
+        </ErrorBoundary>
+      </FaviconRefreshProvider>
     </StyledEngineProvider>
   );
 };

@@ -15,6 +15,7 @@
     "zip:edge": "wxt zip -b edge",
     "zip:all": "npm run zip && npm run zip:firefox && npm run zip:edge",
     "clean": "wxt clean",
+    "setup:extkey": "node scripts/setup-extension-key.mjs",
     "prepare": "wxt prepare",
     "postinstall": "wxt prepare",
     "typecheck": "tsc -p tsconfig.json --noEmit",
