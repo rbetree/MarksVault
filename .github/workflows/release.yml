@@ -56,7 +56,8 @@ jobs:
           echo "Package.json version: ${{ env.PACKAGE_VERSION }}"
           echo "Release version: ${{ env.VERSION }}"
           if [ "$TAG_VERSION_NO_V" != "${{ env.PACKAGE_VERSION }}" ]; then
-            echo "Warning: Release version does not match version in package.json"
+            echo "::error::Release version ${{ env.VERSION }} does not match package.json ${{ env.PACKAGE_VERSION }}"
+            exit 1
           fi
 
       - name: Build & Zip Extensions
