@@ -8,6 +8,7 @@
 
 # 笔记或参考
 /docs
+docs-myself/
 
 # 开发工具文件
 /.idea
