@@ -7,7 +7,9 @@
 .wxt/
 
 # 笔记或参考
-/docs
+/docs/*
+!/docs/agents/
+!/docs/agents/**
 docs-myself/
 
 # 开发工具文件
@@ -20,7 +22,6 @@ docs-myself/
 .cursorindexingignore
 .spec-workflow/
 .claude/
-CLAUDE.md
 paseo.json
 
 # 系统文件
@@ -51,7 +52,6 @@ store-packages/
 *.pem
 store-screenshots-raw/
 build-temp/
-AGENTS.md
 /menav
 /.serena
 /eabookmark
