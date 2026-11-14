@@ -9,7 +9,6 @@ import IconButton from '@mui/material/IconButton';
 import LogoutIcon from '@mui/icons-material/Logout';
 import Tooltip from '@mui/material/Tooltip';
 import Badge from '@mui/material/Badge';
-import VerifiedIcon from '@mui/icons-material/Verified';
 import SystemUpdateAltIcon from '@mui/icons-material/SystemUpdateAlt';
 import CodeIcon from '@mui/icons-material/Code';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';

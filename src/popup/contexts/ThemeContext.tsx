@@ -25,8 +25,6 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
   const [themeColor, setThemeColor] = useState<string>('#667B9D');
   // 根据颜色创建暗色主题
   const [theme, setTheme] = useState<Theme>(createAppTheme(themeColor));
-  // 加载状态
-  const [loading, setLoading] = useState(true);
 
   // 主题颜色变更函数
   const changeThemeColor = async (color: string) => {
@@ -42,7 +40,6 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
   // 组件挂载时从存储加载主题设置
   useEffect(() => {
     const loadThemeSettings = async () => {
-      setLoading(true);
       try {
         const result = await storageService.getSettings();
 
@@ -56,8 +53,6 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
         }
       } catch (error) {
         console.error('加载主题设置失败:', error);
-      } finally {
-        setLoading(false);
       }
     };
 

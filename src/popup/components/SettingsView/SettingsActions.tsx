@@ -5,14 +5,12 @@ import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
 import DialogContentText from '@mui/material/DialogContentText';
 import DialogTitle from '@mui/material/DialogTitle';
-import Grid from '@mui/material/Grid';
 import Alert from '@mui/material/Alert';
 import Typography from '@mui/material/Typography';
 import Box from '@mui/material/Box';
 import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
 import ListItemText from '@mui/material/ListItemText';
-import ListItemIcon from '@mui/material/ListItemIcon';
 import Divider from '@mui/material/Divider';
 import Paper from '@mui/material/Paper';
 import CircularProgress from '@mui/material/CircularProgress';
@@ -22,7 +20,6 @@ import FileUploadIcon from '@mui/icons-material/FileUpload';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
 import GitHubIcon from '@mui/icons-material/GitHub';
-import SettingsIcon from '@mui/icons-material/Settings';
 import WarningIcon from '@mui/icons-material/Warning';
 import { ToastRef } from '../shared/Toast';
 import storageService from '../../../utils/storage-service';
@@ -61,7 +58,6 @@ const SettingsActions: React.FC<SettingsActionsProps> = ({ toastRef }) => {
   const [isGitHubRestoring, setIsGitHubRestoring] = useState(false);
   const [gitHubError, setGitHubError] = useState<string | null>(null);
   const [backupStatus, setBackupStatus] = useState<BackupStatus>({});
-  const [credentialsChecked, setCredentialsChecked] = useState(false);
   const [hasGitHubCredentials, setHasGitHubCredentials] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -73,8 +69,7 @@ const SettingsActions: React.FC<SettingsActionsProps> = ({ toastRef }) => {
         // 检查GitHub凭据
         const credentialsResult = await storageService.getGitHubCredentials();
         setHasGitHubCredentials(credentialsResult.success && !!credentialsResult.data);
-        setCredentialsChecked(true);
-        
+
         // 如果有GitHub凭据，获取设置备份状态
         if (credentialsResult.success && credentialsResult.data) {
           const status = await backupService.getSettingsBackupStatus();

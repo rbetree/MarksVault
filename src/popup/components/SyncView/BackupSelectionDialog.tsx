@@ -9,7 +9,6 @@ import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
 import ListItemButton from '@mui/material/ListItemButton';
 import ListItemText from '@mui/material/ListItemText';
-import ListItemSecondaryAction from '@mui/material/ListItemSecondaryAction';
 import IconButton from '@mui/material/IconButton';
 import CircularProgress from '@mui/material/CircularProgress';
 import Typography from '@mui/material/Typography';
@@ -62,7 +61,7 @@ const BackupSelectionDialog: React.FC<BackupSelectionDialogProps> = ({
     const match = filename.match(/bookmarks_backup_(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})\.json/);
     
     if (match) {
-      const [_, year, month, day, hour, minute, second] = match;
+      const [, year, month, day, hour, minute, second] = match;
       const raw = `${year}${month}${day}${hour}${minute}${second}`;
       const formatted = `${year}-${month}-${day} ${hour}:${minute}:${second}`;
       return { formatted, raw };

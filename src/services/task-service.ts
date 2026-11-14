@@ -505,9 +505,6 @@ class TaskService {
           };
         }
 
-        // 记录旧状态，用于检测状态变化
-        const oldStatus = taskStorage.tasks[taskId].status;
-
         // 更新任务数据：剥离传入的 history 字段——执行历史永远以存储中的最新为准。
         // UI 编辑保存会传回含旧历史的完整任务对象，浅合并会回滚已写入的新历史
         const updates = { ...taskData };

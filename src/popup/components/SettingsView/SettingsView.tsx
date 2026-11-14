@@ -35,14 +35,12 @@ const SettingsView: React.FC<SettingsViewProps> = ({ toastRef }) => {
     notifications: defaultNotifications
   });
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [tabValue, setTabValue] = useState(0);
 
   // 从存储服务加载设置
   useEffect(() => {
     const loadSettings = async () => {
       setLoading(true);
-      setError(null);
 
       try {
         const result = await storageService.getSettings();
@@ -61,11 +59,10 @@ const SettingsView: React.FC<SettingsViewProps> = ({ toastRef }) => {
             }
           });
         } else {
-          setError(result.error || '加载设置失败');
+          console.error('加载设置失败:', result.error);
         }
       } catch (error) {
         console.error('加载设置时出错:', error);
-        setError('加载设置时发生错误');
       } finally {
         setLoading(false);
       }
