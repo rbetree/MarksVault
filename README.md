@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="public/assets/images/logo.png" alt="MarksVault" width="120">
+  <img src="assets/images/logo.png" alt="MarksVault" width="120">
   <h1>MarksVault - 书签保险箱</h1>
   <p>
     一个强大的浏览器扩展，用于智能管理、整理和安全备份您的书签数据
@@ -15,7 +15,7 @@
 > 通过将书签数据安全地存储在用户自己的 GitHub 私有仓库中，确保您的数据安全且完全受您控制。
 
 <div align="center">
-  <img src="public/assets/images/marksvault_summary.png" alt="MarksVault Infographic" width="700">
+  <img src="assets/images/marksvault_summary.png" alt="MarksVault Infographic" width="700">
 </div>
 
 ## 👀 UI预览
@@ -24,11 +24,11 @@
   <table>
     <tr>
       <td align="center">
-        <img src="public/assets/images/screenshots/bookmarks-list.png" alt="书签列表视图" width="250">
+        <img src="assets/images/screenshots/bookmarks-list.png" alt="书签列表视图" width="250">
         <p><i>列表视图</i></p>
       </td>
       <td align="center">
-        <img src="public/assets/images/screenshots/bookmarks-grid.png" alt="书签网格视图" width="250">
+        <img src="assets/images/screenshots/bookmarks-grid.png" alt="书签网格视图" width="250">
         <p><i>网格视图</i></p>
       </td>
     </tr>
