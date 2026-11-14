@@ -75,7 +75,7 @@ class StorageService {
 
   // 运行态数据键：不属于用户配置，不应被 importConfig 清空/覆盖
   // - bookmark_write_lease / execution_lease:* / execution_snapshots：任务执行运行态
-  //   （写书签租约、执行租约、执行快照），与 task-executor.ts 中的常量保持一致
+  //   （写书签租约、执行租约、执行快照），与 task-executor-types.ts 中的常量保持一致
   // - pending_restore_backup：书签恢复暂存数据（恢复失败时用于回滚）
   private readonly RUNTIME_STATE_KEYS = ['bookmark_write_lease', 'execution_snapshots', 'pending_restore_backup'];
   private readonly RUNTIME_STATE_KEY_PREFIXES = ['execution_lease:'];
