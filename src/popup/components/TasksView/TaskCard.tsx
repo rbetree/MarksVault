@@ -20,6 +20,8 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import HistoryIcon from '@mui/icons-material/History';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
@@ -28,7 +30,7 @@ import Tooltip from '@mui/material/Tooltip';
 import Chip from '@mui/material/Chip';
 import CircularProgress from '@mui/material/CircularProgress';
 import Alert from '@mui/material/Alert';
-import { Task, TaskStatus, TriggerType, ActionType, BackupAction } from '../../../types/task';
+import { Task, TaskStatus, TriggerType, ActionType, BackupAction, ExecutionOutcome } from '../../../types/task';
 import TaskStatusChip from './TaskStatusChip';
 import TaskTriggerInfo from './TaskTriggerInfo';
 import TaskActionInfo from './TaskActionInfo';
@@ -40,7 +42,13 @@ import {
   dateDisplayStyles,
   combineStyles
 } from '../../styles/TaskStyles';
-import { formatDate, formatRelativeTime, getExecutionResultText } from '../../../utils/date-utils';
+import {
+  formatDate,
+  formatRelativeTime,
+  getExecutionOutcomeLabel,
+  getExecutionResultText,
+  resolveExecutionOutcome
+} from '../../../utils/date-utils';
 
 interface TaskCardProps {
   task: Task;
@@ -164,7 +172,8 @@ const TaskCard: React.FC<TaskCardProps> = ({
     return getExecutionResultText(
       lastExecution.timestamp,
       lastExecution.success,
-      lastExecution.error
+      lastExecution.error,
+      lastExecution.outcome
     );
   };
   
@@ -235,6 +244,28 @@ const TaskCard: React.FC<TaskCardProps> = ({
     return `${(duration / 1000).toFixed(1)}秒`;
   };
 
+  // 执行结果图标：中断与结果不确定使用警示图标，避免与失败混淆
+  const renderExecutionResultIcon = (outcome: ExecutionOutcome) => {
+    if (outcome === ExecutionOutcome.SUCCESS) {
+      return <CheckCircleOutlineIcon sx={{ fontSize: 14 }} />;
+    }
+    if (outcome === ExecutionOutcome.UNCERTAIN) {
+      return <HelpOutlineIcon sx={{ fontSize: 14 }} />;
+    }
+    if (outcome === ExecutionOutcome.INTERRUPTED) {
+      return <WarningAmberIcon sx={{ fontSize: 14 }} />;
+    }
+    return <ErrorOutlineIcon sx={{ fontSize: 14 }} />;
+  };
+
+  const lastExecution = task.history.lastExecution;
+  const lastExecutionOutcome = lastExecution
+    ? resolveExecutionOutcome(lastExecution.success, lastExecution.outcome)
+    : undefined;
+  const lastExecutionLabel = lastExecution
+    ? getExecutionOutcomeLabel(lastExecution.success, lastExecution.outcome)
+    : '';
+
   // 渲染任务执行历史记录
   const renderTaskHistory = () => {
     const { executions } = task.history;
@@ -263,6 +294,11 @@ const TaskCard: React.FC<TaskCardProps> = ({
       <List disablePadding>
         {visibleExecutions.map((execution) => {
           const isExpanded = expandedHistory === execution.timestamp.toString();
+          const outcome = resolveExecutionOutcome(execution.success, execution.outcome);
+          const outcomeLabel = getExecutionOutcomeLabel(execution.success, execution.outcome);
+          const isSuccess = outcome === ExecutionOutcome.SUCCESS;
+          const isIndeterminate = outcome === ExecutionOutcome.INTERRUPTED
+            || outcome === ExecutionOutcome.UNCERTAIN;
           const executionTime = new Date(execution.timestamp);
           const formattedTime = executionTime.toLocaleString('zh-CN', { 
             hour: '2-digit', 
@@ -284,15 +320,12 @@ const TaskCard: React.FC<TaskCardProps> = ({
                   '&:hover': {
                     backgroundColor: 'action.hover'
                   },
-                  color: execution.success ? 'success.main' : 'error.main'
+                  color: isSuccess ? 'success.main' : isIndeterminate ? 'warning.main' : 'error.main'
                 }}
                 onClick={() => handleHistoryItemClick(execution.timestamp)}
               >
                 <ListItemIcon sx={{ minWidth: 24 }}>
-                  {execution.success ? 
-                    <CheckCircleOutlineIcon sx={{ fontSize: 14 }} /> : 
-                    <ErrorOutlineIcon sx={{ fontSize: 14 }} />
-                  }
+                  {renderExecutionResultIcon(outcome)}
                 </ListItemIcon>
                 <ListItemText
                   primary={
@@ -301,7 +334,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
                         {formattedTime}
                       </Typography>
                       <Typography variant="body2" sx={{ fontSize: '10px' }}>
-                        {execution.success ? '成功' : '失败'} 
+                        {outcomeLabel}
                         {execution.duration && ` (${formatDuration(execution.duration)})`}
                       </Typography>
                     </Box>
@@ -367,7 +400,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
           <Typography variant="h6" component="div" sx={{ fontWeight: 500, fontSize: '13px' }}>
             {task.name}
           </Typography>
-          <TaskStatusChip status={task.status} />
+          <TaskStatusChip status={task.status} outcome={task.history.lastExecution?.outcome} />
         </Box>
         
         {task.description && (
@@ -521,12 +554,12 @@ const TaskCard: React.FC<TaskCardProps> = ({
             <Tooltip title={getLastExecutionText()}>
               <span style={{ fontSize: '10px' }}>
                 上次执行: {formatRelativeTime(task.history.lastExecution.timestamp)}
-                {!task.history.lastExecution.success && (
-                  <Chip 
-                    label="失败" 
-                    color="error" 
-                    size="small" 
-                    variant="outlined" 
+                {lastExecutionOutcome && lastExecutionOutcome !== ExecutionOutcome.SUCCESS && (
+                  <Chip
+                    label={lastExecutionLabel}
+                    color={lastExecutionOutcome === ExecutionOutcome.FAILURE ? 'error' : 'warning'}
+                    size="small"
+                    variant="outlined"
                     sx={{ ml: 0.8, height: 14, fontSize: '0.55rem' }}
                   />
                 )}

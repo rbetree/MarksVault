@@ -131,7 +131,7 @@ const OrganizeOperationItem: React.FC<OrganizeOperationItemProps> = ({
               placeholder="例如: [前缀]书签名"
               value={operation.newName || ''}
               onChange={(e) => onUpdate(index, 'newName', e.target.value)}
-              helperText={errors[`operation_${index}_newName`] || "可以使用{name}引用原书签名"}
+              helperText={errors[`operation_${index}_newName`] || "可以使用{title}引用原书签名"}
               error={!!errors[`operation_${index}_newName`]}
               required
             />

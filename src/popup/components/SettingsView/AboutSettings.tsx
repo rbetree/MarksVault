@@ -83,15 +83,15 @@ const AboutSettings: React.FC = () => {
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                     <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center' }}>
                         <Box component="span" sx={{ width: 4, height: 4, borderRadius: '50%', bgcolor: 'primary.main', mr: 1.5 }} />
-                        书签管理与拖得排序
+                        书签管理与拖拽排序
                     </Typography>
                     <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center' }}>
                         <Box component="span" sx={{ width: 4, height: 4, borderRadius: '50%', bgcolor: 'primary.main', mr: 1.5 }} />
-                        自动化任务调度 (备份/清理)
+                        自动化任务调度 (备份/推送/整理)
                     </Typography>
                     <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center' }}>
                         <Box component="span" sx={{ width: 4, height: 4, borderRadius: '50%', bgcolor: 'primary.main', mr: 1.5 }} />
-                        GitHub Gist 云同步
+                        GitHub 仓库备份与同步
                     </Typography>
                 </Box>
             </DashboardCard>

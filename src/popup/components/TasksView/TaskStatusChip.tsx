@@ -1,24 +1,36 @@
 import React from 'react';
 import Chip from '@mui/material/Chip';
-import { TaskStatus } from '../../../types/task';
+import { ExecutionOutcome, TaskStatus } from '../../../types/task';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import PauseCircleOutlineIcon from '@mui/icons-material/PauseCircleOutline';
 import SyncIcon from '@mui/icons-material/Sync';
 import DoneAllIcon from '@mui/icons-material/DoneAll';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 
 interface TaskStatusChipProps {
   status: TaskStatus;
   size?: 'small' | 'medium';
+  /** 最近一次执行结果分类，用于区分失败与执行中断 */
+  outcome?: ExecutionOutcome;
 }
 
 /**
  * 任务状态标签组件
  * 用于显示任务的当前状态，不同状态使用不同的颜色和图标
  */
-const TaskStatusChip: React.FC<TaskStatusChipProps> = ({ status, size = 'small' }) => {
+const TaskStatusChip: React.FC<TaskStatusChipProps> = ({ status, size = 'small', outcome }) => {
   // 根据状态定义标签配置
   const getStatusConfig = () => {
+    // 执行中断会落到 FAILED 状态，但不能与真正的执行失败混为一谈
+    if (status === TaskStatus.FAILED && outcome === ExecutionOutcome.INTERRUPTED) {
+      return {
+        label: '执行中断',
+        color: 'warning' as const,
+        icon: <WarningAmberIcon />
+      };
+    }
+
     switch (status) {
       case TaskStatus.ENABLED:
         return {

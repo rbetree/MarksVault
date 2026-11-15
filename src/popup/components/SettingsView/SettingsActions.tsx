@@ -90,8 +90,11 @@ const SettingsActions: React.FC<SettingsActionsProps> = ({ toastRef }) => {
       const result = await storageService.clearAllData();
       
       if (result.success) {
-        toastRef?.current?.showToast('所有数据已清除', 'success');
+        toastRef?.current?.showToast('所有数据已清除，正在刷新页面...', 'success');
         setShowClearDialog(false);
+        // Header 的登录状态与设置页的凭据/备份状态都在挂载时读取，
+        // 重新加载 popup 才能同步为已清除状态，避免继续显示旧信息
+        setTimeout(() => window.location.reload(), 300);
       } else {
         toastRef?.current?.showToast(`清除数据失败: ${result.error}`, 'error');
       }

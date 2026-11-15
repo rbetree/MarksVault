@@ -74,6 +74,7 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
   const [formTitle, setFormTitle] = useState('');
   const [formUrl, setFormUrl] = useState('');
   const [currentBookmark, setCurrentBookmark] = useState<BookmarkItemType | null>(null);
+  const [createParentId, setCreateParentId] = useState<string | undefined>(undefined);
   const [contextMenuAnchorPosition, setContextMenuAnchorPosition] = useState<{ top: number; left: number } | null>(null);
   const isContextMenuOpen = Boolean(contextMenuAnchorPosition);
 
@@ -81,11 +82,13 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
     setContextMenuAnchorPosition(null);
   };
 
-  const openCreateDialog = (asFolder: boolean) => {
+  // targetParentId 为右键目标：文件夹项使用自身 id，书签项使用其所在文件夹
+  const openCreateDialog = (asFolder: boolean, targetParentId?: string) => {
     closeContextMenu();
     setIsFolder(asFolder);
     setFormTitle('');
     setFormUrl('');
+    setCreateParentId(targetParentId ?? parentFolder?.id);
     setAddDialogOpen(true);
   };
 
@@ -107,14 +110,14 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
     if (isFolder) {
       if (onAddFolder && formTitle.trim()) {
         await onAddFolder({
-          parentId: parentFolder?.id,
+          parentId: createParentId,
           title: formTitle.trim()
         });
       }
     } else {
       if (onAddBookmark && formTitle.trim() && formUrl.trim()) {
         await onAddBookmark({
-          parentId: parentFolder?.id,
+          parentId: createParentId,
           title: formTitle.trim(),
           url: formUrl.trim()
         });
@@ -275,8 +278,14 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
               isSearching={isSearching}
               highlightText={isSearching ? searchText : ''}
               resolveBookmarkPath={resolveBookmarkPath}
-              onCreateBookmark={() => openCreateDialog(false)}
-              onCreateFolder={() => openCreateDialog(true)}
+              onCreateBookmark={() => openCreateDialog(
+                false,
+                bookmark.isFolder ? bookmark.id : (bookmark.parentId ?? parentFolder?.id)
+              )}
+              onCreateFolder={() => openCreateDialog(
+                true,
+                bookmark.isFolder ? bookmark.id : (bookmark.parentId ?? parentFolder?.id)
+              )}
               onUpdateToCurrentUrl={onUpdateToCurrentUrl}
               onEdit={handleEdit}
               onDelete={handleDelete}

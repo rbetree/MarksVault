@@ -12,8 +12,9 @@ import Badge from '@mui/material/Badge';
 import SystemUpdateAltIcon from '@mui/icons-material/SystemUpdateAlt';
 import CodeIcon from '@mui/icons-material/Code';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import { GitHubUser } from '../../../types/github';
-import versionService, { ReleaseInfo } from '../../../services/version-service';
+import versionService, { ReleaseInfo, VersionCheckStatus } from '../../../services/version-service';
 import UpdateDialog from './UpdateDialog';
 
 interface HeaderProps {
@@ -27,7 +28,7 @@ const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
   const [updateInfo, setUpdateInfo] = useState<ReleaseInfo | null>(null);
   const [showUpdateDialog, setShowUpdateDialog] = useState(false);
   const [isDevelopmentMode, setIsDevelopmentMode] = useState(false);
-  const [isUpToDate, setIsUpToDate] = useState(false);
+  const [versionCheckStatus, setVersionCheckStatus] = useState<VersionCheckStatus | null>(null);
   const [currentVersionForDisplay, setCurrentVersionForDisplay] = useState('');
 
   // 检查版本更新
@@ -36,25 +37,24 @@ const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
       try {
         // 尊重冷却时间检查，避免每次打开 popup 都强刷 GitHub API（无鉴权请求易触发限流）
         const result = await versionService.checkForUpdates(false);
-        
+
         // 保存当前版本用于显示
         setCurrentVersionForDisplay(result.currentVersion);
-        
+        setVersionCheckStatus(result.checkStatus);
+
         // 检查是否处于开发模式
-        if (result.isDevelopmentMode) {
+        if (result.checkStatus === 'development') {
           setIsDevelopmentMode(true);
         }
-        
+
         if (result.hasUpdate && result.releaseInfo) {
           // 直接显示更新提示
           setUpdateAvailable(true);
           setUpdateInfo(result.releaseInfo);
-        } else if (!result.hasUpdate && !result.isDevelopmentMode) {
-          // 已为最新版本
-          setIsUpToDate(true);
         }
       } catch (error) {
         console.error('[Header] 版本检查失败:', error);
+        setVersionCheckStatus('failed');
       }
     };
 
@@ -87,8 +87,8 @@ const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
         
         <Box sx={{ flexGrow: 1 }} />
 
-        {/* 已为最新版本徽章 */}
-        {isUpToDate && !isDevelopmentMode && (
+        {/* 已为最新版本徽章：仅在实际检查成功且无更新时显示 */}
+        {versionCheckStatus === 'up-to-date' && !isDevelopmentMode && (
           <Tooltip title={`已为最新版本 v${currentVersionForDisplay}`}>
             <IconButton
               color="inherit"
@@ -96,6 +96,19 @@ const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
               sx={{ mr: 2 }}
             >
               <CheckCircleIcon sx={{ color: 'success.main' }} />
+            </IconButton>
+          </Tooltip>
+        )}
+
+        {/* 版本检查失败徽章：不显示绿色已最新提示，避免误导 */}
+        {versionCheckStatus === 'failed' && !isDevelopmentMode && (
+          <Tooltip title="版本检查失败，暂时无法确认是否有更新">
+            <IconButton
+              color="inherit"
+              size="small"
+              sx={{ mr: 2 }}
+            >
+              <ErrorOutlineIcon sx={{ color: 'warning.main' }} />
             </IconButton>
           </Tooltip>
         )}
