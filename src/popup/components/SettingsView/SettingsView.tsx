@@ -14,18 +14,18 @@ interface SettingsViewProps {
   toastRef?: React.RefObject<ToastRef>;
 }
 
+// 确保初始状态包含所有必要的字段
+const defaultNotifications = {
+  bookmarkChanges: true,
+  syncStatus: true,
+  backupReminders: true
+};
+
 /**
  * 设置页面主组件
  */
 const SettingsView: React.FC<SettingsViewProps> = ({ toastRef }) => {
   const { changeThemeColor } = useThemeContext();
-
-  // 确保初始状态包含所有必要的字段
-  const defaultNotifications = {
-    bookmarkChanges: true,
-    syncStatus: true,
-    backupReminders: true
-  };
 
   const [settings, setSettings] = useState<UserSettings>({
     isDarkMode: true,
@@ -49,15 +49,15 @@ const SettingsView: React.FC<SettingsViewProps> = ({ toastRef }) => {
           // 确保notifications字段总是完整的
           const loadedNotifications = result.data.notifications || {};
 
-          setSettings({
-            ...settings,
+          setSettings(prev => ({
+            ...prev,
             ...result.data,
             notifications: {
               bookmarkChanges: loadedNotifications.bookmarkChanges ?? defaultNotifications.bookmarkChanges,
               syncStatus: loadedNotifications.syncStatus ?? defaultNotifications.syncStatus,
               backupReminders: loadedNotifications.backupReminders ?? defaultNotifications.backupReminders
             }
-          });
+          }));
         } else {
           console.error('加载设置失败:', result.error);
         }

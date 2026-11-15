@@ -206,34 +206,6 @@ class BookmarkService {
   }
 
   /**
-   * 获取文件夹中包含的项目数量
-   * @param folderId 文件夹ID
-   * @returns Promise<BookmarkResult> 包含项目计数的结果
-   */
-  async getFolderItemCount(folderId: string): Promise<BookmarkResult> {
-    try {
-      const subTree = await browser.bookmarks.getSubTree(folderId);
-      if (subTree.length === 0 || !subTree[0].children) {
-        return {
-          success: true,
-          data: 0
-        };
-      }
-      
-      return {
-        success: true,
-        data: subTree[0].children.length
-      };
-    } catch (error) {
-      console.error('获取文件夹项目计数失败:', error);
-      return {
-        success: false,
-        error: '获取文件夹项目计数失败: ' + (error instanceof Error ? error.message : String(error))
-      };
-    }
-  }
-
-  /**
    * 获取文件夹中的所有书签（包括子文件夹中的）
    * @param folderId 文件夹ID
    * @returns Promise<BookmarkResult>

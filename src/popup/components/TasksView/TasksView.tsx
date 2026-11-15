@@ -57,10 +57,6 @@ const TasksView: React.FC<TasksViewProps> = ({
 
     const fetchTasks = async () => {
       try {
-        if (loading) {
-          // 只在初始加载时显示骨架屏
-        }
-
         setError(null);
 
         const result = filterStatus === 'all'

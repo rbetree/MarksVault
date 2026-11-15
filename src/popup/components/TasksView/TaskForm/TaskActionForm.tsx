@@ -166,6 +166,8 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({
     const validation = validateOrganizeOperations((action as OrganizeAction).operations, {});
     setErrors(validation.errors);
     onChange(action, validation.isValid);
+    // 仅在挂载时同步既有任务的校验结果；action/onChange 随父组件重建，纳入依赖会重复触发 onChange
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // 处理操作类型更改

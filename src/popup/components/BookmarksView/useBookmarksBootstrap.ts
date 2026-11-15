@@ -134,7 +134,22 @@ const useBookmarksBootstrap = ({
         indexIdleHandleRef.current = null;
       }
     };
-  }, []);
+  }, [
+    buildFullIndexInBackground,
+    cancelPendingSearch,
+    currentFolderIdRef,
+    enrichItemsFromMap,
+    isUnmountedRef,
+    loadUserSettings,
+    persistViewState,
+    restoreLastFolder,
+    setBookmarkBarId,
+    setBookmarkRootNodeId,
+    setCurrentFolderItems,
+    setIsLoading,
+    toastRef,
+    upsertBookmarkInMap,
+  ]);
 };
 
 export { useBookmarksBootstrap };

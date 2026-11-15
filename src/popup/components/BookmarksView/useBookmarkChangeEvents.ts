@@ -282,8 +282,15 @@ const useBookmarkChangeEvents = ({
       browser.bookmarks.onMoved.removeListener(handleMoved);
     };
   }, [
+    bookmarksMap,
+    bookmarkBarIdRef,
+    currentFolderIdRef,
+    currentFolderItemsRef,
     clearPathCache,
     clearSearch,
+    folderStackRef,
+    isSearchingRef,
+    refreshCurrentFolderChildrenRef,
     setCurrentFolderId,
     setCurrentFolderItems,
     setFolderChildrenInMap,

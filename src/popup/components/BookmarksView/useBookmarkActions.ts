@@ -17,7 +17,7 @@ const useBookmarkActions = ({
   bookmarkBarId,
 }: UseBookmarkActionsOptions) => {
   // 处理结果并显示提示
-  const handleResult = (result: BookmarkResult, successMessage: string) => {
+  const handleResult = useCallback((result: BookmarkResult, successMessage: string) => {
     if (result.success) {
       toastRef.current?.showToast(successMessage, 'success');
       // 由 chrome.bookmarks 事件驱动增量更新（避免全量 reload）
@@ -26,7 +26,7 @@ const useBookmarkActions = ({
       toastRef.current?.showToast(result.error || '操作失败', 'error');
       return false;
     }
-  };
+  }, [toastRef]);
 
   // 添加书签
   const handleAddBookmark = useCallback(async (bookmark: { parentId?: string; title: string; url: string }) => {
@@ -36,7 +36,7 @@ const useBookmarkActions = ({
     }
     const result = await bookmarkService.createBookmark(bookmark);
     handleResult(result, '书签已添加');
-  }, [bookmarkBarId, currentFolderId]);
+  }, [bookmarkBarId, currentFolderId, handleResult]);
 
   // 添加文件夹
   const handleAddFolder = useCallback(async (folder: { parentId?: string; title: string }) => {
@@ -46,13 +46,13 @@ const useBookmarkActions = ({
     }
     const result = await bookmarkService.createFolder(folder);
     handleResult(result, '文件夹已创建');
-  }, [bookmarkBarId, currentFolderId]);
+  }, [bookmarkBarId, currentFolderId, handleResult]);
 
   // 编辑书签
   const handleEditBookmark = useCallback(async (id: string, changes: { title?: string; url?: string }) => {
     const result = await bookmarkService.updateBookmark(id, changes);
     handleResult(result, '书签已更新');
-  }, []);
+  }, [handleResult]);
 
   // 将指定书签的 URL（以及可选的标题）更新为“当前标签页”
   const handleUpdateToCurrentUrl = useCallback(async (bookmarkId: string) => {
@@ -78,19 +78,47 @@ const useBookmarkActions = ({
       console.error('更新为当前网址错误:', error);
       toastRef.current?.showToast('更新书签时发生错误', 'error');
     }
-  }, [toastRef]);
+  }, [handleResult, toastRef]);
 
   // 删除书签
   const handleDeleteBookmark = useCallback(async (id: string) => {
     const result = await bookmarkService.removeBookmark(id);
     handleResult(result, '书签已删除');
-  }, []);
+  }, [handleResult]);
 
   // 删除文件夹
   const handleDeleteFolder = useCallback(async (id: string) => {
     const result = await bookmarkService.removeBookmarkTree(id);
     handleResult(result, '文件夹已删除');
-  }, []);
+  }, [handleResult]);
+
+  // 检查是否是子文件夹的辅助函数
+  const isSubfolder = useCallback(async (folderId: string, possibleSubfolderId: string): Promise<boolean> => {
+    // 如果尝试移动到自己，返回true（不允许）
+    if (folderId === possibleSubfolderId) {
+      return true;
+    }
+
+    // 优先走已构建的 bookmarksMap；若索引未就绪则退化为按需查 parentId 链
+    let currentId: string | null = possibleSubfolderId;
+    for (let depth = 0; depth < 128 && currentId; depth++) {
+      const cached = bookmarksMap.current.get(currentId);
+      const parentIdFromCache = cached?.parentId;
+      if (parentIdFromCache) {
+        if (parentIdFromCache === folderId) return true;
+        currentId = parentIdFromCache;
+        continue;
+      }
+
+      const result = await bookmarkService.getBookmarkById(currentId);
+      if (!result.success || !result.data) return false;
+      const node = result.data as BookmarkItem;
+      if (!node.parentId) return false;
+      if (node.parentId === folderId) return true;
+      currentId = node.parentId;
+    }
+    return false;
+  }, [bookmarksMap]);
 
   // 添加书签移动处理方法
   const handleMoveBookmark = useCallback(async (bookmarkId: string, destinationFolderId: string, index?: number) => {
@@ -130,35 +158,7 @@ const useBookmarkActions = ({
       toastRef.current?.showToast('移动书签时发生错误', 'error');
       return false;
     }
-  }, [toastRef]);
-
-  // 检查是否是子文件夹的辅助函数
-  const isSubfolder = async (folderId: string, possibleSubfolderId: string): Promise<boolean> => {
-    // 如果尝试移动到自己，返回true（不允许）
-    if (folderId === possibleSubfolderId) {
-      return true;
-    }
-
-    // 优先走已构建的 bookmarksMap；若索引未就绪则退化为按需查 parentId 链
-    let currentId: string | null = possibleSubfolderId;
-    for (let depth = 0; depth < 128 && currentId; depth++) {
-      const cached = bookmarksMap.current.get(currentId);
-      const parentIdFromCache = cached?.parentId;
-      if (parentIdFromCache) {
-        if (parentIdFromCache === folderId) return true;
-        currentId = parentIdFromCache;
-        continue;
-      }
-
-      const result = await bookmarkService.getBookmarkById(currentId);
-      if (!result.success || !result.data) return false;
-      const node = result.data as BookmarkItem;
-      if (!node.parentId) return false;
-      if (node.parentId === folderId) return true;
-      currentId = node.parentId;
-    }
-    return false;
-  };
+  }, [bookmarksMap, handleResult, isSubfolder, toastRef]);
 
   // 复制链接到剪贴板（popup 环境优先使用 Clipboard API，失败时回退 execCommand）
   const handleCopyLink = useCallback(async (url: string) => {

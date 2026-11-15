@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import Dialog from '@mui/material/Dialog';
 import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
@@ -38,6 +38,21 @@ interface BackupSelectionDialogProps {
   onRefreshRef?: React.MutableRefObject<(() => void) | null>;
 }
 
+// 从文件名中提取并格式化时间戳
+const parseTimestampFromFilename = (filename: string): { formatted: string; raw: string } => {
+  // 格式: bookmarks_backup_YYYYMMDDHHMMSS.json
+  const match = filename.match(/bookmarks_backup_(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})\.json/);
+
+  if (match) {
+    const [, year, month, day, hour, minute, second] = match;
+    const raw = `${year}${month}${day}${hour}${minute}${second}`;
+    const formatted = `${year}-${month}-${day} ${hour}:${minute}:${second}`;
+    return { formatted, raw };
+  }
+
+  return { formatted: '未知时间', raw: '0' };
+};
+
 const BackupSelectionDialog: React.FC<BackupSelectionDialogProps> = ({
   open,
   onClose,
@@ -55,23 +70,8 @@ const BackupSelectionDialog: React.FC<BackupSelectionDialogProps> = ({
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [fileToDelete, setFileToDelete] = useState<BackupFile | null>(null);
 
-  // 从文件名中提取并格式化时间戳
-  const parseTimestampFromFilename = (filename: string): { formatted: string; raw: string } => {
-    // 格式: bookmarks_backup_YYYYMMDDHHMMSS.json
-    const match = filename.match(/bookmarks_backup_(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})\.json/);
-    
-    if (match) {
-      const [, year, month, day, hour, minute, second] = match;
-      const raw = `${year}${month}${day}${hour}${minute}${second}`;
-      const formatted = `${year}-${month}-${day} ${hour}:${minute}:${second}`;
-      return { formatted, raw };
-    }
-    
-    return { formatted: '未知时间', raw: '0' };
-  };
-
   // 加载备份文件列表
-  const loadBackupFiles = async () => {
+  const loadBackupFiles = useCallback(async () => {
     setLoading(true);
     setError(null);
     
@@ -107,7 +107,7 @@ const BackupSelectionDialog: React.FC<BackupSelectionDialogProps> = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [credentials, repoName, username]);
 
   // 确保每次打开对话框时都重新加载文件列表
   useEffect(() => {
@@ -117,7 +117,7 @@ const BackupSelectionDialog: React.FC<BackupSelectionDialogProps> = ({
       setError(null);
       loadBackupFiles();
     }
-  }, [open, credentials, username, repoName]);
+  }, [open, loadBackupFiles]);
 
   // 选择文件并关闭对话框
   const handleSelect = () => {
@@ -186,11 +186,11 @@ const BackupSelectionDialog: React.FC<BackupSelectionDialogProps> = ({
   };
 
   // 添加一个方法供父组件调用，用于手动刷新文件列表
-  const refreshFileList = () => {
+  const refreshFileList = useCallback(() => {
     if (open) {
       loadBackupFiles();
     }
-  };
+  }, [loadBackupFiles, open]);
 
   // 设置刷新方法的引用，供父组件使用
   useEffect(() => {
@@ -203,7 +203,7 @@ const BackupSelectionDialog: React.FC<BackupSelectionDialogProps> = ({
         onRefreshRef.current = null;
       }
     };
-  }, [onRefreshRef]);
+  }, [onRefreshRef, refreshFileList]);
 
   return (
     <>

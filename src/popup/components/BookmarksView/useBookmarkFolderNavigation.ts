@@ -162,13 +162,13 @@ const useBookmarkFolderNavigation = ({
         setIsLoading(false);
       }
     }
-  }, [bookmarkBarId, currentFolderId, enrichItemsFromMap, setFolderChildrenInMap, toastRef]);
+  }, [bookmarkBarId, bookmarksMap, currentFolderId, enrichItemsFromMap, isUnmountedRef, setFolderChildrenInMap, toastRef]);
   refreshCurrentFolderChildrenRef.current = refreshCurrentFolderChildren;
 
   // 文件夹变化（或首次拿到 bookmarkBarId）时：按需加载当前目录一层 children
   useEffect(() => {
     void refreshCurrentFolderChildren();
-  }, [currentFolderId, bookmarkBarId]);
+  }, [bookmarkBarId, currentFolderId, refreshCurrentFolderChildren]);
 
   // 导航到指定文件夹
   const navigateToFolder = useCallback(async (folderId: string) => {
@@ -192,7 +192,7 @@ const useBookmarkFolderNavigation = ({
       setCurrentFolderId(folderId);
       persistViewState(folderId);
     }
-  }, [clearSearch, currentFolderItems, isSearching, persistViewState, searchResults, upsertBookmarkInMap]);
+  }, [bookmarksMap, clearSearch, currentFolderItems, isSearching, persistViewState, searchResults, upsertBookmarkInMap]);
 
   // 导航返回上级文件夹
   const navigateBack = useCallback(() => {

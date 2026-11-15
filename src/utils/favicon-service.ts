@@ -49,18 +49,6 @@ export const getFaviconUrl = (url: string): string => {
 };
 
 /**
- * 获取网站主题色(未来可以扩展)
- * @param url 网站URL
- * @returns Promise<string> 返回颜色代码
- */
-export const getWebsiteThemeColor = async (_url: string): Promise<string> => {
-  void _url;
-  // 这里可以实现获取网站主题色的逻辑
-  // 默认返回一个占位色
-  return '#f0f0f0';
-};
-
-/**
  * 检查图标是否有效
  * @param iconUrl 图标URL
  * @returns Promise<boolean> 是否有效
@@ -77,7 +65,6 @@ export const isValidFavicon = async (iconUrl: string): Promise<boolean> => {
 const faviconService = {
   getFaviconUrl,
   getDomainFromUrl,
-  getWebsiteThemeColor,
   isValidFavicon
 };
 

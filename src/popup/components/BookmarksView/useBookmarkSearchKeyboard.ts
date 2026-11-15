@@ -85,7 +85,15 @@ const useBookmarkSearchKeyboard = ({
 
     window.addEventListener('keydown', handleGlobalKeyDown, true);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown, true);
-  }, [clearSearch, navigateToFolder]);
+  }, [
+    clearSearch,
+    isSearchingRef,
+    navigateToFolder,
+    searchInputRef,
+    searchResultsRef,
+    selectedIndexRef,
+    setSelectedIndex,
+  ]);
 
   // 选中项变化时滚动到可视区域
   useEffect(() => {
@@ -96,7 +104,7 @@ const useBookmarkSearchKeyboard = ({
     if (selectedEl) {
       (selectedEl as HTMLElement).scrollIntoView({ block: 'nearest' });
     }
-  }, [selectedIndex]);
+  }, [itemListRef, selectedIndex]);
 };
 
 export { useBookmarkSearchKeyboard };

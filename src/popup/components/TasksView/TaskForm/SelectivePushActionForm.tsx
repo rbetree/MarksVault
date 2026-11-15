@@ -65,6 +65,8 @@ const SelectivePushActionForm: React.FC<SelectivePushActionFormProps> = ({
     
     onChange(updatedAction);
     validateForm();
+    // action/onChange 由父组件在每次更新时重建，纳入依赖会导致同步循环，故仅在本地字段变化时执行
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [repoName, folderPath, commitMessage]);
 
   // 处理仓库名称变更
