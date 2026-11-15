@@ -12,6 +12,7 @@ import {
   BackupAction,
 } from '../types/task';
 import storageService, { StorageResult } from '../utils/storage-service';
+import { clearTaskExecutionState } from './task-execution-state';
 // 导入触发器服务 - 注意避免循环依赖
 // 仅在需要使用时动态导入
 
@@ -488,6 +489,21 @@ class TaskService {
    * @returns 更新后的任务对象或错误
    */
   public async updateTask(taskId: string, taskData: Partial<Task>): Promise<StorageResult> {
+    return await this.applyTaskUpdates(taskId, taskData, false);
+  }
+
+  /**
+   * 应用任务更新
+   * @param taskId 任务ID
+   * @param taskData 更新的任务数据
+   * @param allowStatus 是否允许更新状态；仅 setTaskStatus 显式状态变更时为 true
+   * @returns 更新后的任务对象或错误
+   */
+  private async applyTaskUpdates(
+    taskId: string,
+    taskData: Partial<Task>,
+    allowStatus: boolean
+  ): Promise<StorageResult> {
     try {
       return await this.withWriteMutex(async () => {
         const result = await this.getTasks();
@@ -505,10 +521,14 @@ class TaskService {
           };
         }
 
-        // 更新任务数据：剥离传入的 history 字段——执行历史永远以存储中的最新为准。
-        // UI 编辑保存会传回含旧历史的完整任务对象，浅合并会回滚已写入的新历史
+        // 更新任务数据：剥离传入的 history 与 status 字段。
+        // UI 编辑保存会传回含旧历史、旧状态的完整任务对象，浅合并会回滚执行期间
+        // 已写入的新历史或执行器置位的 RUNNING/FAILED；状态变更只走 setTaskStatus
         const updates = { ...taskData };
         delete updates.history;
+        if (!allowStatus) {
+          delete updates.status;
+        }
         Object.assign(taskStorage.tasks[taskId], updates);
 
         // 确保ID不变，更新更新时间
@@ -572,6 +592,10 @@ class TaskService {
           return saveResult;
         }
 
+        // 任务已删除，清理其执行快照、执行租约与书签写入租约，
+        // 避免重试窗口删除任务后留下孤儿状态
+        await clearTaskExecutionState(taskId);
+
         return {
           success: true
         };
@@ -610,7 +634,8 @@ class TaskService {
    * @returns 设置结果
    */
   public async setTaskStatus(taskId: string, status: TaskStatus): Promise<StorageResult> {
-    return await this.updateTask(taskId, { status });
+    // 状态是执行器与用户显式控制的字段，绕过 updateTask 对表单回传状态的剥离
+    return await this.applyTaskUpdates(taskId, { status }, true);
   }
 
   /**

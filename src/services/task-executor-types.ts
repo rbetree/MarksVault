@@ -33,6 +33,9 @@ export interface ExecutionLease {
 // 执行租约在 storage.local 中的存储键前缀（每个任务一个独立键，避免跨任务写入互相覆盖）
 export const EXECUTION_LEASE_KEY_PREFIX = 'execution_lease:';
 
+// 执行快照在 storage.local 中的存储键
+export const EXECUTION_SNAPSHOTS_KEY = 'execution_snapshots';
+
 // 执行租约时长：2倍执行超时（120秒），为原执行留足余量；到期后原执行失去运行所有权
 export const EXECUTION_LEASE_DURATION = DEFAULT_CONFIG.timeout * 2;
 

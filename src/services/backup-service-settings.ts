@@ -24,8 +24,22 @@ export async function saveBackupStatusForType(
   status: BackupStatus
 ): Promise<void> {
   if (type === BackupType.SETTINGS) {
-    // 配置备份状态存储在另一个键中，避免与书签备份状态混淆
-    await storageService.setStorageData('settings_backup_status', status);
+    // 配置备份状态存储在另一个键中，避免与书签备份状态混淆。
+    // 与书签状态一样合并写入：失败状态只带 lastOperationStatus/errorMessage，
+    // 整键覆盖会抹掉上次成功的 lastBackupTime/backupFileUrl
+    const currentResult = await storageService.getStorageData('settings_backup_status');
+    if (!currentResult.success) {
+      // 无法读取旧状态时不写入，避免用不完整状态覆盖上次成功记录
+      console.error('读取配置备份状态失败，跳过状态写入:', currentResult.error);
+      return;
+    }
+    const currentStatus = currentResult.data && typeof currentResult.data === 'object'
+      ? currentResult.data as BackupStatus
+      : {};
+    await storageService.setStorageData('settings_backup_status', {
+      ...currentStatus,
+      ...status,
+    });
   } else {
     await storageService.saveBackupStatus(status);
   }

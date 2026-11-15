@@ -2,7 +2,7 @@ import { BackupStatus, BookmarkBackup } from '../types/backup';
 import { GitHubCredentials } from '../utils/storage-service';
 import storageService from '../utils/storage-service';
 import githubService from './github-service';
-import { BOOKMARKS_FOLDER_PATH, DEFAULT_BACKUP_REPO } from './backup-service-config';
+import { BOOKMARKS_FOLDER_PATH, DEFAULT_BACKUP_REPO, LATEST_BACKUP_PATH } from './backup-service-config';
 import { parseBookmarksBackupTimestamp } from './backup-service-paths';
 import { listRepositoryFiles, readRepositoryFileContent } from './backup-service-github';
 
@@ -57,17 +57,20 @@ export async function getBackupStats(
       file => file.name.startsWith('bookmarks_backup_') && file.name.endsWith('.json')
     );
 
-    // latest 是恢复回退文件，不计入备份数量，避免与清理口径不一致
-    const totalBackups = backupFiles.filter(
+    // 统计口径与恢复对话框一致：latest 回退文件也算一个可恢复的备份。
+    // latest 不参与清理阈值（cleanupOldBackups 单独排除），这里只影响展示数量
+    const timestampedBackupFiles = backupFiles.filter(
       file => parseBookmarksBackupTimestamp(file.name) > 0
-    ).length;
+    );
+    const hasLatestBackup = backupFiles.some(file => file.name === LATEST_BACKUP_PATH);
+    const totalBackups = timestampedBackupFiles.length + (hasLatestBackup ? 1 : 0);
 
     if (totalBackups === 0) {
       return { totalBackups: 0 };
     }
 
     // 提取时间戳并排序
-    const timestamps = backupFiles
+    const timestamps = timestampedBackupFiles
       .map(file => parseBookmarksBackupTimestamp(file.name))
       .filter(ts => ts > 0)
       .sort((a, b) => a - b);

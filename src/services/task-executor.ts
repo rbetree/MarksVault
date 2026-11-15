@@ -6,6 +6,7 @@
 import {
   Task,
   TaskStatus,
+  TaskStorage,
   ActionType,
   TaskExecutionResult,
   TaskSnapshot,
@@ -13,6 +14,7 @@ import {
   ExecutionOutcome,
 } from '../types/task';
 import taskService from './task-service';
+import { cleanupOrphanedExecutionState } from './task-execution-state';
 import { TaskExecutionConfig, DEFAULT_CONFIG, ExecutionTimeoutError } from './task-executor-types';
 import { Mutex } from './task-executor-mutex';
 import { ExecutionSnapshotStore } from './task-executor-snapshot';
@@ -156,16 +158,28 @@ export class TaskExecutor {
 
   /**
    * 初始化任务执行引擎
-   * 对遗留 RUNNING 任务按执行租约状态恢复，取代一律 FAILED 的恢复逻辑：
+   * 先清理已删除任务遗留的执行快照/租约，再对遗留 RUNNING 任务按执行租约状态恢复：
    * - 存在未到期执行租约 → 恢复为"结果不确定"（原执行可能仍有外部副作用）
    * - 执行租约已到期或不存在 → 恢复为"执行中断"（原执行已失去运行所有权）
    * - 无遗留快照 → 无未正常结束的执行，仅清理 RUNNING 状态残留
    */
   public async init(): Promise<void> {
     try {
-      const runningTasksResult = await taskService.getTasksByStatus(TaskStatus.RUNNING);
-      if (runningTasksResult.success && runningTasksResult.data.length > 0) {
-        const runningTasks = runningTasksResult.data as Task[];
+      const tasksResult = await taskService.getTasks();
+      if (!tasksResult.success) {
+        console.error('任务执行引擎初始化失败: 无法读取任务列表');
+        return;
+      }
+
+      const taskStorage = tasksResult.data as TaskStorage;
+      const existingTaskIds = new Set(Object.keys(taskStorage.tasks));
+
+      // 孤儿清理兜底：任务已删除但执行快照/租约残留（删除发生在重试窗口或 SW 中断期间）
+      await cleanupOrphanedExecutionState(existingTaskIds);
+
+      const runningTasks = Object.values(taskStorage.tasks)
+        .filter(task => task.status === TaskStatus.RUNNING);
+      if (runningTasks.length > 0) {
         console.log(`发现 ${runningTasks.length} 个处于RUNNING状态的任务，正在按执行租约状态恢复...`);
 
         for (const task of runningTasks) {
@@ -369,18 +383,31 @@ export class TaskExecutor {
 
       // 任务存在性检查：重试仍沿用首次固化的任务定义，这里只确认任务未被删除，
       // 不用存储中的配置覆盖快照。读取失败时重读一次，区分瞬时故障；
-      // 仍失败时无法可靠区分“已删除”与“读取异常”，保守保留快照与租约交给恢复逻辑
-      let taskResult = await taskService.getTaskById(taskId);
-      if (!taskResult.success) {
-        taskResult = await taskService.getTaskById(taskId);
+      // 两次仍失败时无法可靠区分“已删除”与“读取异常”，保守保留快照与租约交给恢复逻辑
+      let tasksResult = await taskService.getTasks();
+      if (!tasksResult.success) {
+        tasksResult = await taskService.getTasks();
       }
-      if (!taskResult.success) {
+      if (!tasksResult.success) {
         console.warn(`任务 ${taskId} 不存在或无法读取，停止重试...`);
         executionResult.success = false;
         executionResult.outcome = ExecutionOutcome.FAILURE;
         executionResult.error = '任务不存在或无法读取，停止重试';
         executionResult.details = '任务在执行期间被删除或无法读取，本次执行终止且不修改任务状态';
         executionResult.source = source;
+        return executionResult;
+      }
+      if (!(tasksResult.data as TaskStorage).tasks[taskId]) {
+        // 已确认任务被删除：清理本次执行残留的快照与租约，避免重试窗口删除后留下孤儿状态
+        console.warn(`任务 ${taskId} 已被删除，清理残留执行状态并停止重试...`);
+        executionResult.success = false;
+        executionResult.outcome = ExecutionOutcome.FAILURE;
+        executionResult.error = '任务不存在，停止重试';
+        executionResult.details = '任务在执行期间被删除，本次执行终止并已清理执行快照与租约';
+        executionResult.source = source;
+        await this.snapshotStore.delete(taskId);
+        await releaseExecutionLease(taskId, leaseExecutionId);
+        await releaseBookmarkWriteLease(leaseExecutionId);
         return executionResult;
       }
 

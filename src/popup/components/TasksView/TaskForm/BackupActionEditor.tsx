@@ -4,7 +4,6 @@ import FormControl from '@mui/material/FormControl';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import TextField from '@mui/material/TextField';
 import Grid from '@mui/material/Grid';
-import Checkbox from '@mui/material/Checkbox';
 import Divider from '@mui/material/Divider';
 import Radio from '@mui/material/Radio';
 import RadioGroup from '@mui/material/RadioGroup';
@@ -12,12 +11,8 @@ import Typography from '@mui/material/Typography';
 
 interface BackupActionEditorProps {
   operation: 'backup' | 'restore';
-  commitMessage: string;
-  includeMetadata: boolean;
   backupFilePath: string;
   onOperationChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
-  onCommitMessageChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
-  onIncludeMetadataChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
   onBackupFilePathChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
 }
 
@@ -26,12 +21,8 @@ interface BackupActionEditorProps {
  */
 const BackupActionEditor: React.FC<BackupActionEditorProps> = ({
   operation,
-  commitMessage,
-  includeMetadata,
   backupFilePath,
   onOperationChange,
-  onCommitMessageChange,
-  onIncludeMetadataChange,
   onBackupFilePathChange
 }) => {
   return (
@@ -76,32 +67,9 @@ const BackupActionEditor: React.FC<BackupActionEditorProps> = ({
         <Divider sx={{ my: 1.5 }} />
 
         {operation === 'backup' ? (
-          <Grid container spacing={1.5}>
-            <Grid item xs={12}>
-              <TextField
-                label="提交信息"
-                fullWidth
-                size="small"
-                value={commitMessage}
-                onChange={onCommitMessageChange}
-                placeholder="例如: 每日备份"
-                margin="dense"
-                helperText="提交到GitHub仓库时使用的提交信息"
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={includeMetadata}
-                    onChange={onIncludeMetadataChange}
-                    size="small"
-                  />
-                }
-                label={<Typography variant="body2">包含元数据 (创建时间、访问频率等)</Typography>}
-              />
-            </Grid>
-          </Grid>
+          <Typography variant="body2" color="text.secondary">
+            备份会完整上传书签数据（含元数据），提交信息由系统自动生成。
+          </Typography>
         ) : (
           <Grid container spacing={1.5}>
             <Grid item xs={12}>

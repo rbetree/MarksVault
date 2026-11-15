@@ -47,12 +47,6 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({
   const [actionType, setActionType] = useState<ActionType>(action.type);
 
   // 备份操作状态
-  const [commitMessage, setCommitMessage] = useState<string>(
-    action.type === ActionType.BACKUP ? (action as BackupAction).options.commitMessage || '' : '自动备份书签'
-  );
-  const [includeMetadata, setIncludeMetadata] = useState<boolean>(
-    action.type === ActionType.BACKUP ? !!(action as BackupAction).options.includeMetadata : true
-  );
   const [backupOperation, setBackupOperation] = useState<'backup' | 'restore'>(
     action.type === ActionType.BACKUP && 'operation' in action ?
       (action as BackupAction).operation : 'backup'
@@ -143,8 +137,6 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({
 
     if (action.type === ActionType.BACKUP) {
       const backupAction = action as BackupAction;
-      setCommitMessage(backupAction.options.commitMessage || '');
-      setIncludeMetadata(!!backupAction.options.includeMetadata);
       setBackupOperation(backupAction.operation || 'backup');
       setBackupFilePath(backupAction.options.backupFilePath ? String(backupAction.options.backupFilePath) : '');
     } else if (action.type === ActionType.PUSH) {
@@ -189,42 +181,6 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({
     onChange(newAction, true);
   };
 
-  // 处理提交消息更改
-  const handleCommitMessageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const value = event.target.value;
-    setCommitMessage(value);
-
-    if (action.type === ActionType.BACKUP) {
-      const updatedAction: BackupAction = {
-        ...(action as BackupAction),
-        options: {
-          ...(action as BackupAction).options,
-          commitMessage: value
-        }
-      };
-
-      onChange(updatedAction, true);
-    }
-  };
-
-  // 处理包含元数据选项更改
-  const handleIncludeMetadataChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const value = event.target.checked;
-    setIncludeMetadata(value);
-
-    if (action.type === ActionType.BACKUP) {
-      const updatedAction: BackupAction = {
-        ...(action as BackupAction),
-        options: {
-          ...(action as BackupAction).options,
-          includeMetadata: value
-        }
-      };
-
-      onChange(updatedAction, true);
-    }
-  };
-
   // 处理备份操作类型更改
   const handleBackupOperationChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const newOperation = event.target.value as 'backup' | 'restore';
@@ -237,7 +193,6 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({
         description: newOperation === 'backup' ? '备份书签到GitHub' : '从GitHub恢复书签',
         options: {
           ...(action as BackupAction).options,
-          commitMessage: newOperation === 'backup' ? commitMessage : '',
           backupFilePath: newOperation === 'restore' ? backupFilePath : undefined
         }
       };
@@ -444,12 +399,8 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({
     return (
       <BackupActionEditor
         operation={backupOperation}
-        commitMessage={commitMessage}
-        includeMetadata={includeMetadata}
         backupFilePath={backupFilePath}
         onOperationChange={handleBackupOperationChange}
-        onCommitMessageChange={handleCommitMessageChange}
-        onIncludeMetadataChange={handleIncludeMetadataChange}
         onBackupFilePathChange={handleBackupFilePathChange}
       />
     );

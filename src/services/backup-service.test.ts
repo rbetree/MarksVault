@@ -1,5 +1,5 @@
 import backupService from './backup-service';
-import githubService from './github-service';
+import githubService, { GitHubApiError } from './github-service';
 import storageService from '../utils/storage-service';
 import bookmarkService from '../utils/bookmark-service';
 import { getFaviconUrl } from '../utils/favicon-service';
@@ -32,8 +32,22 @@ jest.mock('./github-service', () => ({
   },
   // 测试中的错误均为普通错误（配置/文件错误），结构化判定返回不可重试
   isRetryableGitHubError: jest.fn(() => false),
-  GitHubApiError: class extends Error {},
-  RetryableError: class extends Error {},
+  GitHubApiError: class extends Error {
+    status: number;
+    constructor(status: number, message: string) {
+      super(message);
+      this.name = 'GitHubApiError';
+      this.status = status;
+    }
+  },
+  RetryableError: class extends Error {
+    category: string;
+    constructor(category: string, message: string) {
+      super(message);
+      this.name = 'RetryableError';
+      this.category = category;
+    }
+  },
 }));
 
 jest.mock('../utils/storage-service', () => ({
@@ -215,6 +229,29 @@ describe('backup-service 恢复路径选择', () => {
     expect(result.success).toBe(false);
     expect(result.error).toContain('未找到可恢复的书签备份文件');
     expect(mockedGitHub.getFileContent).not.toHaveBeenCalled();
+  });
+
+  test('仓库或 bookmarks 目录不存在（404）时返回未找到可恢复备份，而非文件列表失败', async () => {
+    mockedGitHub.getRepositoryFiles.mockRejectedValue(
+      new GitHubApiError(404, '获取仓库文件列表失败: 404 - Not Found')
+    );
+
+    const result = await backupService.restoreFromGitHub(credentials, username);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('未找到可恢复的书签备份文件');
+    expect(result.error).not.toContain('获取仓库文件列表失败');
+    expect(mockedGitHub.getFileContent).not.toHaveBeenCalled();
+  });
+
+  test('文件列表的非 404 错误保持原始错误信息', async () => {
+    mockedGitHub.getRepositoryFiles.mockRejectedValue(new Error('network down'));
+
+    const result = await backupService.restoreFromGitHub(credentials, username);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('network down');
+    expect(result.error).not.toContain('未找到可恢复的书签备份文件');
   });
 
   test('删除旧书签失败时应中断恢复并返回失败', async () => {
@@ -574,6 +611,15 @@ describe('backup-service 备份文件命名与解析', () => {
     await expect(resolveLatestBookmarksBackupFilePath(credentials, username))
       .resolves.toBe('bookmarks/bookmarks_backup_latest.json');
   });
+
+  test('仓库或书签目录不存在（404）时返回未找到可恢复备份', async () => {
+    mockedGitHub.getRepositoryFiles.mockRejectedValue(
+      new GitHubApiError(404, '获取仓库文件列表失败: 404 - Not Found')
+    );
+
+    await expect(resolveLatestBookmarksBackupFilePath(credentials, username))
+      .rejects.toThrow('未找到可恢复的书签备份文件');
+  });
 });
 
 describe('backup-service 清理阈值与回退文件保护', () => {
@@ -807,6 +853,49 @@ describe('backup-service 统计缓存', () => {
       totalBookmarks: 1,
     }));
   });
+
+  test('仅有 latest 回退文件时统计为 1 个备份（与恢复对话框一致）', async () => {
+    mockedGitHub.getRepositoryFiles.mockResolvedValue([
+      buildFile('bookmarks_backup_latest.json', 300),
+    ] as any);
+    mockedGitHub.getFileContent.mockResolvedValue({
+      content: JSON.stringify({ metadata: { totalBookmarks: 5, totalFolders: 1 } }),
+    } as any);
+
+    const stats = await backupService.getBackupStats(credentials, username);
+
+    expect(stats.totalBackups).toBe(1);
+    expect(stats.firstBackupTime).toBeUndefined();
+    expect(stats.fileSize).toBe(300);
+    expect(stats.totalBookmarks).toBe(5);
+    expect(stats.totalFolders).toBe(1);
+    expect(mockedStorage.saveBackupStatsCache).toHaveBeenCalledWith(expect.objectContaining({
+      totalBackups: 1,
+    }));
+  });
+
+  test('时间戳备份与 latest 混合时统计为 N+1 个备份', async () => {
+    mockedGitHub.getRepositoryFiles.mockResolvedValue([
+      buildFile('bookmarks_backup_20240101010101.json', 100),
+      buildFile('bookmarks_backup_20240202020202.json', 200),
+      buildFile('bookmarks_backup_latest.json', 300),
+    ] as any);
+    mockedGitHub.getFileContent.mockResolvedValue({
+      content: JSON.stringify({ metadata: { totalBookmarks: 12, totalFolders: 3 } }),
+    } as any);
+
+    const stats = await backupService.getBackupStats(credentials, username);
+
+    expect(stats.totalBackups).toBe(3);
+    expect(stats.firstBackupTime).toBe(new Date(2024, 0, 1, 1, 1, 1).getTime());
+    // latest 不参与“最新时间戳备份”的选择，文件大小仍取自最新时间戳备份
+    expect(stats.fileSize).toBe(200);
+    expect(mockedStorage.saveBackupStatsCache).toHaveBeenCalledWith(expect.objectContaining({
+      totalBackups: 3,
+      firstBackupTime: new Date(2024, 0, 1, 1, 1, 1).getTime(),
+      fileSize: 200,
+    }));
+  });
 });
 
 describe('backup-service 配置备份与恢复', () => {
@@ -831,6 +920,7 @@ describe('backup-service 配置备份与恢复', () => {
     mockedGitHub.repoExists.mockResolvedValue(true);
     mockedGitHub.createOrUpdateFile.mockResolvedValue({ content: { html_url: fileUrl } } as any);
     mockedStorage.setStorageData.mockResolvedValue({ success: true } as any);
+    mockedStorage.getStorageData.mockResolvedValue({ success: true, data: {} } as any);
     mockedStorage.saveBackupStatus.mockResolvedValue({ success: true } as any);
     mockedStorage.exportConfig.mockResolvedValue({ success: true, data: configBackup } as any);
     mockedStorage.importConfig.mockResolvedValue({ success: true } as any);
@@ -895,6 +985,49 @@ describe('backup-service 配置备份与恢复', () => {
         lastOperationStatus: 'failed',
         errorMessage: 'network down',
       })
+    );
+  });
+
+  test('配置备份失败时合并写入状态，保留上次成功的备份时间与文件链接', async () => {
+    const previousStatus = {
+      lastBackupTime: 1735600000000,
+      backupFileUrl: 'https://github.com/alice/marksvault-backups/blob/main/settings/old.json',
+      lastBackupFilePath: 'settings/settings_backup_20240101010101.json',
+      lastOperationStatus: 'success',
+      stats: { totalBackups: 2 },
+    };
+    mockedStorage.getStorageData.mockResolvedValue({
+      success: true,
+      data: previousStatus,
+    } as any);
+    mockedGitHub.createOrUpdateFile.mockRejectedValue(new Error('network down'));
+
+    const result = await backupService.backupToGitHub(credentials, username, BackupType.SETTINGS);
+
+    expect(result.success).toBe(false);
+    expect(mockedStorage.setStorageData).toHaveBeenCalledWith(
+      'settings_backup_status',
+      {
+        ...previousStatus,
+        lastOperationStatus: 'failed',
+        errorMessage: 'network down',
+      }
+    );
+  });
+
+  test('读取配置备份状态失败时不写入，避免覆盖上次成功记录', async () => {
+    mockedStorage.getStorageData.mockResolvedValue({
+      success: false,
+      error: 'storage down',
+    } as any);
+    mockedGitHub.createOrUpdateFile.mockRejectedValue(new Error('network down'));
+
+    const result = await backupService.backupToGitHub(credentials, username, BackupType.SETTINGS);
+
+    expect(result.success).toBe(false);
+    expect(mockedStorage.setStorageData).not.toHaveBeenCalledWith(
+      'settings_backup_status',
+      expect.anything()
     );
   });
 

@@ -1,5 +1,5 @@
 import { GitHubCredentials } from '../utils/storage-service';
-import githubService from './github-service';
+import githubService, { GitHubApiError } from './github-service';
 import {
   BOOKMARKS_FOLDER_PATH,
   BackupType,
@@ -36,12 +36,22 @@ export async function resolveLatestBookmarksBackupFilePath(
   credentials: GitHubCredentials,
   username: string
 ): Promise<string> {
-  const files = await githubService.getRepositoryFiles(
-    credentials,
-    username,
-    DEFAULT_BACKUP_REPO,
-    BOOKMARKS_FOLDER_PATH
-  );
+  let files: Awaited<ReturnType<typeof githubService.getRepositoryFiles>>;
+  try {
+    files = await githubService.getRepositoryFiles(
+      credentials,
+      username,
+      DEFAULT_BACKUP_REPO,
+      BOOKMARKS_FOLDER_PATH
+    );
+  } catch (error) {
+    // 仓库或 bookmarks/ 目录不存在时 GitHub 返回 404：这是“没有可恢复备份”，
+    // 不是文件列表读取失败，避免用户看到误导性的网络/权限错误
+    if (error instanceof GitHubApiError && error.status === 404) {
+      throw new Error('未找到可恢复的书签备份文件，请先进行备份');
+    }
+    throw error;
+  }
 
   const timestampedFiles = files.filter(file => isTimestampedBookmarksBackupFile(file.name));
   if (timestampedFiles.length > 0) {

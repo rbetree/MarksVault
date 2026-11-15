@@ -7,9 +7,7 @@
 import { TaskSnapshot } from '../types/task';
 import storageService from '../utils/storage-service';
 import { Mutex } from './task-executor-mutex';
-
-// 任务快照的 storage.local 存储键
-const SNAPSHOTS_KEY = 'execution_snapshots';
+import { EXECUTION_SNAPSHOTS_KEY } from './task-executor-types';
 
 export class ExecutionSnapshotStore {
   // 与租约检查-获取共用同一互斥队列，保证快照读-改-写不会与并发执行流程相互覆盖
@@ -21,7 +19,7 @@ export class ExecutionSnapshotStore {
    */
   private async getSnapshots(): Promise<Record<string, TaskSnapshot>> {
     try {
-      const result = await storageService.getStorageData(SNAPSHOTS_KEY);
+      const result = await storageService.getStorageData(EXECUTION_SNAPSHOTS_KEY);
       if (!result.success || !result.data) {
         return {};
       }
@@ -61,12 +59,12 @@ export class ExecutionSnapshotStore {
     try {
       // 快照读-改-写纳入互斥：避免并发执行流程的快照读写相互覆盖
       await this.mutex.runExclusive(async () => {
-        const result = await storageService.getStorageData(SNAPSHOTS_KEY);
+        const result = await storageService.getStorageData(EXECUTION_SNAPSHOTS_KEY);
         const snapshots = result.success && result.data
           ? { ...(result.data as Record<string, TaskSnapshot>) }
           : {};
         snapshots[snapshot.taskId] = snapshot;
-        await storageService.setStorageData(SNAPSHOTS_KEY, snapshots);
+        await storageService.setStorageData(EXECUTION_SNAPSHOTS_KEY, snapshots);
       });
     } catch (error) {
       console.error(`保存任务快照 ${snapshot.taskId} 失败:`, error);
@@ -85,7 +83,7 @@ export class ExecutionSnapshotStore {
       try {
         // 快照读-改-写纳入互斥：避免并发执行流程的快照读写相互覆盖
         await this.mutex.runExclusive(async () => {
-          const result = await storageService.getStorageData(SNAPSHOTS_KEY);
+          const result = await storageService.getStorageData(EXECUTION_SNAPSHOTS_KEY);
           if (!result.success || !result.data) {
             return;
           }
@@ -94,7 +92,7 @@ export class ExecutionSnapshotStore {
             return;
           }
           delete snapshots[taskId];
-          await storageService.setStorageData(SNAPSHOTS_KEY, snapshots);
+          await storageService.setStorageData(EXECUTION_SNAPSHOTS_KEY, snapshots);
         });
         return;
       } catch (error) {
