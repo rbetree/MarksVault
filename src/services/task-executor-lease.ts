@@ -218,7 +218,8 @@ export async function extendExecutionLease(
     return { status: 'expired', lease };
   }
 
-  const desiredExpiresAt = Date.now() + durationMs;
+  // 以获取时间为基准，避免短动作在加载任务后无谓延长几毫秒
+  const desiredExpiresAt = lease.acquiredAt + durationMs;
   if (lease.expiresAt >= desiredExpiresAt) {
     return { status: 'unchanged', lease };
   }
