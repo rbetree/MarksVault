@@ -102,7 +102,7 @@ export function selectBookmarksToRestore(backupBookmarks: BookmarkItem[]): Bookm
  */
 export function validateBackupTreeForRestore(items: BookmarkItem[]): void {
   const MAX_RESTORE_DEPTH = 100; // 最大嵌套层级
-  const MAX_RESTORE_NODE_COUNT = 5000; // 最大节点总数
+  const MAX_RESTORE_NODE_COUNT = 20000; // 最大节点总数
 
   let maxDepth = 0;
   let totalNodes = 0;

@@ -441,7 +441,7 @@ describe('backup-service restore 前置校验与暂存保护', () => {
   });
 
   test('节点数超过上限的备份应在任何删除/暂存前被拒绝', async () => {
-    const manyItems = Array.from({ length: 5001 }, (_, i) => ({
+    const manyItems = Array.from({ length: 20001 }, (_, i) => ({
       id: `b-${i}`,
       title: `B ${i}`,
       url: 'https://example.com',
