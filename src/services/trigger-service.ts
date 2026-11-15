@@ -3,11 +3,14 @@
  * 管理基于事件的触发器
  */
 
-import { Task, TaskStatus, TriggerType, EventType } from '../types/task';
+import { Task, TaskStatus, TriggerType, EventType, EventTriggerConditions } from '../types/task';
 import taskService from './task-service';
 import storageService from '../utils/storage-service';
 import { isRecentSelfWriteCompletion } from './task-executor-lease';
 import { BookmarkWriteLease, BOOKMARK_WRITE_LEASE_KEY } from './task-executor-types';
+
+// 条件匹配只使用这三个已定义字段，其他键不参与事件过滤
+type NormalizedTriggerConditions = Partial<Record<'url' | 'title' | 'parentFolder', string>>;
 
 class TriggerService {
   private static instance: TriggerService;
@@ -121,6 +124,11 @@ class TriggerService {
 
       // 筛选与事件类型匹配的事件触发器任务
       const matchingTasks = enabledTasks.filter(task => {
+        // 触发器自身停用时跳过；旧数据缺少 enabled 时按启用处理
+        if (task.trigger.enabled === false) {
+          console.log(`任务 ${task.id} 的触发器已停用，跳过 ${eventType} 事件`);
+          return false;
+        }
         if (activeWriteLease?.taskId === task.id) {
           console.log(`任务 ${task.id} 正在写入书签，跳过其自身写入产生的 ${eventType} 事件`);
           return false;
@@ -188,13 +196,13 @@ class TriggerService {
     }
     
     const trigger = task.trigger;
-    const conditions = trigger.conditions;
-    
-    // 如果没有设置条件，则视为匹配
-    if (!conditions || Object.keys(conditions).length === 0) {
+    const conditions = this.normalizeConditions(trigger.conditions);
+
+    // 没有有效条件（旧任务缺少 conditions 或条件为空）时匹配全部事件
+    if (Object.keys(conditions).length === 0) {
       return true;
     }
-    
+
     console.log(`检查任务 ${task.id} 的条件是否匹配`, conditions);
     
     // 根据不同事件类型检查不同条件
@@ -219,12 +227,36 @@ class TriggerService {
   }
   
   /**
+   * 归一化条件配置：去除首尾空白，只保留有文本的已知条件字段
+   * @param conditions 原始条件配置
+   * @returns 用于匹配的条件
+   */
+  private normalizeConditions(conditions?: EventTriggerConditions): NormalizedTriggerConditions {
+    const normalized: NormalizedTriggerConditions = {};
+    if (!conditions) {
+      return normalized;
+    }
+
+    (['url', 'title', 'parentFolder'] as const).forEach((key) => {
+      const value = conditions[key];
+      if (typeof value === 'string' && value.trim()) {
+        normalized[key] = value.trim();
+      }
+    });
+
+    return normalized;
+  }
+
+  /**
    * 检查书签条件是否匹配
    * @param conditions 条件配置
    * @param bookmarkData 书签数据
    * @returns 是否匹配
    */
-  private matchBookmarkConditions(conditions: Record<string, any>, bookmarkData: any): boolean {
+  private matchBookmarkConditions(
+    conditions: NormalizedTriggerConditions,
+    bookmarkData: any
+  ): boolean {
     // 如果没有书签数据，则视为不匹配
     if (!bookmarkData || (!bookmarkData.bookmark && !bookmarkData.removeInfo)) {
       return false;

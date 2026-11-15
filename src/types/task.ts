@@ -33,16 +33,19 @@ export enum EventType {
   EXTENSION_CLICKED = 'extension_clicked' // 扩展图标点击 - 已废弃：已配置 action.default_popup，此事件永远不会触发
 }
 
+// 事件触发条件
+export interface EventTriggerConditions {
+  url?: string;               // URL包含文本
+  title?: string;             // 标题包含文本
+  parentFolder?: string;      // 父文件夹ID (适用于书签事件)
+  [key: string]: any;         // 其他条件过滤键值对
+}
+
 // 事件触发器接口
 export interface EventTrigger extends BaseTrigger {
   type: TriggerType.EVENT;
   event: EventType;             // 事件类型
-  conditions?: {                // 可选的条件过滤
-    url?: string;               // URL匹配模式
-    title?: string;             // 标题匹配
-    parentFolder?: string;      // 父文件夹ID (适用于书签事件)
-    [key: string]: any;         // 其他条件过滤键值对
-  };
+  conditions?: EventTriggerConditions; // 可选的条件过滤，缺失时匹配全部事件
   lastTriggered?: number;       // 上次触发时间戳
 }
 
@@ -226,7 +229,7 @@ export const createDefaultTask = (): Task => {
 };
 
 // 创建事件触发器工厂函数
-export const createEventTrigger = (eventType: EventType, conditions?: Record<string, any>): EventTrigger => {
+export const createEventTrigger = (eventType: EventType, conditions?: EventTriggerConditions): EventTrigger => {
   return {
     type: TriggerType.EVENT,
     enabled: true,

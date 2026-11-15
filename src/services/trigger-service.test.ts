@@ -9,6 +9,7 @@ import {
 } from './task-executor-lease';
 import {
   EventType,
+  EventTriggerConditions,
   ExecutionOutcome,
   Task,
   TaskStatus,
@@ -27,12 +28,22 @@ jest.mock('./task-executor', () => ({
 describe('trigger-service 事件触发语义', () => {
   const mockedExecutor = taskExecutor as unknown as { executeTask: jest.Mock };
 
-  const createEventTask = async (id: string): Promise<void> => {
+  const createEventTask = async (
+    id: string,
+    options: {
+      conditions?: EventTriggerConditions;
+      triggerEnabled?: boolean;
+    } = {}
+  ): Promise<void> => {
+    const trigger = createEventTrigger(EventType.BOOKMARK_CHANGED, options.conditions);
+    if (options.triggerEnabled === false) {
+      trigger.enabled = false;
+    }
     const result = await taskService.createTask({
       id,
       name: `事件任务 ${id}`,
       status: TaskStatus.ENABLED,
-      trigger: createEventTrigger(EventType.BOOKMARK_CHANGED),
+      trigger,
       action: createOrganizeAction(),
     });
     expect(result.success).toBe(true);
@@ -41,6 +52,14 @@ describe('trigger-service 事件触发语义', () => {
   const handleBookmarkChanged = async (): Promise<void> => {
     await triggerService.handleEventTrigger(EventType.BOOKMARK_CHANGED, {
       bookmark: { id: 'bookmark_1' },
+    });
+  };
+
+  const handleBookmarkChangedWith = async (
+    bookmark: Record<string, unknown>
+  ): Promise<void> => {
+    await triggerService.handleEventTrigger(EventType.BOOKMARK_CHANGED, {
+      bookmark,
     });
   };
 
@@ -260,5 +279,128 @@ describe('trigger-service 事件触发语义', () => {
     const stored = await browser.storage.local.get('tasks_data');
     const storage = stored.tasks_data as TaskStorage;
     expect(storage.tasks[taskId].status).toBe(TaskStatus.ENABLED);
+  });
+
+  describe('触发条件匹配', () => {
+    test('URL 条件命中时触发任务', async () => {
+      const taskId = 'condition_url_match';
+      await createEventTask(taskId, { conditions: { url: 'example.com' } });
+
+      await handleBookmarkChangedWith({
+        id: 'bookmark_1',
+        url: 'https://example.com/page',
+      });
+
+      expect(mockedExecutor.executeTask).toHaveBeenCalledWith(taskId, 0, 'event');
+    });
+
+    test('URL 条件不命中时不触发任务', async () => {
+      const taskId = 'condition_url_miss';
+      await createEventTask(taskId, { conditions: { url: 'example.com' } });
+
+      await handleBookmarkChangedWith({
+        id: 'bookmark_1',
+        url: 'https://other.test/page',
+      });
+
+      expect(mockedExecutor.executeTask).not.toHaveBeenCalled();
+    });
+
+    test('标题条件命中时触发任务', async () => {
+      const taskId = 'condition_title_match';
+      await createEventTask(taskId, { conditions: { title: '工作' } });
+
+      await handleBookmarkChangedWith({
+        id: 'bookmark_1',
+        title: '工作台',
+      });
+
+      expect(mockedExecutor.executeTask).toHaveBeenCalledWith(taskId, 0, 'event');
+    });
+
+    test('标题条件不命中时不触发任务', async () => {
+      const taskId = 'condition_title_miss';
+      await createEventTask(taskId, { conditions: { title: '工作' } });
+
+      await handleBookmarkChangedWith({
+        id: 'bookmark_1',
+        title: '个人收藏',
+      });
+
+      expect(mockedExecutor.executeTask).not.toHaveBeenCalled();
+    });
+
+    test('父文件夹条件命中时触发任务', async () => {
+      const taskId = 'condition_parent_folder_match';
+      await createEventTask(taskId, { conditions: { parentFolder: 'folder_1' } });
+
+      await handleBookmarkChangedWith({
+        id: 'bookmark_1',
+        parentId: 'folder_1',
+      });
+
+      expect(mockedExecutor.executeTask).toHaveBeenCalledWith(taskId, 0, 'event');
+    });
+
+    test('父文件夹条件不命中时不触发任务', async () => {
+      const taskId = 'condition_parent_folder_miss';
+      await createEventTask(taskId, { conditions: { parentFolder: 'folder_1' } });
+
+      await handleBookmarkChangedWith({
+        id: 'bookmark_1',
+        parentId: 'folder_2',
+      });
+
+      expect(mockedExecutor.executeTask).not.toHaveBeenCalled();
+    });
+
+    test('条件所需字段缺失时不触发任务', async () => {
+      const taskId = 'condition_field_missing';
+      await createEventTask(taskId, {
+        conditions: { url: 'example.com', title: '工作', parentFolder: 'folder_1' },
+      });
+
+      await handleBookmarkChangedWith({ id: 'bookmark_1', url: 'https://example.com/page' });
+
+      expect(mockedExecutor.executeTask).not.toHaveBeenCalled();
+    });
+
+    test('未配置条件的旧任务仍触发所有书签变更', async () => {
+      const taskId = 'legacy_no_conditions';
+      await createEventTask(taskId);
+
+      await handleBookmarkChangedWith({ id: 'bookmark_1', url: 'https://example.com/page' });
+
+      expect(mockedExecutor.executeTask).toHaveBeenCalledWith(taskId, 0, 'event');
+    });
+
+    test('条件为空白文本时按未配置处理，仍触发任务', async () => {
+      const taskId = 'blank_conditions';
+      await createEventTask(taskId, { conditions: { url: '   ', title: '\t' } });
+
+      await handleBookmarkChangedWith({ id: 'bookmark_1', url: 'https://example.com/page' });
+
+      expect(mockedExecutor.executeTask).toHaveBeenCalledWith(taskId, 0, 'event');
+    });
+
+    test('触发器 enabled=false 时即使条件命中也不触发', async () => {
+      const taskId = 'trigger_disabled_by_enabled_flag';
+      await createEventTask(taskId, {
+        conditions: { url: 'example.com' },
+        triggerEnabled: false,
+      });
+
+      await handleBookmarkChangedWith({
+        id: 'bookmark_1',
+        url: 'https://example.com/page',
+      });
+
+      expect(mockedExecutor.executeTask).not.toHaveBeenCalled();
+
+      // 任务本身仍为启用状态，跳过原因是触发器 enabled=false
+      const task = (await taskService.getTaskById(taskId)).data as Task;
+      expect(task.status).toBe(TaskStatus.ENABLED);
+      expect(task.trigger.enabled).toBe(false);
+    });
   });
 });
