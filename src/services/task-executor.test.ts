@@ -5,7 +5,14 @@ import taskService from './task-service';
 import storageService from '../utils/storage-service';
 import { RetryableError, RetryableErrorCategory, GitHubApiError } from './github-service';
 import { resolveActionTimeout, runWithTimeout } from './task-executor-timeout';
-import { ACTION_TIMEOUTS, DEFAULT_CONFIG } from './task-executor-types';
+import {
+  ACTION_TIMEOUTS,
+  BOOKMARK_WRITE_LEASE_DURATION,
+  DEFAULT_CONFIG,
+  EXECUTION_LEASE_DURATION,
+  LEASE_TIMEOUT_BUFFER,
+  resolveExecutionLeaseDuration,
+} from './task-executor-types';
 import {
   BackupAction,
   BookmarkSelection,
@@ -2628,6 +2635,157 @@ describe('task-executor 动作级超时', () => {
     const organizeAction = createOrganizeAction();
     organizeAction.operations = [{ operation: 'validate' }];
     expect(resolveActionTimeout(buildTask(organizeAction), config)).toBe(3000);
+  });
+
+  test('租约时长覆盖动作超时加缓冲，短动作保持默认租约时长', () => {
+    expect(resolveExecutionLeaseDuration(ACTION_TIMEOUTS.push))
+      .toBe(ACTION_TIMEOUTS.push + LEASE_TIMEOUT_BUFFER);
+    expect(resolveExecutionLeaseDuration(ACTION_TIMEOUTS.restore))
+      .toBe(ACTION_TIMEOUTS.restore + LEASE_TIMEOUT_BUFFER);
+    // 动作超时加缓冲小于默认租约时长时，仍使用默认租约时长
+    expect(resolveExecutionLeaseDuration(60000)).toBe(EXECUTION_LEASE_DURATION);
+  });
+});
+
+describe('task-executor 租约时长与动作超时联动', () => {
+  beforeEach(async () => {
+    await browser.storage.local.clear();
+    await browser.storage.sync.clear();
+    jest.restoreAllMocks();
+    TaskExecutor.resetForTesting();
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  const leaseKey = (taskId: string) => `${EXECUTION_LEASE_KEY_PREFIX}${taskId}`;
+
+  const readLease = async (taskId: string): Promise<any> => {
+    const result = await browser.storage.local.get(leaseKey(taskId));
+    return result[leaseKey(taskId)];
+  };
+
+  const readWriteLease = async (): Promise<any> => {
+    const result = await browser.storage.local.get(BOOKMARK_WRITE_LEASE_KEY);
+    return result[BOOKMARK_WRITE_LEASE_KEY];
+  };
+
+  const waitForCall = async (spy: jest.SpyInstance): Promise<void> => {
+    await waitFor(() => spy.mock.calls.length > 0);
+  };
+
+  const createRestoreTask = async (id: string): Promise<void> => {
+    await taskService.createTask({
+      id,
+      name: `恢复租约时长任务 ${id}`,
+      status: TaskStatus.ENABLED,
+      trigger: createManualTrigger('手动'),
+      action: createBackupAction('restore'),
+    });
+  };
+
+  const createOrganizeTask = async (id: string): Promise<void> => {
+    await taskService.createTask({
+      id,
+      name: `整理租约时长任务 ${id}`,
+      status: TaskStatus.ENABLED,
+      trigger: createManualTrigger('手动'),
+      action: createOrganizeAction(),
+    });
+  };
+
+  test('长动作（恢复）的执行租约与写入租约均覆盖动作超时加缓冲', async () => {
+    const taskId = 'lease_duration_restore_task';
+    await createRestoreTask(taskId);
+
+    const executor = TaskExecutor.getInstance();
+    const gate = createDeferred();
+    const actionSpy = jest
+      .spyOn(executor as any, 'executeBackupAction')
+      .mockImplementation(async () => {
+        await gate.promise;
+        return { success: true, timestamp: Date.now(), details: '恢复完成' };
+      });
+
+    const executionPromise = executor.executeTask(taskId, 0, 'manual');
+    await waitForCall(actionSpy);
+
+    const lease = await readLease(taskId);
+    expect(lease.expiresAt - lease.acquiredAt)
+      .toBeGreaterThanOrEqual(ACTION_TIMEOUTS.restore);
+    expect(lease.expiresAt - lease.acquiredAt)
+      .toBeGreaterThanOrEqual(ACTION_TIMEOUTS.restore + LEASE_TIMEOUT_BUFFER);
+
+    const writeLease = await readWriteLease();
+    expect(writeLease.expiresAt - writeLease.acquiredAt)
+      .toBeGreaterThanOrEqual(ACTION_TIMEOUTS.restore + LEASE_TIMEOUT_BUFFER);
+
+    gate.resolve();
+    expect((await executionPromise).success).toBe(true);
+  });
+
+  test('短动作仍使用默认执行租约与写入租约时长', async () => {
+    const taskId = 'lease_duration_organize_task';
+    await createOrganizeTask(taskId);
+
+    const executor = TaskExecutor.getInstance();
+    // 动作超时加缓冲小于默认租约时长：租约保持默认值
+    executor.updateConfig({ actionTimeouts: { organize: 60000 } });
+
+    const gate = createDeferred();
+    const actionSpy = jest
+      .spyOn(executor as any, 'executeOrganizeAction')
+      .mockImplementation(async () => {
+        await gate.promise;
+        return { success: true, timestamp: Date.now(), details: '整理完成' };
+      });
+
+    const executionPromise = executor.executeTask(taskId, 0, 'manual');
+    await waitForCall(actionSpy);
+
+    const lease = await readLease(taskId);
+    expect(lease.expiresAt - lease.acquiredAt).toBe(EXECUTION_LEASE_DURATION);
+    const writeLease = await readWriteLease();
+    expect(writeLease.expiresAt - writeLease.acquiredAt).toBe(BOOKMARK_WRITE_LEASE_DURATION);
+
+    gate.resolve();
+    expect((await executionPromise).success).toBe(true);
+  });
+
+  test('重试前的续期同样按动作超时计算执行租约时长', async () => {
+    const taskId = 'lease_duration_retry_restore_task';
+    await createRestoreTask(taskId);
+
+    const executor = TaskExecutor.getInstance();
+    executor.updateConfig({ retryDelay: 10, maxRetries: 1 });
+
+    let callCount = 0;
+    const retryLeaseDurations: number[] = [];
+    const actionSpy = jest
+      .spyOn(executor as any, 'executeBackupAction')
+      .mockImplementation(async () => {
+        callCount++;
+        if (callCount === 1) {
+          return {
+            success: false,
+            timestamp: Date.now(),
+            retryable: true,
+            error: '网络错误',
+          };
+        }
+        const lease = await readLease(taskId);
+        retryLeaseDurations.push(lease.expiresAt - lease.acquiredAt);
+        return { success: true, timestamp: Date.now(), details: '恢复成功' };
+      });
+
+    const result = await executor.executeTask(taskId, 0, 'manual');
+
+    expect(result.success).toBe(true);
+    expect(actionSpy).toHaveBeenCalledTimes(2);
+    expect(retryLeaseDurations.length).toBe(1);
+    expect(retryLeaseDurations[0])
+      .toBeGreaterThanOrEqual(ACTION_TIMEOUTS.restore + LEASE_TIMEOUT_BUFFER);
   });
 });
 

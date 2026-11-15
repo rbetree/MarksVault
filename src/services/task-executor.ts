@@ -15,19 +15,25 @@ import {
 } from '../types/task';
 import taskService from './task-service';
 import { cleanupOrphanedExecutionState } from './task-execution-state';
-import { TaskExecutionConfig, DEFAULT_CONFIG, ExecutionTimeoutError } from './task-executor-types';
+import {
+  TaskExecutionConfig,
+  DEFAULT_CONFIG,
+  EXECUTION_LEASE_DURATION,
+  ExecutionTimeoutError,
+  resolveExecutionLeaseDuration,
+} from './task-executor-types';
 import { Mutex } from './task-executor-mutex';
 import { ExecutionSnapshotStore } from './task-executor-snapshot';
 import {
-  acquireBookmarkWriteLease as acquireBookmarkWriteLeaseInStorage,
   acquireExecutionLease as acquireExecutionLeaseInStorage,
+  extendExecutionLease,
   isBookmarkWriteAction,
-  isBookmarkWriteLeaseAvailable,
   isExecutionLeaseAvailable,
   readExecutionLease,
   releaseBookmarkWriteLease,
   releaseExecutionLease,
   renewExecutionLease,
+  tryAcquireBookmarkWriteLease,
 } from './task-executor-lease';
 import {
   executeBackupAction as runBackupAction,
@@ -115,20 +121,42 @@ export class TaskExecutor {
   /**
    * 获取执行租约
    * @param taskId 任务ID
+   * @param durationMs 租约时长（毫秒），缺省使用默认租约时长
    * @returns 获取结果与执行ID
    */
-  private async acquireExecutionLease(taskId: string): Promise<{ success: boolean; executionId: string }> {
-    return acquireExecutionLeaseInStorage(taskId);
+  private async acquireExecutionLease(
+    taskId: string,
+    durationMs?: number
+  ): Promise<{ success: boolean; executionId: string }> {
+    return acquireExecutionLeaseInStorage(taskId, durationMs);
   }
 
   /**
-   * 获取书签写入租约
+   * 检查并获取书签写入租约
    * @param taskId 持有写入租约的任务ID
    * @param executionId 本次任务执行的执行ID
-   * @returns 获取结果
+   * @param durationMs 租约时长（毫秒），缺省使用默认写入租约时长
+   * @returns 获取结果；denied=true 表示写入租约被其他执行占用
    */
-  private async acquireBookmarkWriteLease(taskId: string, executionId: string): Promise<{ success: boolean }> {
-    return acquireBookmarkWriteLeaseInStorage(taskId, executionId);
+  private async acquireBookmarkWriteLease(
+    taskId: string,
+    executionId: string,
+    durationMs?: number
+  ): Promise<{ success: boolean; denied: boolean }> {
+    return tryAcquireBookmarkWriteLease(taskId, executionId, durationMs);
+  }
+
+  /**
+   * 按任务动作解析执行租约时长
+   * 长动作（恢复、整理验证、推送）的租约覆盖动作超时加缓冲，避免执行中途失去所有权
+   * @param task 任务对象；未知任务时使用默认租约时长
+   * @returns 执行租约时长（毫秒）
+   */
+  private resolveLeaseDuration(task?: Task): number {
+    if (!task) {
+      return EXECUTION_LEASE_DURATION;
+    }
+    return resolveExecutionLeaseDuration(resolveActionTimeout(task, this.config));
   }
 
   private async executeBackupAction(task: Task): Promise<TaskExecutionResult> {
@@ -298,8 +326,9 @@ export class TaskExecutor {
           }
         }
 
-        // 获取执行租约：租约可靠保存后执行请求才被接受
-        const lease = await this.acquireExecutionLease(taskId);
+        // 获取执行租约：租约可靠保存后执行请求才被接受。
+        // 已提供任务定义时按动作超时确定租约时长；从存储加载的首次执行在加载后延长
+        const lease = await this.acquireExecutionLease(taskId, this.resolveLeaseDuration(providedTask));
         if (!lease.success) {
           return { success: false, error: '获取执行租约失败' };
         }
@@ -317,7 +346,9 @@ export class TaskExecutor {
       // 重试前续期执行租约：每次执行尝试都会重新计算有效期，避免多次重试累计耗时
       // 超过租约时长导致合法重试被误判为租约失效。
       // 检查-续期在互斥中完成：避免与并发执行请求的"检查-获取"交错
-      const renewal = await this.withLeaseMutex(() => renewExecutionLease(taskId, leaseExecutionId));
+      const renewal = await this.withLeaseMutex(() =>
+        renewExecutionLease(taskId, leaseExecutionId, this.resolveLeaseDuration(providedTask))
+      );
 
       if (renewal.status === 'taken_over') {
         // 其他执行已合法接管：本次执行不得再改写任务状态/历史，
@@ -457,19 +488,37 @@ export class TaskExecutor {
       }
       taskForRetry = task;
 
+      // 首次执行从存储加载任务时，获取租约时尚不知道动作类型，默认租约可能短于动作超时；
+      // 执行前按实际动作延长租约，避免长动作中途失去运行所有权。延长失败说明租约已失效，
+      // 此时尚未修改任何状态与书签树，直接终止本次执行
+      if (!providedTask) {
+        const extension = await extendExecutionLease(
+          taskId,
+          activeLeaseExecutionId,
+          this.resolveLeaseDuration(task)
+        );
+        if (extension.status !== 'extended' && extension.status !== 'unchanged') {
+          console.warn(`任务 ${taskId} 延长执行租约失败: ${extension.status}，终止执行`);
+          executionResult.error = extension.status === 'storage_error'
+            ? '无法延长执行租约，执行请求已终止'
+            : '执行租约已失效，执行请求已终止';
+          executionResult.timestamp = Date.now();
+          return executionResult;
+        }
+      }
+
       // 书签写入租约：修改书签树的任务（整理、恢复）在每次执行尝试开始时检查并获取，
       // 阻止多个任务同时修改书签树；只读/上传类任务不获取写入租约，可与写入任务并行。
       // 获取顺序：先执行租约（任务执行所有权），后写入租约（书签树独占权）；
       // 被写入租约阻止时拒绝执行请求（不产生执行历史），并立即释放刚获取的执行租约，避免残留
       // 检查-获取在互斥中完成：避免并发写入请求在"检查可用"与"获取租约"之间交错导致双重获取
       if (isBookmarkWriteAction(task)) {
-        const writeLeaseResult = await this.withLeaseMutex(async () => {
-          if (!(await isBookmarkWriteLeaseAvailable())) {
-            return { success: false, denied: true };
-          }
-          const acquired = await this.acquireBookmarkWriteLease(taskId, activeLeaseExecutionId);
-          return { success: acquired.success, denied: false };
-        });
+        // 写入租约时长与动作超时联动：恢复、整理验证等长写入动作不会被默认租约提前释放
+        const writeLeaseResult = await this.acquireBookmarkWriteLease(
+          taskId,
+          activeLeaseExecutionId,
+          this.resolveLeaseDuration(task)
+        );
 
         if (!writeLeaseResult.success) {
           // 事件触发跳过本次执行请求；手动触发返回失败并带清晰提示
@@ -609,7 +658,7 @@ export class TaskExecutor {
       return finalizeFailureResult(executionResult, taskId, executionStartTime);
     } finally {
       if (timeoutOccurred) {
-        // 底层操作可能仍在运行：保留执行租约与写入租约直至自然到期（120s），
+        // 底层操作可能仍在运行：保留执行租约与写入租约直至自然到期，
         // 阻止并发重入/双写；快照照常清理（执行输入失效）
         this.executingTasks.delete(taskId);
         await this.snapshotStore.delete(taskId);

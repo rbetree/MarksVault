@@ -6,8 +6,21 @@ import { browser } from 'wxt/browser';
 import taskExecutor from '../services/task-executor';
 import taskService from '../services/task-service';
 import triggerService from '../services/trigger-service';
+import backupService from '../services/backup-service';
 import { warmupBookmarkFavicons } from '../services/favicon-warmup-service';
-import { ActionType, createDefaultTaskStorage, EventType } from '../types/task';
+import {
+  releaseBookmarkWriteLease,
+  tryAcquireBookmarkWriteLease,
+} from '../services/task-executor-lease';
+import { ActionType, createDefaultTaskStorage, EventType, Task } from '../types/task';
+import { ACTION_TIMEOUTS, resolveExecutionLeaseDuration } from '../services/task-executor-types';
+
+// 回滚入口不是任务执行，使用固定伪任务ID持有书签写入租约，与任务写入互斥
+const PENDING_RESTORE_ROLLBACK_LEASE_TASK_ID = 'pending_restore_rollback';
+
+function generateRollbackExecutionId(): string {
+  return `rollback-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
 
 /**
  * 初始化所有后台服务
@@ -230,6 +243,105 @@ export default defineBackground({
 
           console.error('选择性推送失败:', result.error);
           return { success: false, error: result.error };
+        })()
+          .then((response) => sendResponse(response))
+          .catch(respondError);
+
+        return true;
+      }
+
+      if (message.type === 'EXECUTE_TASK_WITH_DATA') {
+        void (async () => {
+          if (!await ensureServicesInitializedOrLog('runtime.onMessage:EXECUTE_TASK_WITH_DATA')) {
+            return { success: false, error: '后台服务尚未准备就绪，请稍后重试' };
+          }
+
+          const taskId = message?.payload?.taskId as unknown;
+          const backupFilePath = message?.payload?.backupFilePath as unknown;
+
+          if (!taskId || typeof taskId !== 'string') {
+            return { success: false, error: '无效的任务ID' };
+          }
+          if (backupFilePath !== undefined && typeof backupFilePath !== 'string') {
+            return { success: false, error: '无效的备份文件路径' };
+          }
+
+          // 任务配置从存储读取，运行时只覆盖恢复来源（最新备份或指定文件），
+          // 避免调用方伪造触发器等任务定义
+          const taskResult = await taskService.getTaskById(taskId);
+          if (!taskResult.success || !taskResult.data) {
+            return { success: false, error: '任务不存在' };
+          }
+
+          const task = taskResult.data as Task;
+          if (task.action.type !== ActionType.BACKUP || task.action.operation !== 'restore') {
+            return { success: false, error: '仅支持恢复书签任务' };
+          }
+
+          const options = { ...task.action.options };
+          const selectedPath = typeof backupFilePath === 'string' ? backupFilePath.trim() : '';
+          if (selectedPath) {
+            options.backupFilePath = selectedPath;
+          } else {
+            // 选择“最新备份”时显式移除旧路径，避免持久化配置中的残留路径覆盖本次选择
+            delete options.backupFilePath;
+          }
+
+          const taskToExecute: Task = {
+            ...task,
+            action: {
+              ...task.action,
+              options,
+            },
+          };
+
+          console.log('收到恢复任务执行请求:', { taskId, useSelectedPath: !!selectedPath });
+
+          // 用户从二次确认对话框明确发起，执行来源为 manual
+          const result = await taskExecutor.executeTaskWithData(taskToExecute, 0, 'manual');
+
+          return { success: result.success, error: result.error };
+        })()
+          .then((response) => sendResponse(response))
+          .catch(respondError);
+
+        return true;
+      }
+
+      if (message.type === 'RESTORE_PENDING_BOOKMARK_BACKUP') {
+        void (async () => {
+          if (!await ensureServicesInitializedOrLog('runtime.onMessage:RESTORE_PENDING_BOOKMARK_BACKUP')) {
+            return { success: false, error: '后台服务尚未准备就绪，请稍后重试' };
+          }
+
+          // 回滚会重建书签栏，必须与任务写入互斥：先检查并获取书签写入租约
+          const executionId = generateRollbackExecutionId();
+          // 回滚与恢复同样重建书签树，写入租约按恢复动作超时设置，避免大书签树中途失去租约
+          const lease = await tryAcquireBookmarkWriteLease(
+            PENDING_RESTORE_ROLLBACK_LEASE_TASK_ID,
+            executionId,
+            resolveExecutionLeaseDuration(ACTION_TIMEOUTS.restore)
+          );
+          if (!lease.success) {
+            return {
+              success: false,
+              error: lease.denied
+                ? '另一个任务正在修改书签树，请稍后重试'
+                : '获取书签写入租约失败',
+            };
+          }
+
+          try {
+            const result = await backupService.restorePendingBookmarkBackup();
+            return {
+              success: result.success,
+              data: result.data,
+              error: result.error,
+            };
+          } finally {
+            // 成功或失败都必须释放写入租约；释放失败时租约将在到期后自然失效
+            await releaseBookmarkWriteLease(executionId);
+          }
         })()
           .then((response) => sendResponse(response))
           .catch(respondError);

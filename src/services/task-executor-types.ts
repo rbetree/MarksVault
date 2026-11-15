@@ -54,8 +54,23 @@ export const EXECUTION_LEASE_KEY_PREFIX = 'execution_lease:';
 // 执行快照在 storage.local 中的存储键
 export const EXECUTION_SNAPSHOTS_KEY = 'execution_snapshots';
 
-// 执行租约时长：2倍执行超时（120秒），为原执行留足余量；到期后原执行失去运行所有权
+// 执行租约默认时长：2倍默认执行超时（120秒），作为最短租约时长；
+// 长动作按动作超时另行延长，到期后原执行失去运行所有权
 export const EXECUTION_LEASE_DURATION = DEFAULT_CONFIG.timeout * 2;
+
+// 动作超时之外的租约缓冲：覆盖租约获取、快照、状态与结果收尾等执行开销
+export const LEASE_TIMEOUT_BUFFER = 30000;
+
+/**
+ * 按动作超时计算执行租约时长
+ * 租约必须覆盖动作超时加缓冲，避免长动作执行中途失去运行所有权被其他执行接管；
+ * 短动作仍使用默认租约时长（120秒）
+ * @param actionTimeout 动作执行超时（毫秒）
+ * @returns 执行租约时长（毫秒）
+ */
+export function resolveExecutionLeaseDuration(actionTimeout: number): number {
+  return Math.max(actionTimeout + LEASE_TIMEOUT_BUFFER, EXECUTION_LEASE_DURATION);
+}
 
 /**
  * 执行超时错误
@@ -84,6 +99,6 @@ export interface BookmarkWriteLease {
 // 书签写入租约在 storage.local 中的存储键（全局唯一：所有写入任务共用同一互斥声明）
 export const BOOKMARK_WRITE_LEASE_KEY = 'bookmark_write_lease';
 
-// 书签写入租约时长：与执行租约一致为 2倍执行超时（120秒），为原执行留足余量；
-// SW 中断时此方法不会执行释放，租约在到期后自然失效，不会永久阻塞写入任务
+// 书签写入租约默认时长：与执行租约一致为 2倍默认执行超时（120秒），作为最短租约时长；
+// 长写入动作按动作超时延长。SW 中断时不会执行释放，租约在到期后自然失效，不会永久阻塞写入任务
 export const BOOKMARK_WRITE_LEASE_DURATION = DEFAULT_CONFIG.timeout * 2;

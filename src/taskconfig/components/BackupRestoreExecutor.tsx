@@ -20,11 +20,9 @@ import WarningIcon from '@mui/icons-material/Warning';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 
 import BackupSelectionDialog from '../../popup/components/SyncView/BackupSelectionDialog';
-import { Task, BackupAction, ActionType } from '../../types/task';
+import { Task, BackupAction } from '../../types/task';
 import storageService, { GitHubCredentials } from '../../utils/storage-service';
 import githubService from '../../services/github-service';
-import taskExecutor from '../../services/task-executor';
-import backupService from '../../services/backup-service';
 import { PENDING_RESTORE_BACKUP_KEY } from '../../services/backup-service-bookmark-data';
 import { browser } from 'wxt/browser';
 
@@ -114,27 +112,18 @@ const BackupRestoreExecutor: React.FC<BackupRestoreExecutorProps> = ({ task, onC
     setError(null);
 
     try {
-      const taskToExecute: Task = {
-        ...task,
-        action: {
-          ...(task.action as BackupAction),
-          type: ActionType.BACKUP,
-          operation: 'restore',
-          options: {
-            ...(action.options || {}),
-            ...(restoreMode === 'select' ? { backupFilePath: selectedBackupPath } : {}),
-          },
-        } as BackupAction,
-      };
+      // 恢复在 background 中执行：页面关闭后仍可完成，执行租约与写入租约由后台维护。
+      // 仅传任务ID与本次选择的备份文件，任务配置由后台从存储读取
+      const response = await browser.runtime.sendMessage({
+        type: 'EXECUTE_TASK_WITH_DATA',
+        payload: {
+          taskId: task.id,
+          ...(restoreMode === 'select' ? { backupFilePath: selectedBackupPath } : {}),
+        },
+      }) as { success?: boolean; error?: string } | undefined;
 
-      // 如果选择“最新备份”，显式移除 backupFilePath（避免旧配置残留）
-      if (restoreMode === 'latest') {
-        delete (taskToExecute.action as BackupAction).options.backupFilePath;
-      }
-
-      const result = await taskExecutor.executeTaskWithData(taskToExecute);
-      if (!result.success) {
-        throw new Error(result.error || '恢复失败');
+      if (!response?.success) {
+        throw new Error(response?.error || '恢复失败');
       }
 
       setSuccess(true);
@@ -183,13 +172,22 @@ const BackupRestoreExecutor: React.FC<BackupRestoreExecutorProps> = ({ task, onC
     setRollbackMessage(null);
 
     try {
-      const result = await backupService.restorePendingBookmarkBackup();
-      if (!result.success) {
-        throw new Error(result.error || '回滚失败');
+      // 回滚通过 background 执行并获取书签写入租约，避免与其他写入任务并发
+      const response = await browser.runtime.sendMessage({
+        type: 'RESTORE_PENDING_BOOKMARK_BACKUP',
+      }) as {
+        success?: boolean;
+        data?: { bookmarksCount?: number };
+        error?: string;
+      } | undefined;
+
+      if (!response?.success) {
+        throw new Error(response?.error || '回滚失败');
       }
+
       setPendingRestoreAvailable(false);
       setRollbackMessage(
-        `已恢复上次暂存书签${result.data?.bookmarksCount ? `，共 ${result.data.bookmarksCount} 个书签` : ''}`
+        `已恢复上次暂存书签${response.data?.bookmarksCount ? `，共 ${response.data.bookmarksCount} 个书签` : ''}`
       );
     } catch (e) {
       console.error('回滚暂存书签失败:', e);

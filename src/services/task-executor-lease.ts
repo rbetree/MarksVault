@@ -6,6 +6,7 @@
 import { browser } from 'wxt/browser';
 import { ActionType, BackupAction, Task } from '../types/task';
 import storageService from '../utils/storage-service';
+import { Mutex } from './task-executor-mutex';
 import {
   BookmarkWriteLease,
   BOOKMARK_WRITE_LEASE_DURATION,
@@ -14,6 +15,9 @@ import {
   EXECUTION_LEASE_DURATION,
   EXECUTION_LEASE_KEY_PREFIX,
 } from './task-executor-types';
+
+// 书签写入租约的检查-获取互斥：写入任务与回滚入口共用，避免并发请求交错导致双重获取
+const bookmarkWriteLeaseMutex = new Mutex();
 
 /**
  * 生成执行ID
@@ -65,16 +69,20 @@ export async function isExecutionLeaseAvailable(taskId: string): Promise<boolean
  * 获取执行租约
  * 租约可靠保存后执行请求才被接受并形成任务执行
  * @param taskId 任务ID
+ * @param durationMs 租约时长（毫秒），缺省使用默认租约时长
  * @returns 获取结果与执行ID
  */
-export async function acquireExecutionLease(taskId: string): Promise<{ success: boolean; executionId: string }> {
+export async function acquireExecutionLease(
+  taskId: string,
+  durationMs: number = EXECUTION_LEASE_DURATION
+): Promise<{ success: boolean; executionId: string }> {
   const now = Date.now();
   const executionId = generateExecutionId();
   const lease: ExecutionLease = {
     taskId,
     executionId,
     acquiredAt: now,
-    expiresAt: now + EXECUTION_LEASE_DURATION,
+    expiresAt: now + durationMs,
   };
   const saveResult = await storageService.setStorageData(getExecutionLeaseKey(taskId), lease);
   if (!saveResult.success) {
@@ -131,11 +139,13 @@ export interface ExecutionLeaseRenewalResult {
  * 仅当租约仍由本执行持有且未到期时续期；其他情况返回具体原因
  * @param taskId 任务ID
  * @param executionId 本执行的执行ID
+ * @param durationMs 续期后的租约时长（毫秒），缺省使用默认租约时长
  * @returns 续期结果与当前租约
  */
 export async function renewExecutionLease(
   taskId: string,
-  executionId: string
+  executionId: string,
+  durationMs: number = EXECUTION_LEASE_DURATION
 ): Promise<ExecutionLeaseRenewalResult> {
   const result = await storageService.getStorageData(getExecutionLeaseKey(taskId));
   if (!result.success) {
@@ -156,7 +166,7 @@ export async function renewExecutionLease(
 
   const renewedLease: ExecutionLease = {
     ...lease,
-    expiresAt: Date.now() + EXECUTION_LEASE_DURATION,
+    expiresAt: Date.now() + durationMs,
   };
   const saveResult = await storageService.setStorageData(getExecutionLeaseKey(taskId), renewedLease);
   if (!saveResult.success) {
@@ -164,6 +174,64 @@ export async function renewExecutionLease(
     return { status: 'storage_error', lease };
   }
   return { status: 'renewed', lease: renewedLease };
+}
+
+export type ExecutionLeaseExtensionStatus =
+  | 'extended'       // 已延长到目标时长
+  | 'unchanged'      // 当前租约已覆盖目标时长，无需修改
+  | 'missing'        // 租约不存在
+  | 'expired'        // 本执行持有的租约已到期
+  | 'taken_over'     // 租约由其他执行持有
+  | 'storage_error'; // 租约存储读写失败
+
+export interface ExecutionLeaseExtensionResult {
+  status: ExecutionLeaseExtensionStatus;
+  lease: ExecutionLease | null;
+}
+
+/**
+ * 按动作超时延长执行租约
+ * 首次执行在加载任务后才知道动作类型，获取租约时先使用默认时长，
+ * 长动作在执行前延长到至少覆盖动作超时；已在目标时长内的租约保持不变
+ * @param taskId 任务ID
+ * @param executionId 本执行的执行ID
+ * @param durationMs 期望的租约时长（毫秒）
+ * @returns 延长结果与当前租约
+ */
+export async function extendExecutionLease(
+  taskId: string,
+  executionId: string,
+  durationMs: number
+): Promise<ExecutionLeaseExtensionResult> {
+  const result = await storageService.getStorageData(getExecutionLeaseKey(taskId));
+  if (!result.success) {
+    return { status: 'storage_error', lease: null };
+  }
+  const lease = result.data as ExecutionLease | null;
+  if (!lease) {
+    return { status: 'missing', lease: null };
+  }
+  if (lease.executionId !== executionId) {
+    return { status: 'taken_over', lease };
+  }
+  if (lease.expiresAt <= Date.now()) {
+    return { status: 'expired', lease };
+  }
+
+  const desiredExpiresAt = Date.now() + durationMs;
+  if (lease.expiresAt >= desiredExpiresAt) {
+    return { status: 'unchanged', lease };
+  }
+
+  const extendedLease: ExecutionLease = {
+    ...lease,
+    expiresAt: desiredExpiresAt,
+  };
+  const saveResult = await storageService.setStorageData(getExecutionLeaseKey(taskId), extendedLease);
+  if (!saveResult.success) {
+    return { status: 'storage_error', lease };
+  }
+  return { status: 'extended', lease: extendedLease };
 }
 
 /**
@@ -207,21 +275,48 @@ export async function isBookmarkWriteLeaseAvailable(): Promise<boolean> {
  * 重试属于同一任务执行的执行尝试，重新获取并覆盖原租约
  * @param taskId 持有写入租约的任务ID
  * @param executionId 本次任务执行的执行ID
+ * @param durationMs 租约时长（毫秒），缺省使用默认写入租约时长
  * @returns 获取结果
  */
-export async function acquireBookmarkWriteLease(taskId: string, executionId: string): Promise<{ success: boolean }> {
+export async function acquireBookmarkWriteLease(
+  taskId: string,
+  executionId: string,
+  durationMs: number = BOOKMARK_WRITE_LEASE_DURATION
+): Promise<{ success: boolean }> {
   const now = Date.now();
   const lease: BookmarkWriteLease = {
     taskId,
     executionId,
     acquiredAt: now,
-    expiresAt: now + BOOKMARK_WRITE_LEASE_DURATION,
+    expiresAt: now + durationMs,
   };
   const saveResult = await storageService.setStorageData(BOOKMARK_WRITE_LEASE_KEY, lease);
   if (!saveResult.success) {
     return { success: false };
   }
   return { success: true };
+}
+
+/**
+ * 检查并获取书签写入租约
+ * 检查-获取在同一互斥临界区中完成，避免写入任务与回滚入口并发交错导致双重获取
+ * @param taskId 持有写入租约的任务ID
+ * @param executionId 本次写入操作的执行ID
+ * @param durationMs 租约时长（毫秒），缺省使用默认写入租约时长
+ * @returns success=false 且 denied=true 表示写入租约被其他执行占用
+ */
+export async function tryAcquireBookmarkWriteLease(
+  taskId: string,
+  executionId: string,
+  durationMs: number = BOOKMARK_WRITE_LEASE_DURATION
+): Promise<{ success: boolean; denied: boolean }> {
+  return bookmarkWriteLeaseMutex.runExclusive(async () => {
+    if (!(await isBookmarkWriteLeaseAvailable())) {
+      return { success: false, denied: true };
+    }
+    const acquired = await acquireBookmarkWriteLease(taskId, executionId, durationMs);
+    return { success: acquired.success, denied: false };
+  });
 }
 
 /**
