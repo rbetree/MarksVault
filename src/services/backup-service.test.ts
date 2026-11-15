@@ -1322,8 +1322,14 @@ describe('backup-service 推送返回结果', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedGitHub.repoExists.mockResolvedValue(true);
+    mockedGitHub.getRepositoryFiles.mockResolvedValue([]);
     mockedGitHub.createOrUpdateFile.mockResolvedValue({ content: { html_url: fileUrl } } as any);
     mockedStorage.saveBackupStatus.mockResolvedValue({ success: true } as any);
+    // 关闭清理流程，避免其文件列表请求干扰推送用例的调用次数断言
+    mockedStorage.getSettings.mockResolvedValue({
+      success: true,
+      data: { backup: { maxBackupsPerType: 0 } },
+    } as any);
     mockedFavicon.mockReturnValue('');
     mockedBookmark.getAllBookmarks.mockResolvedValue({
       success: true,
@@ -1367,6 +1373,97 @@ describe('backup-service 推送返回结果', () => {
       lastOperationStatus: 'success',
       stats: { isFromCache: false },
     }));
+  });
+
+  test('同日二次推送应查询已有文件并携带 sha 更新', async () => {
+    const first = await backupService.pushBookmarksToGitHub(
+      credentials,
+      username,
+      'menav',
+      'bookmarks',
+      '提交书签'
+    );
+    // 模拟首次推送后仓库中已存在同名文件
+    const existingFileName = first.data.filePath.split('/').pop() as string;
+    mockedGitHub.getRepositoryFiles.mockResolvedValueOnce([
+      {
+        name: existingFileName,
+        path: first.data.filePath,
+        sha: 'sha-existing',
+        size: 1,
+        url: '',
+        download_url: '',
+        type: 'file',
+      },
+    ] as any);
+
+    const second = await backupService.pushBookmarksToGitHub(
+      credentials,
+      username,
+      'menav',
+      'bookmarks',
+      '提交书签'
+    );
+
+    expect(first.success).toBe(true);
+    expect(second.success).toBe(true);
+    expect(second.data.filePath).toBe(first.data.filePath);
+    expect(mockedGitHub.getRepositoryFiles).toHaveBeenNthCalledWith(
+      1,
+      credentials,
+      username,
+      'menav',
+      'bookmarks'
+    );
+    expect(mockedGitHub.getRepositoryFiles).toHaveBeenNthCalledWith(
+      2,
+      credentials,
+      username,
+      'menav',
+      'bookmarks'
+    );
+    // 首次上传目录为空（不传 sha），同日第二次上传携带已有文件 sha，避免 GitHub 返回 422
+    expect(mockedGitHub.createOrUpdateFile).toHaveBeenNthCalledWith(
+      1,
+      credentials,
+      username,
+      'menav',
+      first.data.filePath,
+      expect.stringContaining('<!DOCTYPE NETSCAPE-Bookmark-file-1>'),
+      '提交书签'
+    );
+    expect(mockedGitHub.createOrUpdateFile).toHaveBeenNthCalledWith(
+      2,
+      credentials,
+      username,
+      'menav',
+      second.data.filePath,
+      expect.stringContaining('<!DOCTYPE NETSCAPE-Bookmark-file-1>'),
+      '提交书签',
+      'sha-existing'
+    );
+  });
+
+  test('目标目录不存在时按新建文件上传', async () => {
+    mockedGitHub.getRepositoryFiles.mockRejectedValue(new GitHubApiError(404, 'Not Found'));
+
+    const result = await backupService.pushBookmarksToGitHub(
+      credentials,
+      username,
+      'menav',
+      'bookmarks',
+      '提交书签'
+    );
+
+    expect(result.success).toBe(true);
+    expect(mockedGitHub.createOrUpdateFile).toHaveBeenCalledWith(
+      credentials,
+      username,
+      'menav',
+      result.data.filePath,
+      expect.stringContaining('<!DOCTYPE NETSCAPE-Bookmark-file-1>'),
+      '提交书签'
+    );
   });
 
   test('推送上传失败时返回失败并保存失败状态', async () => {

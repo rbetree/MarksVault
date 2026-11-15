@@ -1,5 +1,5 @@
 import { GitHubCredentials } from '../utils/storage-service';
-import githubService from './github-service';
+import githubService, { GitHubApiError } from './github-service';
 
 export type RepositoryFile = Awaited<ReturnType<typeof githubService.getRepositoryFiles>>[number];
 
@@ -74,14 +74,45 @@ export async function readRepositoryFileContent(
   return fileData.content;
 }
 
+/**
+ * 查询仓库中已有文件的 sha
+ * GitHub Contents API 更新已有文件时必须携带 sha，否则返回 422；目录不存在时返回 undefined
+ */
+export async function findRepositoryFileSha(
+  credentials: GitHubCredentials,
+  username: string,
+  repoName: string,
+  path: string
+): Promise<string | undefined> {
+  const separatorIndex = path.lastIndexOf('/');
+  const folderPath = separatorIndex >= 0 ? path.slice(0, separatorIndex) : '';
+  const fileName = separatorIndex >= 0 ? path.slice(separatorIndex + 1) : path;
+
+  try {
+    const files = await githubService.getRepositoryFiles(credentials, username, repoName, folderPath);
+    return files.find(file => file.name === fileName)?.sha;
+  } catch (error) {
+    // 目录尚不存在等同于目标文件不存在，上传会走新建分支
+    if (error instanceof GitHubApiError && error.status === 404) {
+      return undefined;
+    }
+    throw error;
+  }
+}
+
 export async function writeRepositoryFile(
   credentials: GitHubCredentials,
   username: string,
   repoName: string,
   path: string,
   content: string,
-  message: string
+  message: string,
+  sha?: string
 ): Promise<any> {
+  // 仅在更新已有文件时携带 sha，保持新建文件调用与历史行为一致
+  if (sha) {
+    return githubService.createOrUpdateFile(credentials, username, repoName, path, content, message, sha);
+  }
   return githubService.createOrUpdateFile(credentials, username, repoName, path, content, message);
 }
 

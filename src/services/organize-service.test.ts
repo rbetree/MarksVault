@@ -125,7 +125,7 @@ describe('organize-service 失败处理', () => {
     expect(result.details).toContain('异常 1 个');
   });
 
-  test('validate 分支在 HEAD 失败时应回退 GET(no-cors)', async () => {
+  test('validate 分支在 HEAD 失败时应回退 GET(no-cors)，只标记为网络可达', async () => {
     mockedFetch
       .mockRejectedValueOnce(new Error('HEAD blocked'))
       .mockResolvedValueOnce({
@@ -142,8 +142,30 @@ describe('organize-service 失败处理', () => {
 
     expect(result.success).toBe(true);
     expect(result.processedCount).toBe(1);
+    expect(result.details).toContain('正常 0 个');
+    expect(result.details).toContain('网络可达但状态未知 1 个');
+    expect(result.details).not.toContain('正常 1 个');
     expect(mockedFetch).toHaveBeenCalledTimes(2);
     expect(mockedFetch.mock.calls[0][1].method).toBe('HEAD');
     expect(mockedFetch.mock.calls[1][1].method).toBe('GET');
+  });
+
+  test('validate 分支应将 5xx 状态码判为异常', async () => {
+    mockedFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 503,
+    } as any);
+
+    const [result] = await organizeService.organizeBookmarks([
+      {
+        operation: 'validate',
+        filters: { pattern: 'example.com' },
+      },
+    ]);
+
+    expect(result.success).toBe(false);
+    expect(result.details).toContain('正常 0 个');
+    expect(result.details).toContain('异常 1 个');
+    expect(result.details).toContain('HTTP 503');
   });
 });

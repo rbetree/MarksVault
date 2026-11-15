@@ -4,7 +4,7 @@ import storageService from '../utils/storage-service';
 import { isRetryableGitHubError } from './github-service';
 import { BackupType, DEFAULT_BACKUP_REPO } from './backup-service-config';
 import { buildPushFilePath, buildTimestampedBackupFilePath } from './backup-service-paths';
-import { ensureRepositoryExists, writeRepositoryFile } from './backup-service-github';
+import { ensureRepositoryExists, findRepositoryFileSha, writeRepositoryFile } from './backup-service-github';
 import { createBookmarkBackupData } from './backup-service-bookmark-data';
 import { createSettingsBackupData, saveBackupStatusForType } from './backup-service-settings';
 import { createHtmlBookmarkData } from './backup-service-html';
@@ -163,13 +163,16 @@ export async function pushBookmarksToGitHub(
     const filePath = buildPushFilePath(folderPath, now);
 
     // 4. 上传HTML书签文件
+    // 同名文件（同日重复推送）需要携带已有 sha 才会更新而不是返回 422
+    const existingFileSha = await findRepositoryFileSha(credentials, username, repoName, filePath);
     const uploadResult = await writeRepositoryFile(
       credentials,
       username,
       repoName,
       filePath,
       htmlBookmarkData,
-      commitMessage || `推送书签 - ${now.toLocaleString()}`
+      commitMessage || `推送书签 - ${now.toLocaleString()}`,
+      existingFileSha
     );
 
     // 5. 保存状态 (使用与备份相同的状态结构，但区分开)

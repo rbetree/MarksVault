@@ -57,6 +57,7 @@ const useBookmarkActions = ({
   // 将指定书签的 URL（以及可选的标题）更新为“当前标签页”
   const handleUpdateToCurrentUrl = useCallback(async (bookmarkId: string) => {
     try {
+      // popup 由扩展图标点击打开，activeTab 已临时授予 url/title 读取权限
       const tabs = await browser.tabs.query({ active: true, currentWindow: true });
       const tab = tabs?.[0];
       const url = tab?.url;
