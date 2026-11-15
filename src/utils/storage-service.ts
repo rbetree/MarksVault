@@ -634,12 +634,27 @@ class StorageService {
         }
       }
 
-      await browser.storage.local.clear();
-      await browser.storage.local.set(data.local as Record<string, any>);
+      // clear 后写入失败会丢失原配置：失败时用导入前的全量快照恢复
+      try {
+        await browser.storage.local.clear();
+        await browser.storage.local.set(data.local as Record<string, any>);
 
-      // 回写运行态数据（以当前运行态为准，覆盖备份文件中同名的 key）
-      if (Object.keys(runtimeState).length > 0) {
-        await browser.storage.local.set(runtimeState);
+        // 回写运行态数据（以当前运行态为准，覆盖备份文件中同名的 key）
+        if (Object.keys(runtimeState).length > 0) {
+          await browser.storage.local.set(runtimeState);
+        }
+      } catch (importLocalError) {
+        try {
+          await browser.storage.local.clear();
+          await browser.storage.local.set(allLocalData);
+        } catch (rollbackError) {
+          console.error('导入配置失败后恢复原数据失败:', rollbackError);
+          return {
+            success: false,
+            error: `导入配置失败: ${importLocalError instanceof Error ? importLocalError.message : String(importLocalError)}；恢复原数据失败: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`
+          };
+        }
+        throw importLocalError;
       }
 
       // 2) 合并导入 sync（不清空）

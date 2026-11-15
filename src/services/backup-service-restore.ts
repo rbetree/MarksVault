@@ -64,6 +64,11 @@ export async function restoreSettingsFromGitHub(
         );
       } catch (error) {
         console.error('获取仓库文件列表失败:', error);
+        // 仓库或 settings/ 目录不存在时 GitHub 返回 404：这是“没有配置备份”，
+        // 不是文件列表读取失败，避免用户看到误导性的网络/权限错误
+        if (error instanceof GitHubApiError && error.status === 404) {
+          throw new Error('未找到配置备份文件，请先进行备份');
+        }
         // 网络/限流等临时性失败保留结构化分类，供上层判定可重试性
         if (error instanceof RetryableError || error instanceof GitHubApiError) {
           throw error;

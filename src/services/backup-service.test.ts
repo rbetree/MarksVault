@@ -1283,6 +1283,22 @@ describe('backup-service 配置备份与恢复', () => {
     expect(result.error).toContain('获取仓库文件列表失败: network down');
   });
 
+  test('仓库或 settings 目录不存在（404）时返回未找到配置备份，而非文件列表失败', async () => {
+    mockedGitHub.getRepositoryFiles.mockRejectedValue(new GitHubApiError(404, 'Not Found'));
+
+    const result = await backupService.restoreFromGitHub(
+      credentials,
+      username,
+      false,
+      undefined,
+      BackupType.SETTINGS
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('未找到配置备份文件，请先进行备份');
+    expect(result.error).not.toContain('获取仓库文件列表失败');
+  });
+
   test('旧版仅 settings 格式的配置备份仍可恢复', async () => {
     mockedGitHub.getRepositoryFiles.mockResolvedValue([
       {
@@ -1614,6 +1630,90 @@ describe('backup-service 推送返回结果', () => {
     expect(mockedStorage.saveBackupStatus).toHaveBeenCalledWith(expect.objectContaining({
       lastOperationStatus: 'failed',
       errorMessage: '403 forbidden',
+    }));
+  });
+
+  test.each([422, 409])('推送遇到 %i 冲突时应重新查询 sha 并重试一次', async (status) => {
+    const filePath = buildPushFilePath('bookmarks', new Date());
+    const fileName = filePath.split('/').pop() as string;
+
+    // 首次查询不到已过期 sha；冲突后重新查询得到最新 sha
+    mockedGitHub.getRepositoryFiles
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          name: fileName,
+          path: filePath,
+          sha: 'sha-latest',
+          size: 1,
+          url: '',
+          download_url: '',
+          type: 'file',
+        },
+      ] as any);
+    mockedGitHub.createOrUpdateFile
+      .mockRejectedValueOnce(new GitHubApiError(status, 'sha does not match'))
+      .mockResolvedValueOnce({ content: { html_url: fileUrl } } as any);
+
+    const result = await backupService.pushBookmarksToGitHub(
+      credentials,
+      username,
+      'menav',
+      'bookmarks',
+      '提交书签'
+    );
+
+    expect(result.success).toBe(true);
+    expect(mockedGitHub.getRepositoryFiles).toHaveBeenCalledTimes(2);
+    expect(mockedGitHub.createOrUpdateFile).toHaveBeenCalledTimes(2);
+    expect(mockedGitHub.createOrUpdateFile).toHaveBeenNthCalledWith(
+      2,
+      credentials,
+      username,
+      'menav',
+      result.data.filePath,
+      expect.stringContaining('<!DOCTYPE NETSCAPE-Bookmark-file-1>'),
+      '提交书签',
+      'sha-latest'
+    );
+  });
+
+  test('冲突重试仍失败时返回首次错误', async () => {
+    const filePath = buildPushFilePath('bookmarks', new Date());
+    const fileName = filePath.split('/').pop() as string;
+
+    mockedGitHub.getRepositoryFiles
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          name: fileName,
+          path: filePath,
+          sha: 'sha-latest',
+          size: 1,
+          url: '',
+          download_url: '',
+          type: 'file',
+        },
+      ] as any);
+    mockedGitHub.createOrUpdateFile
+      .mockRejectedValueOnce(new GitHubApiError(422, 'sha does not match'))
+      .mockRejectedValueOnce(new GitHubApiError(422, 'retry failed'));
+
+    const result = await backupService.pushBookmarksToGitHub(
+      credentials,
+      username,
+      'menav',
+      'bookmarks',
+      '提交书签'
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('sha does not match');
+    expect(result.error).not.toContain('retry failed');
+    expect(mockedGitHub.createOrUpdateFile).toHaveBeenCalledTimes(2);
+    expect(mockedStorage.saveBackupStatus).toHaveBeenCalledWith(expect.objectContaining({
+      lastOperationStatus: 'failed',
+      errorMessage: 'sha does not match',
     }));
   });
 });

@@ -1,7 +1,7 @@
 import { BackupResult, BackupStatus } from '../types/backup';
 import { GitHubCredentials } from '../utils/storage-service';
 import storageService from '../utils/storage-service';
-import { isRetryableGitHubError } from './github-service';
+import { GitHubApiError, isRetryableGitHubError } from './github-service';
 import { BackupType, DEFAULT_BACKUP_REPO } from './backup-service-config';
 import { buildPushFilePath, buildTimestampedBackupFilePath } from './backup-service-paths';
 import { ensureRepositoryExists, findRepositoryFileSha, writeRepositoryFile } from './backup-service-github';
@@ -164,16 +164,45 @@ export async function pushBookmarksToGitHub(
 
     // 4. 上传HTML书签文件
     // 同名文件（同日重复推送）需要携带已有 sha 才会更新而不是返回 422
+    const finalCommitMessage = commitMessage || `推送书签 - ${now.toLocaleString()}`;
     const existingFileSha = await findRepositoryFileSha(credentials, username, repoName, filePath);
-    const uploadResult = await writeRepositoryFile(
-      credentials,
-      username,
-      repoName,
-      filePath,
-      htmlBookmarkData,
-      commitMessage || `推送书签 - ${now.toLocaleString()}`,
-      existingFileSha
-    );
+
+    let uploadResult: Awaited<ReturnType<typeof writeRepositoryFile>>;
+    try {
+      uploadResult = await writeRepositoryFile(
+        credentials,
+        username,
+        repoName,
+        filePath,
+        htmlBookmarkData,
+        finalCommitMessage,
+        existingFileSha
+      );
+    } catch (uploadError) {
+      // 并发写入会让已查到的 sha 过期（GitHub 返回 422/409）：
+      // 重新查询最新 sha 后重试一次，仍失败则保留首次错误
+      const isShaConflict = uploadError instanceof GitHubApiError
+        && (uploadError.status === 422 || uploadError.status === 409);
+      if (!isShaConflict) {
+        throw uploadError;
+      }
+
+      try {
+        const latestFileSha = await findRepositoryFileSha(credentials, username, repoName, filePath);
+        uploadResult = await writeRepositoryFile(
+          credentials,
+          username,
+          repoName,
+          filePath,
+          htmlBookmarkData,
+          finalCommitMessage,
+          latestFileSha
+        );
+      } catch (retryError) {
+        console.error('重新查询 sha 后重试推送失败:', retryError);
+        throw uploadError;
+      }
+    }
 
     // 5. 保存状态 (使用与备份相同的状态结构，但区分开)
     const backupStatus: BackupStatus = {

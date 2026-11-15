@@ -211,4 +211,30 @@ describe('organize-service 失败处理', () => {
     expect(result.details).toContain('异常 1 个');
     expect(result.details).toContain('HTTP 503');
   });
+
+  test.each([401, 403, 429])(
+    'validate 分支应将 HEAD %i 标记为状态未知而非正常',
+    async (status) => {
+      mockedFetch.mockResolvedValueOnce({
+        ok: false,
+        status,
+      } as any);
+
+      const [result] = await organizeService.organizeBookmarks([
+        {
+          operation: 'validate',
+          filters: { pattern: 'example.com' },
+        },
+      ]);
+
+      expect(result.success).toBe(true);
+      expect(result.processedCount).toBe(1);
+      expect(result.details).toContain('正常 0 个');
+      expect(result.details).toContain('网络可达但状态未知 1 个');
+      expect(result.details).toContain('需要目标站点权限');
+      expect(result.details).not.toContain('正常 1 个');
+      // HEAD 已返回状态，无需回退到 no-cors GET
+      expect(mockedFetch).toHaveBeenCalledTimes(1);
+    }
+  );
 });

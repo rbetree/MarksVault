@@ -107,4 +107,42 @@ describe('storage-service importConfig 运行态保护', () => {
       settings: { syncEnabled: false, viewType: 'list' },
     });
   });
+
+  test('导入写入失败时应回滚到导入前的全量数据', async () => {
+    const originalData = {
+      settings: { syncEnabled: true, viewType: 'grid' },
+      bookmarks: { lastUpdated: 1, customData: { '1': { note: 'keep' } } },
+      bookmark_write_lease: { taskId: 't-1' },
+    };
+    mockedLocalGet.mockResolvedValueOnce(originalData);
+    mockedLocalSet.mockRejectedValueOnce(new Error('quota exceeded'));
+
+    const result = await storageService.importConfig(baseConfig as any);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('导入配置失败');
+    expect(result.error).toContain('quota exceeded');
+    // 首次 set 导入数据失败后，再次 clear 并写回导入前的完整快照
+    expect(mockedLocalClear).toHaveBeenCalledTimes(2);
+    expect(mockedLocalSet).toHaveBeenNthCalledWith(1, {
+      settings: { syncEnabled: false, viewType: 'list' },
+    });
+    expect(mockedLocalSet).toHaveBeenNthCalledWith(2, originalData);
+  });
+
+  test('导入写入与回滚都失败时返回两个错误', async () => {
+    mockedLocalGet.mockResolvedValueOnce({
+      settings: { syncEnabled: true, viewType: 'grid' },
+    });
+    mockedLocalSet
+      .mockRejectedValueOnce(new Error('write failed'))
+      .mockRejectedValueOnce(new Error('rollback failed'));
+
+    const result = await storageService.importConfig(baseConfig as any);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('write failed');
+    expect(result.error).toContain('恢复原数据失败');
+    expect(result.error).toContain('rollback failed');
+  });
 });

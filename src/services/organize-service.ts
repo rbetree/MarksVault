@@ -82,6 +82,12 @@ class OrganizeService {
     return status === 404 || status === 410 || status >= 500;
   }
 
+  private isPermissionOrRateLimitStatus(status: number): boolean {
+    // 401/403/429 表示站点拒绝或限制了请求，书签本身未必失效；
+    // 没有目标站点 host 权限时无法进一步确认，只能标记为状态未知
+    return status === 401 || status === 403 || status === 429;
+  }
+
   private async validateBookmarkUrl(url: string): Promise<BookmarkUrlValidationResult> {
     let parsedUrl: URL;
     try {
@@ -103,6 +109,13 @@ class OrganizeService {
 
       if (this.isUnavailableStatus(headResponse.status)) {
         return { status: 'invalid', reason: `HTTP ${headResponse.status}` };
+      }
+
+      if (this.isPermissionOrRateLimitStatus(headResponse.status)) {
+        return {
+          status: 'unknown',
+          reason: `HTTP ${headResponse.status}，需要目标站点权限才能确认`,
+        };
       }
 
       return { status: 'ok' };
@@ -570,7 +583,7 @@ class OrganizeService {
       processedCount: bookmarksToValidate.length,
       details: details
         + (unknownCount > 0
-          ? '。状态未知表示跨域限制导致无法读取状态码，仅确认网络可达'
+          ? '。状态未知表示无法确认链接是否有效（跨域限制或需要目标站点权限）'
           : '')
         + (invalidDetails.length > 0
           ? `。异常详情: ${invalidDetails.slice(0, 5).join('; ')}`

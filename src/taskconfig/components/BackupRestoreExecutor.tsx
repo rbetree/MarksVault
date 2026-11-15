@@ -249,7 +249,7 @@ const BackupRestoreExecutor: React.FC<BackupRestoreExecutorProps> = ({ task, onC
         {!loading && !success && (
           <>
             <Alert severity="warning" icon={<WarningIcon />} sx={{ mb: 2 }}>
-              此操作会覆盖当前浏览器中的书签，且不可撤销。建议先执行一次“立即备份”。
+              此操作仅恢复书签栏，会覆盖当前浏览器书签栏中的内容，且不可撤销。其他位置的书签不受影响。建议先执行一次“立即备份”。
             </Alert>
 
             {rollbackMessage && (
@@ -362,7 +362,7 @@ const BackupRestoreExecutor: React.FC<BackupRestoreExecutorProps> = ({ task, onC
           </DialogTitle>
           <DialogContent>
             <DialogContentText>
-              此操作将从 GitHub 恢复书签，并覆盖当前浏览器中的书签。此操作不可撤销。
+              此操作将从 GitHub 恢复书签到书签栏，并覆盖当前浏览器书签栏中的内容。此操作不可撤销，其他位置的书签不受影响。
               <br />
               <br />
               {restoreMode === 'select' && selectedBackupPath ? (
