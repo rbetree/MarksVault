@@ -7,6 +7,7 @@ import taskExecutor from '../services/task-executor';
 import taskService from '../services/task-service';
 import triggerService from '../services/trigger-service';
 import backupService from '../services/backup-service';
+import notificationService, { BACKUP_REMINDER_ALARM_NAME } from '../services/notification-service';
 import { warmupBookmarkFavicons } from '../services/favicon-warmup-service';
 import {
   releaseBookmarkWriteLease,
@@ -83,6 +84,14 @@ export function resetServicesInitStateForTesting(): void {
 export default defineBackground({
   type: 'module',
   main() {
+    // 每日备份检查：alarm 在安装/启动时确保存在，Service Worker 重启后仍会触发
+    browser.alarms.onAlarm.addListener((alarm) => {
+      if (alarm.name !== BACKUP_REMINDER_ALARM_NAME) return;
+      void notificationService.checkBackupReminder().catch((error) => {
+        console.error('[alarms.onAlarm] 备份提醒检查失败:', error);
+      });
+    });
+
     // 监听安装事件
     browser.runtime.onInstalled.addListener(async (details) => {
       if (details.reason === 'install') {
@@ -105,6 +114,9 @@ export default defineBackground({
         );
       }
 
+      // 安装/更新后确保每日备份检查定时任务存在
+      await notificationService.ensureBackupReminderAlarm();
+
       // 使用统一的服务初始化函数
       await ensureServicesInitializedOrLog('onInstalled');
     });
@@ -112,6 +124,9 @@ export default defineBackground({
     // 监听浏览器启动事件
     browser.runtime.onStartup.addListener(async () => {
       console.log('浏览器启动，初始化 MarksVault 服务...');
+
+      // 确保每日备份检查定时任务存在
+      await notificationService.ensureBackupReminderAlarm();
 
       // 使用统一的服务初始化函数
       if (!await ensureServicesInitializedOrLog('onStartup')) {
@@ -128,6 +143,7 @@ export default defineBackground({
         return;
       }
       await triggerService.handleEventTrigger(EventType.BOOKMARK_CHANGED, { id, bookmark });
+      await notificationService.notifyBookmarkChanges();
     });
 
     browser.bookmarks.onRemoved.addListener(async (id, removeInfo) => {
@@ -135,6 +151,7 @@ export default defineBackground({
         return;
       }
       await triggerService.handleEventTrigger(EventType.BOOKMARK_CHANGED, { id, removeInfo });
+      await notificationService.notifyBookmarkChanges();
     });
 
     browser.bookmarks.onChanged.addListener(async (id, changeInfo) => {
@@ -148,6 +165,7 @@ export default defineBackground({
         changeInfo,
         bookmark: { id, title: changeInfo.title, url: changeInfo.url },
       });
+      await notificationService.notifyBookmarkChanges();
     });
 
     browser.bookmarks.onMoved.addListener(async (id, moveInfo) => {
@@ -161,6 +179,7 @@ export default defineBackground({
         moveInfo,
         bookmark: { id, parentId: moveInfo.parentId },
       });
+      await notificationService.notifyBookmarkChanges();
     });
 
     // 由于在 manifest 中配置了 action.default_popup，chrome.action.onClicked 事件永远不会触发
@@ -238,6 +257,7 @@ export default defineBackground({
           // 使用 executeTaskWithData 执行，直接传入包含 selections 的任务对象
           // 用户从 UI 明确发起，执行来源为 manual
           const result = await taskExecutor.executeTaskWithData(taskWithSelections, 0, 'manual');
+          await notificationService.notifySyncStatus(task, result);
 
           if (result.success) return { success: true };
 
@@ -299,6 +319,7 @@ export default defineBackground({
 
           // 用户从二次确认对话框明确发起，执行来源为 manual
           const result = await taskExecutor.executeTaskWithData(taskToExecute, 0, 'manual');
+          await notificationService.notifySyncStatus(taskToExecute, result);
 
           return { success: result.success, error: result.error };
         })()
@@ -368,11 +389,13 @@ export default defineBackground({
           if (!taskResult.success || !taskResult.data) {
             return { success: false, error: '任务不存在' };
           }
+          const task = taskResult.data as Task;
 
           console.log('收到手动执行任务请求:', { taskId });
 
           // 用户从 UI 明确发起，执行来源为 manual
           const result = await taskExecutor.executeTask(taskId, 0, 'manual');
+          await notificationService.notifySyncStatus(task, result);
 
           return { success: result.success, error: result.error };
         })()

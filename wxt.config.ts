@@ -82,8 +82,16 @@ export default defineConfig({
       description: '智能管理、整理和安全备份您的书签数据',
       // activeTab：用户点击扩展图标打开 popup 时临时授予当前标签页访问权，
       // “更新为当前网址”依赖它读取 URL/标题；完整 tabs 权限不必要
+      // notifications/alarms：浏览器通知与每日备份检查定时任务
       // Firefox 不支持 Chromium 的 `_favicon` 端点，也不需要 `favicon` 权限，避免 AMO 审核噪音
-      permissions: ['bookmarks', 'storage', 'activeTab', ...(isFirefox ? [] : ['favicon'])],
+      permissions: [
+        'bookmarks',
+        'storage',
+        'activeTab',
+        'notifications',
+        'alarms',
+        ...(isFirefox ? [] : ['favicon']),
+      ],
       host_permissions: ['https://api.github.com/*'],
       action: {
         default_icon: {

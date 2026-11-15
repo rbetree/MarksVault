@@ -4,8 +4,10 @@ jest.mock('wxt', () => ({
 
 import wxtConfig from '../../wxt.config';
 
+const BROWSERS = ['chrome', 'edge', 'firefox'] as const;
+
 describe('wxt manifest 权限配置', () => {
-  const getManifest = (browser: 'chrome' | 'firefox') => {
+  const getManifest = (browser: typeof BROWSERS[number]) => {
     return (wxtConfig as any).manifest({ browser }) as { permissions: string[] };
   };
 
@@ -20,5 +22,13 @@ describe('wxt manifest 权限配置', () => {
     const manifest = getManifest('firefox');
 
     expect(manifest.permissions).toContain('activeTab');
+  });
+
+  test.each(BROWSERS)('%s manifest 声明通知与定时任务权限，且不引入 tabs', (browser) => {
+    const manifest = getManifest(browser);
+
+    expect(manifest.permissions).toContain('notifications');
+    expect(manifest.permissions).toContain('alarms');
+    expect(manifest.permissions).not.toContain('tabs');
   });
 });

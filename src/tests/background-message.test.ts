@@ -3,12 +3,24 @@ jest.mock('wxt/utils/define-background', () => ({
 }));
 
 let onMessageListener: ((message: any, sender: any, sendResponse: any) => any) | null = null;
+let onInstalledListener: ((details: any) => any) | null = null;
+let onStartupListener: (() => any) | null = null;
+let onAlarmListener: ((alarm: any) => any) | null = null;
+let onBookmarkCreatedListener: ((id: string, bookmark: any) => any) | null = null;
 
 jest.mock('wxt/browser', () => ({
   browser: {
     runtime: {
-      onInstalled: { addListener: jest.fn() },
-      onStartup: { addListener: jest.fn() },
+      onInstalled: {
+        addListener: jest.fn((listener: any) => {
+          onInstalledListener = listener;
+        }),
+      },
+      onStartup: {
+        addListener: jest.fn((listener: any) => {
+          onStartupListener = listener;
+        }),
+      },
       onMessage: {
         addListener: jest.fn((listener: any) => {
           onMessageListener = listener;
@@ -17,7 +29,11 @@ jest.mock('wxt/browser', () => ({
       getManifest: jest.fn(() => ({ version: '1.0.0' })),
     },
     bookmarks: {
-      onCreated: { addListener: jest.fn() },
+      onCreated: {
+        addListener: jest.fn((listener: any) => {
+          onBookmarkCreatedListener = listener;
+        }),
+      },
       onRemoved: { addListener: jest.fn() },
       onChanged: { addListener: jest.fn() },
       onMoved: { addListener: jest.fn() },
@@ -25,6 +41,14 @@ jest.mock('wxt/browser', () => ({
     storage: {
       local: {
         set: jest.fn(),
+      },
+    },
+    alarms: {
+      create: jest.fn(),
+      onAlarm: {
+        addListener: jest.fn((listener: any) => {
+          onAlarmListener = listener;
+        }),
       },
     },
   },
@@ -56,7 +80,19 @@ jest.mock('../services/trigger-service', () => ({
   __esModule: true,
   default: {
     init: jest.fn(),
+    handleEventTrigger: jest.fn(),
   },
+}));
+
+jest.mock('../services/notification-service', () => ({
+  __esModule: true,
+  default: {
+    notifyBookmarkChanges: jest.fn(),
+    notifySyncStatus: jest.fn(),
+    checkBackupReminder: jest.fn(),
+    ensureBackupReminderAlarm: jest.fn(),
+  },
+  BACKUP_REMINDER_ALARM_NAME: 'marksvault-daily-backup-reminder',
 }));
 
 jest.mock('../services/backup-service', () => ({
@@ -76,6 +112,9 @@ import background, {
   resetServicesInitStateForTesting,
 } from '../entrypoints/background';
 import { warmupBookmarkFavicons } from '../services/favicon-warmup-service';
+import notificationService, {
+  BACKUP_REMINDER_ALARM_NAME,
+} from '../services/notification-service';
 import taskExecutor from '../services/task-executor';
 import taskService from '../services/task-service';
 import backupService from '../services/backup-service';
@@ -87,6 +126,8 @@ import { ACTION_TIMEOUTS } from '../services/task-executor-types';
 
 describe('background runtime.onMessage', () => {
   const mockedWarmup = warmupBookmarkFavicons as jest.MockedFunction<typeof warmupBookmarkFavicons>;
+  const mockedNotificationService =
+    notificationService as jest.Mocked<typeof notificationService>;
   const mockedTaskExecutor = taskExecutor as jest.Mocked<typeof taskExecutor>;
   const mockedTaskService = taskService as jest.Mocked<typeof taskService>;
   const mockedBackupService = backupService as jest.Mocked<typeof backupService>;
@@ -115,6 +156,15 @@ describe('background runtime.onMessage', () => {
     resetServicesInitStateForTesting();
     jest.clearAllMocks();
     onMessageListener = null;
+    onInstalledListener = null;
+    onStartupListener = null;
+    onAlarmListener = null;
+    onBookmarkCreatedListener = null;
+
+    mockedNotificationService.notifyBookmarkChanges.mockResolvedValue(undefined);
+    mockedNotificationService.notifySyncStatus.mockResolvedValue(undefined);
+    mockedNotificationService.checkBackupReminder.mockResolvedValue(undefined);
+    mockedNotificationService.ensureBackupReminderAlarm.mockResolvedValue(undefined);
   });
 
   test('WARMUP_BOOKMARK_FAVICONS 会通过 sendResponse 返回结果', async () => {
@@ -188,6 +238,10 @@ describe('background runtime.onMessage', () => {
       await waitForResponse(sendResponse);
 
       expect(mockedTaskExecutor.executeTask).toHaveBeenCalledWith('task_1', 0, 'manual');
+      expect(mockedNotificationService.notifySyncStatus).toHaveBeenCalledWith(
+        { id: 'task_1' },
+        expect.objectContaining({ success: true }),
+      );
       expect(sendResponse).toHaveBeenCalledWith({ success: true, error: undefined });
     });
 
@@ -338,6 +392,10 @@ describe('background runtime.onMessage', () => {
         }),
         0,
         'manual',
+      );
+      expect(mockedNotificationService.notifySyncStatus).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'task_restore' }),
+        expect.objectContaining({ success: true }),
       );
       expect(sendResponse).toHaveBeenCalledWith({ success: true, error: undefined });
     });
@@ -527,6 +585,46 @@ describe('background runtime.onMessage', () => {
         success: false,
         error: '获取书签写入租约失败',
       });
+    });
+  });
+
+  describe('通知接入', () => {
+    const getListener = <T>(listener: T | null, name: string): T => {
+      if (!listener) throw new Error(`${name} 监听器未注册`);
+      return listener;
+    };
+
+    test('书签创建事件触发书签变更通知', async () => {
+      startListener();
+      const listener = getListener(onBookmarkCreatedListener, 'bookmarks.onCreated');
+
+      await listener('bookmark_1', { id: 'bookmark_1', title: '示例书签' });
+
+      expect(mockedNotificationService.notifyBookmarkChanges).toHaveBeenCalledTimes(1);
+    });
+
+    test('备份提醒 alarm 触发检查，其他 alarm 被忽略', async () => {
+      startListener();
+      const listener = getListener(onAlarmListener, 'alarms.onAlarm');
+
+      listener({ name: 'other-alarm' });
+      expect(mockedNotificationService.checkBackupReminder).not.toHaveBeenCalled();
+
+      listener({ name: BACKUP_REMINDER_ALARM_NAME });
+      await new Promise<void>((resolve) => setImmediate(resolve));
+
+      expect(mockedNotificationService.checkBackupReminder).toHaveBeenCalledTimes(1);
+    });
+
+    test('安装与浏览器启动时确保备份提醒定时任务存在', async () => {
+      startListener();
+      const installedListener = getListener(onInstalledListener, 'runtime.onInstalled');
+      const startupListener = getListener(onStartupListener, 'runtime.onStartup');
+
+      await installedListener({ reason: 'install' });
+      await startupListener();
+
+      expect(mockedNotificationService.ensureBackupReminderAlarm).toHaveBeenCalledTimes(2);
     });
   });
 });
