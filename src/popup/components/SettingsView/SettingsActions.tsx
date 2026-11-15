@@ -5,14 +5,12 @@ import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
 import DialogContentText from '@mui/material/DialogContentText';
 import DialogTitle from '@mui/material/DialogTitle';
-import Grid from '@mui/material/Grid';
 import Alert from '@mui/material/Alert';
 import Typography from '@mui/material/Typography';
 import Box from '@mui/material/Box';
 import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
 import ListItemText from '@mui/material/ListItemText';
-import ListItemIcon from '@mui/material/ListItemIcon';
 import Divider from '@mui/material/Divider';
 import Paper from '@mui/material/Paper';
 import CircularProgress from '@mui/material/CircularProgress';
@@ -22,7 +20,6 @@ import FileUploadIcon from '@mui/icons-material/FileUpload';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
 import GitHubIcon from '@mui/icons-material/GitHub';
-import SettingsIcon from '@mui/icons-material/Settings';
 import WarningIcon from '@mui/icons-material/Warning';
 import { ToastRef } from '../shared/Toast';
 import storageService from '../../../utils/storage-service';
@@ -61,7 +58,6 @@ const SettingsActions: React.FC<SettingsActionsProps> = ({ toastRef }) => {
   const [isGitHubRestoring, setIsGitHubRestoring] = useState(false);
   const [gitHubError, setGitHubError] = useState<string | null>(null);
   const [backupStatus, setBackupStatus] = useState<BackupStatus>({});
-  const [credentialsChecked, setCredentialsChecked] = useState(false);
   const [hasGitHubCredentials, setHasGitHubCredentials] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -73,8 +69,7 @@ const SettingsActions: React.FC<SettingsActionsProps> = ({ toastRef }) => {
         // 检查GitHub凭据
         const credentialsResult = await storageService.getGitHubCredentials();
         setHasGitHubCredentials(credentialsResult.success && !!credentialsResult.data);
-        setCredentialsChecked(true);
-        
+
         // 如果有GitHub凭据，获取设置备份状态
         if (credentialsResult.success && credentialsResult.data) {
           const status = await backupService.getSettingsBackupStatus();
@@ -95,8 +90,11 @@ const SettingsActions: React.FC<SettingsActionsProps> = ({ toastRef }) => {
       const result = await storageService.clearAllData();
       
       if (result.success) {
-        toastRef?.current?.showToast('所有数据已清除', 'success');
+        toastRef?.current?.showToast('所有数据已清除，正在刷新页面...', 'success');
         setShowClearDialog(false);
+        // Header 的登录状态与设置页的凭据/备份状态都在挂载时读取，
+        // 重新加载 popup 才能同步为已清除状态，避免继续显示旧信息
+        setTimeout(() => window.location.reload(), 300);
       } else {
         toastRef?.current?.showToast(`清除数据失败: ${result.error}`, 'error');
       }

@@ -33,6 +33,12 @@ export interface OrganizeResult {
   error?: string;               // 错误信息
 }
 
+// URL 验证结果：unknown 表示仅确认网络可达，跨域限制下无法读取状态码
+interface BookmarkUrlValidationResult {
+  status: 'ok' | 'unknown' | 'invalid';
+  reason?: string;
+}
+
 /**
  * 书签整理服务
  */
@@ -71,27 +77,27 @@ class OrganizeService {
     }
   }
 
-  private isReachableStatus(status: number): boolean {
+  private isUnavailableStatus(status: number): boolean {
     // 404/410 明确不存在；5xx 为服务端异常，视为不可用。
-    if (status === 404 || status === 410) {
-      return false;
-    }
-    if (status >= 500) {
-      return false;
-    }
-    return true;
+    return status === 404 || status === 410 || status >= 500;
   }
 
-  private async validateBookmarkUrl(url: string): Promise<{ valid: boolean; reason?: string }> {
+  private isPermissionOrRateLimitStatus(status: number): boolean {
+    // 401/403/429 表示站点拒绝或限制了请求，书签本身未必失效；
+    // 没有目标站点 host 权限时无法进一步确认，只能标记为状态未知
+    return status === 401 || status === 403 || status === 429;
+  }
+
+  private async validateBookmarkUrl(url: string): Promise<BookmarkUrlValidationResult> {
     let parsedUrl: URL;
     try {
       parsedUrl = new URL(url);
     } catch (error) {
-      return { valid: false, reason: 'URL 格式无效' };
+      return { status: 'invalid', reason: 'URL 格式无效' };
     }
 
     if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
-      return { valid: false, reason: `不支持的协议: ${parsedUrl.protocol}` };
+      return { status: 'invalid', reason: `不支持的协议: ${parsedUrl.protocol}` };
     }
 
     try {
@@ -101,24 +107,32 @@ class OrganizeService {
         cache: 'no-store',
       });
 
-      if (this.isReachableStatus(headResponse.status)) {
-        return { valid: true };
+      if (this.isUnavailableStatus(headResponse.status)) {
+        return { status: 'invalid', reason: `HTTP ${headResponse.status}` };
       }
 
-      return { valid: false, reason: `HTTP ${headResponse.status}` };
+      if (this.isPermissionOrRateLimitStatus(headResponse.status)) {
+        return {
+          status: 'unknown',
+          reason: `HTTP ${headResponse.status}，需要目标站点权限才能确认`,
+        };
+      }
+
+      return { status: 'ok' };
     } catch (headError) {
       try {
-        // 某些站点会拒绝 HEAD/CORS；回退到 no-cors GET，能连通即视为可访问。
+        // 无 host 权限时跨域 HEAD 常被 CORS 拦截；no-cors GET 只能证明网络可达，
+        // 响应为 opaque，无法读取 404/410/5xx 等状态码
         await this.fetchWithTimeout(url, {
           method: 'GET',
           mode: 'no-cors',
           redirect: 'follow',
           cache: 'no-store',
         });
-        return { valid: true };
+        return { status: 'unknown', reason: '仅确认网络可达，跨域限制无法读取状态码' };
       } catch (getError) {
         return {
-          valid: false,
+          status: 'invalid',
           reason: getError instanceof Error ? getError.message : String(getError),
         };
       }
@@ -376,6 +390,16 @@ class OrganizeService {
    * @returns 操作结果
    */
   private async deleteBookmarks(bookmarks: BookmarkItem[], operation: OrganizeOperation): Promise<OrganizeResult> {
+    // 空匹配规则会命中全部书签，删除前必须再次校验，避免绕过表单校验误删
+    if (!operation.filters?.pattern?.trim()) {
+      return {
+        success: false,
+        processedCount: 0,
+        details: '删除操作需要指定匹配规则，已取消删除',
+        error: '删除操作需要指定匹配规则'
+      };
+    }
+
     // 过滤出符合条件的书签
     const filteredBookmarks = this.filterBookmarks(bookmarks, operation.filters);
     
@@ -518,6 +542,7 @@ class OrganizeService {
     }
 
     let validCount = 0;
+    let unknownCount = 0;
     let invalidCount = 0;
     const invalidDetails: string[] = [];
     let cursor = 0;
@@ -530,8 +555,10 @@ class OrganizeService {
         }
 
         const validationResult = await this.validateBookmarkUrl(bookmark.url);
-        if (validationResult.valid) {
+        if (validationResult.status === 'ok') {
           validCount++;
+        } else if (validationResult.status === 'unknown') {
+          unknownCount++;
         } else {
           invalidCount++;
           invalidDetails.push(
@@ -544,10 +571,20 @@ class OrganizeService {
     const workerCount = Math.min(this.VALIDATION_CONCURRENCY, bookmarksToValidate.length);
     await Promise.all(Array.from({ length: workerCount }, () => worker()));
 
+    const details = [
+      `已验证 ${bookmarksToValidate.length} 个书签`,
+      `正常 ${validCount} 个`,
+      ...(unknownCount > 0 ? [`网络可达但状态未知 ${unknownCount} 个`] : []),
+      `异常 ${invalidCount} 个`,
+    ].join('，');
+
     return {
       success: invalidCount === 0,
       processedCount: bookmarksToValidate.length,
-      details: `已验证 ${bookmarksToValidate.length} 个书签，正常 ${validCount} 个，异常 ${invalidCount} 个`
+      details: details
+        + (unknownCount > 0
+          ? '。状态未知表示无法确认链接是否有效（跨域限制或需要目标站点权限）'
+          : '')
         + (invalidDetails.length > 0
           ? `。异常详情: ${invalidDetails.slice(0, 5).join('; ')}`
           : ''),

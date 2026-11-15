@@ -182,7 +182,7 @@ const BookmarkItem: React.FC<BookmarkItemProps> = ({
       .finally(() => {
         resolvingPathRef.current = false;
       });
-  }, [bookmark.id, isSearching, resolveBookmarkPath]);
+  }, [bookmark.id, isSearching, pathTitle, resolveBookmarkPath]);
 
   // 使用自定义 Hook 处理拖拽逻辑
   const {

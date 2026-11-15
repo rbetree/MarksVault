@@ -57,10 +57,6 @@ const TasksView: React.FC<TasksViewProps> = ({
 
     const fetchTasks = async () => {
       try {
-        if (loading) {
-          // 只在初始加载时显示骨架屏
-        }
-
         setError(null);
 
         const result = filterStatus === 'all'
@@ -278,8 +274,6 @@ const TasksView: React.FC<TasksViewProps> = ({
               <MenuItem value={TaskStatus.ENABLED} sx={{ fontSize: '0.85rem', minHeight: '32px', py: 0.5 }}>已启用</MenuItem>
               <MenuItem value={TaskStatus.DISABLED} sx={{ fontSize: '0.85rem', minHeight: '32px', py: 0.5 }}>已禁用</MenuItem>
               <MenuItem value={TaskStatus.RUNNING} sx={{ fontSize: '0.85rem', minHeight: '32px', py: 0.5 }}>运行中</MenuItem>
-              <MenuItem value={TaskStatus.COMPLETED} sx={{ fontSize: '0.85rem', minHeight: '32px', py: 0.5 }}>已完成</MenuItem>
-              <MenuItem value={TaskStatus.FAILED} sx={{ fontSize: '0.85rem', minHeight: '32px', py: 0.5 }}>失败</MenuItem>
             </Select>
           </FormControl>
         </Box>

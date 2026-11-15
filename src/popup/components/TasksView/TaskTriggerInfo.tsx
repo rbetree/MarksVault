@@ -7,7 +7,7 @@ import NotificationsIcon from '@mui/icons-material/Notifications';
 import WebIcon from '@mui/icons-material/Web';
 import BookmarkIcon from '@mui/icons-material/Bookmark';
 import FilterAltIcon from '@mui/icons-material/FilterAlt';
-import { Trigger, TriggerType, EventType } from '../../../types/task';
+import { Trigger, TriggerType, EventType, EventTriggerConditions } from '../../../types/task';
 import { formatTimestamp } from '../../../utils/date-utils';
 
 interface TaskTriggerInfoProps {
@@ -51,53 +51,57 @@ const TaskTriggerInfo: React.FC<TaskTriggerInfoProps> = ({ trigger, compact = fa
     }
   };
 
+  // 条件值可能来自旧数据，只把非空文本视为已配置
+  const getConditionText = (value: unknown): string =>
+    typeof value === 'string' ? value.trim() : '';
+
   // 获取条件描述
-  const getConditionsDescription = (conditions?: Record<string, any>): React.ReactNode => {
-    if (!conditions || Object.keys(conditions).length === 0) {
-      return null;
-    }
-    
+  const getConditionsDescription = (conditions?: EventTriggerConditions): React.ReactNode => {
+    const url = getConditionText(conditions?.url);
+    const title = getConditionText(conditions?.title);
+    const parentFolder = getConditionText(conditions?.parentFolder);
+
     const conditionsChips = [];
-    
+
     // URL条件
-    if (conditions.url) {
+    if (url) {
       conditionsChips.push(
-        <Chip 
-          key="url" 
-          size="small" 
-          label={`URL包含: ${conditions.url}`} 
-          variant="outlined" 
+        <Chip
+          key="url"
+          size="small"
+          label={`URL包含: ${url}`}
+          variant="outlined"
           sx={{ fontSize: '10px' }}
         />
       );
     }
-    
+
     // 标题条件
-    if (conditions.title) {
+    if (title) {
       conditionsChips.push(
-        <Chip 
-          key="title" 
-          size="small" 
-          label={`标题包含: ${conditions.title}`} 
-          variant="outlined" 
+        <Chip
+          key="title"
+          size="small"
+          label={`标题包含: ${title}`}
+          variant="outlined"
           sx={{ fontSize: '10px' }}
         />
       );
     }
-    
+
     // 父文件夹条件
-    if (conditions.parentFolder) {
+    if (parentFolder) {
       conditionsChips.push(
-        <Chip 
-          key="parentFolder" 
-          size="small" 
-          label={`文件夹ID: ${conditions.parentFolder}`} 
-          variant="outlined" 
+        <Chip
+          key="parentFolder"
+          size="small"
+          label={`文件夹ID: ${parentFolder}`}
+          variant="outlined"
           sx={{ fontSize: '10px' }}
         />
       );
     }
-    
+
     if (conditionsChips.length === 0) {
       return null;
     }
@@ -154,7 +158,8 @@ const TaskTriggerInfo: React.FC<TaskTriggerInfoProps> = ({ trigger, compact = fa
     const { event, conditions } = trigger;
     const eventTitle = getEventTypeText(event);
     const eventIcon = getEventIcon(event);
-    
+    const conditionsDescription = getConditionsDescription(conditions);
+
     if (compact) {
       return (
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
@@ -162,8 +167,12 @@ const TaskTriggerInfo: React.FC<TaskTriggerInfoProps> = ({ trigger, compact = fa
           <Typography variant="body2" sx={{ ml: 0.75, fontSize: '11px' }}>
             事件: {eventTitle}
           </Typography>
-          {conditions && Object.keys(conditions).length > 0 && (
+          {conditionsDescription ? (
             <FilterAltIcon fontSize="small" color="action" sx={{ ml: 0.5, fontSize: '12px' }} />
+          ) : (
+            <Typography variant="body2" color="text.secondary" sx={{ ml: 0.75, fontSize: '11px' }}>
+              所有事件
+            </Typography>
           )}
         </Box>
       );
@@ -181,8 +190,12 @@ const TaskTriggerInfo: React.FC<TaskTriggerInfoProps> = ({ trigger, compact = fa
           {eventTitle}
         </Typography>
         
-        {/* 显示条件信息 */}
-        {getConditionsDescription(conditions)}
+        {/* 显示条件信息；未配置条件时匹配所有事件 */}
+        {conditionsDescription || (
+          <Typography variant="body2" color="text.secondary" sx={{ ml: 3, fontSize: '11px' }}>
+            所有事件
+          </Typography>
+        )}
         
         {trigger.lastTriggered && (
           <Typography variant="body2" color="text.secondary" sx={{ ml: 3, mt: 0.5, fontSize: '11px' }}>

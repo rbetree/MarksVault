@@ -4,7 +4,6 @@ import { TaskStatus } from '../../../types/task';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import PauseCircleOutlineIcon from '@mui/icons-material/PauseCircleOutline';
 import SyncIcon from '@mui/icons-material/Sync';
-import DoneAllIcon from '@mui/icons-material/DoneAll';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 
 interface TaskStatusChipProps {
@@ -14,7 +13,8 @@ interface TaskStatusChipProps {
 
 /**
  * 任务状态标签组件
- * 用于显示任务的当前状态，不同状态使用不同的颜色和图标
+ * 只展示稳定的启用状态；执行结果（成功、失败、中断、结果不确定）
+ * 由执行历史单独展示，不再混入启用状态
  */
 const TaskStatusChip: React.FC<TaskStatusChipProps> = ({ status, size = 'small' }) => {
   // 根据状态定义标签配置
@@ -38,17 +38,14 @@ const TaskStatusChip: React.FC<TaskStatusChipProps> = ({ status, size = 'small' 
           color: 'primary' as const,
           icon: <SyncIcon sx={{ animation: 'mv-task-spin 1s linear infinite' }} />
         };
+      // 旧版本用执行结果覆盖启用状态；读取时已迁移为 ENABLED，
+      // 此处保留兜底显示，避免历史 UI 状态显示为失败
       case TaskStatus.COMPLETED:
-        return {
-          label: '已完成',
-          color: 'secondary' as const,
-          icon: <DoneAllIcon />
-        };
       case TaskStatus.FAILED:
         return {
-          label: '失败',
-          color: 'error' as const,
-          icon: <ErrorOutlineIcon />
+          label: '已启用',
+          color: 'success' as const,
+          icon: <CheckCircleIcon />
         };
       default:
         return {
@@ -68,7 +65,7 @@ const TaskStatusChip: React.FC<TaskStatusChipProps> = ({ status, size = 'small' 
       icon={icon}
       size={size}
       variant="filled"
-      sx={{ 
+      sx={{
         '@keyframes mv-task-spin': {
           from: { transform: 'rotate(0deg)' },
           to: { transform: 'rotate(360deg)' },
@@ -89,4 +86,4 @@ const TaskStatusChip: React.FC<TaskStatusChipProps> = ({ status, size = 'small' 
   );
 };
 
-export default TaskStatusChip; 
+export default TaskStatusChip;

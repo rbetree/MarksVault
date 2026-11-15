@@ -6,8 +6,46 @@ import { browser } from 'wxt/browser';
 import taskExecutor from '../services/task-executor';
 import taskService from '../services/task-service';
 import triggerService from '../services/trigger-service';
+import backupService from '../services/backup-service';
+import notificationService, { BACKUP_REMINDER_ALARM_NAME } from '../services/notification-service';
 import { warmupBookmarkFavicons } from '../services/favicon-warmup-service';
-import { ActionType, createDefaultTaskStorage, EventType } from '../types/task';
+import {
+  releaseBookmarkWriteLease,
+  tryAcquireBookmarkWriteLease,
+} from '../services/task-executor-lease';
+import { ActionType, createDefaultTaskStorage, EventType, Task } from '../types/task';
+import { ACTION_TIMEOUTS, resolveExecutionLeaseDuration } from '../services/task-executor-types';
+
+// 回滚入口不是任务执行，使用固定伪任务ID持有书签写入租约，与任务写入互斥
+const PENDING_RESTORE_ROLLBACK_LEASE_TASK_ID = 'pending_restore_rollback';
+
+function generateRollbackExecutionId(): string {
+  return `rollback-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+/**
+ * 仅补齐缺失的存储键，避免开发者模式重载或重复 install 覆盖已有任务
+ */
+export async function initializeStorageIfMissing(): Promise<void> {
+  const existing = await browser.storage.local.get([
+    'settings',
+    'bookmarks',
+    'tasks_data',
+  ]);
+  const defaults: Record<string, unknown> = {};
+  if (!existing.settings) {
+    defaults.settings = { isDarkMode: false, syncEnabled: false };
+  }
+  if (!existing.bookmarks) {
+    defaults.bookmarks = { lastUpdated: null, customData: {} };
+  }
+  if (!existing.tasks_data) {
+    defaults.tasks_data = createDefaultTaskStorage();
+  }
+  if (Object.keys(defaults).length > 0) {
+    await browser.storage.local.set(defaults);
+  }
+}
 
 /**
  * 初始化所有后台服务
@@ -70,27 +108,27 @@ export function resetServicesInitStateForTesting(): void {
 export default defineBackground({
   type: 'module',
   main() {
+    // 每日备份检查：alarm 在安装/启动时确保存在，Service Worker 重启后仍会触发
+    browser.alarms.onAlarm.addListener((alarm) => {
+      if (alarm.name !== BACKUP_REMINDER_ALARM_NAME) return;
+      void notificationService.checkBackupReminder().catch((error) => {
+        console.error('[alarms.onAlarm] 备份提醒检查失败:', error);
+      });
+    });
+
     // 监听安装事件
     browser.runtime.onInstalled.addListener(async (details) => {
       if (details.reason === 'install') {
         console.log('MarksVault 扩展已安装');
-        // 初始化存储
-        await browser.storage.local.set({
-          settings: {
-            isDarkMode: false,
-            syncEnabled: false,
-          },
-          bookmarks: {
-            lastUpdated: null,
-            customData: {},
-          },
-          tasks_data: createDefaultTaskStorage(), // 初始化任务存储
-        });
+        await initializeStorageIfMissing();
       } else if (details.reason === 'update') {
         console.log(
           'MarksVault 扩展已更新到版本 ' + browser.runtime.getManifest().version,
         );
       }
+
+      // 安装/更新后确保每日备份检查定时任务存在
+      await notificationService.ensureBackupReminderAlarm();
 
       // 使用统一的服务初始化函数
       await ensureServicesInitializedOrLog('onInstalled');
@@ -99,6 +137,9 @@ export default defineBackground({
     // 监听浏览器启动事件
     browser.runtime.onStartup.addListener(async () => {
       console.log('浏览器启动，初始化 MarksVault 服务...');
+
+      // 确保每日备份检查定时任务存在
+      await notificationService.ensureBackupReminderAlarm();
 
       // 使用统一的服务初始化函数
       if (!await ensureServicesInitializedOrLog('onStartup')) {
@@ -115,6 +156,7 @@ export default defineBackground({
         return;
       }
       await triggerService.handleEventTrigger(EventType.BOOKMARK_CHANGED, { id, bookmark });
+      await notificationService.notifyBookmarkChanges();
     });
 
     browser.bookmarks.onRemoved.addListener(async (id, removeInfo) => {
@@ -122,6 +164,7 @@ export default defineBackground({
         return;
       }
       await triggerService.handleEventTrigger(EventType.BOOKMARK_CHANGED, { id, removeInfo });
+      await notificationService.notifyBookmarkChanges();
     });
 
     browser.bookmarks.onChanged.addListener(async (id, changeInfo) => {
@@ -135,6 +178,7 @@ export default defineBackground({
         changeInfo,
         bookmark: { id, title: changeInfo.title, url: changeInfo.url },
       });
+      await notificationService.notifyBookmarkChanges();
     });
 
     browser.bookmarks.onMoved.addListener(async (id, moveInfo) => {
@@ -148,6 +192,7 @@ export default defineBackground({
         moveInfo,
         bookmark: { id, parentId: moveInfo.parentId },
       });
+      await notificationService.notifyBookmarkChanges();
     });
 
     // 由于在 manifest 中配置了 action.default_popup，chrome.action.onClicked 事件永远不会触发
@@ -225,11 +270,112 @@ export default defineBackground({
           // 使用 executeTaskWithData 执行，直接传入包含 selections 的任务对象
           // 用户从 UI 明确发起，执行来源为 manual
           const result = await taskExecutor.executeTaskWithData(taskWithSelections, 0, 'manual');
+          await notificationService.notifySyncStatus(task, result);
 
           if (result.success) return { success: true };
 
           console.error('选择性推送失败:', result.error);
           return { success: false, error: result.error };
+        })()
+          .then((response) => sendResponse(response))
+          .catch(respondError);
+
+        return true;
+      }
+
+      if (message.type === 'EXECUTE_TASK_WITH_DATA') {
+        void (async () => {
+          if (!await ensureServicesInitializedOrLog('runtime.onMessage:EXECUTE_TASK_WITH_DATA')) {
+            return { success: false, error: '后台服务尚未准备就绪，请稍后重试' };
+          }
+
+          const taskId = message?.payload?.taskId as unknown;
+          const backupFilePath = message?.payload?.backupFilePath as unknown;
+
+          if (!taskId || typeof taskId !== 'string') {
+            return { success: false, error: '无效的任务ID' };
+          }
+          if (backupFilePath !== undefined && typeof backupFilePath !== 'string') {
+            return { success: false, error: '无效的备份文件路径' };
+          }
+
+          // 任务配置从存储读取，运行时只覆盖恢复来源（最新备份或指定文件），
+          // 避免调用方伪造触发器等任务定义
+          const taskResult = await taskService.getTaskById(taskId);
+          if (!taskResult.success || !taskResult.data) {
+            return { success: false, error: '任务不存在' };
+          }
+
+          const task = taskResult.data as Task;
+          if (task.action.type !== ActionType.BACKUP || task.action.operation !== 'restore') {
+            return { success: false, error: '仅支持恢复书签任务' };
+          }
+
+          const options = { ...task.action.options };
+          const selectedPath = typeof backupFilePath === 'string' ? backupFilePath.trim() : '';
+          if (selectedPath) {
+            options.backupFilePath = selectedPath;
+          } else {
+            // 选择“最新备份”时显式移除旧路径，避免持久化配置中的残留路径覆盖本次选择
+            delete options.backupFilePath;
+          }
+
+          const taskToExecute: Task = {
+            ...task,
+            action: {
+              ...task.action,
+              options,
+            },
+          };
+
+          console.log('收到恢复任务执行请求:', { taskId, useSelectedPath: !!selectedPath });
+
+          // 用户从二次确认对话框明确发起，执行来源为 manual
+          const result = await taskExecutor.executeTaskWithData(taskToExecute, 0, 'manual');
+          await notificationService.notifySyncStatus(taskToExecute, result);
+
+          return { success: result.success, error: result.error };
+        })()
+          .then((response) => sendResponse(response))
+          .catch(respondError);
+
+        return true;
+      }
+
+      if (message.type === 'RESTORE_PENDING_BOOKMARK_BACKUP') {
+        void (async () => {
+          if (!await ensureServicesInitializedOrLog('runtime.onMessage:RESTORE_PENDING_BOOKMARK_BACKUP')) {
+            return { success: false, error: '后台服务尚未准备就绪，请稍后重试' };
+          }
+
+          // 回滚会重建书签栏，必须与任务写入互斥：先检查并获取书签写入租约
+          const executionId = generateRollbackExecutionId();
+          // 回滚与恢复同样重建书签树，写入租约按恢复动作超时设置，避免大书签树中途失去租约
+          const lease = await tryAcquireBookmarkWriteLease(
+            PENDING_RESTORE_ROLLBACK_LEASE_TASK_ID,
+            executionId,
+            resolveExecutionLeaseDuration(ACTION_TIMEOUTS.restore)
+          );
+          if (!lease.success) {
+            return {
+              success: false,
+              error: lease.denied
+                ? '另一个任务正在修改书签树，请稍后重试'
+                : '获取书签写入租约失败',
+            };
+          }
+
+          try {
+            const result = await backupService.restorePendingBookmarkBackup();
+            return {
+              success: result.success,
+              data: result.data,
+              error: result.error,
+            };
+          } finally {
+            // 成功或失败都必须释放写入租约；释放失败时租约将在到期后自然失效
+            await releaseBookmarkWriteLease(executionId);
+          }
         })()
           .then((response) => sendResponse(response))
           .catch(respondError);
@@ -243,7 +389,8 @@ export default defineBackground({
             return { success: false, error: '后台服务尚未准备就绪，请稍后重试' };
           }
 
-          const taskId = message?.payload?.taskId as unknown;
+          // 规范消息使用 payload.taskId；兼容早期快捷备份发送的顶层 taskId
+          const taskId = (message?.payload?.taskId ?? message?.taskId) as unknown;
 
           // 数据校验
           if (!taskId || typeof taskId !== 'string') {
@@ -255,11 +402,13 @@ export default defineBackground({
           if (!taskResult.success || !taskResult.data) {
             return { success: false, error: '任务不存在' };
           }
+          const task = taskResult.data as Task;
 
           console.log('收到手动执行任务请求:', { taskId });
 
           // 用户从 UI 明确发起，执行来源为 manual
           const result = await taskExecutor.executeTask(taskId, 0, 'manual');
+          await notificationService.notifySyncStatus(task, result);
 
           return { success: result.success, error: result.error };
         })()

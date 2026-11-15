@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release version (format: v1.0.0)'
+        description: 'Release version (format: v1.5.2)'
         required: true
-        default: 'v0.1.0'
+        default: 'v1.5.2'
 
 jobs:
   release:
@@ -24,6 +24,12 @@ jobs:
         with:
           fetch-depth: 0
           lfs: true
+
+      - name: Verify Manual Release Branch
+        if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Manual releases must run from main (current: $GITHUB_REF)"
+          exit 1
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -56,8 +62,18 @@ jobs:
           echo "Package.json version: ${{ env.PACKAGE_VERSION }}"
           echo "Release version: ${{ env.VERSION }}"
           if [ "$TAG_VERSION_NO_V" != "${{ env.PACKAGE_VERSION }}" ]; then
-            echo "Warning: Release version does not match version in package.json"
+            echo "::error::Release version ${{ env.VERSION }} does not match package.json ${{ env.PACKAGE_VERSION }}"
+            exit 1
           fi
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit Tests
+        run: npm test
 
       - name: Build & Zip Extensions
         run: npm run zip:all
@@ -65,30 +81,27 @@ jobs:
       - name: Generate Changelog
         id: changelog
         run: |
-          # Get the previous tag (if exists)
-          PREVIOUS_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-          
           if [ "${{ github.event_name }}" != "workflow_dispatch" ]; then
-            # Tag-based release: get commits between previous tag and current tag
+            # Tag 触发时 HEAD 就是当前 tag，必须从父提交开始找上一个 tag，否则日志范围为空
+            RELEASE_REF="${{ env.VERSION }}"
+            PREVIOUS_TAG=$(git describe --tags --abbrev=0 "${RELEASE_REF}^" 2>/dev/null || echo "")
+
             if [ -z "$PREVIOUS_TAG" ]; then
-              # If there's no previous tag, get all commits up to current tag
-              CHANGELOG=$(git log --pretty=format:"* %s (%h)" ${{ env.VERSION }})
-              echo "CHANGELOG_TITLE=All Changes" >> $GITHUB_ENV
+              CHANGELOG=$(git log --pretty=format:"* %s (%h)" "$RELEASE_REF")
+              echo "CHANGELOG_TITLE=All Changes" >> "$GITHUB_ENV"
             else
-              # Get commits since the previous tag
-              CHANGELOG=$(git log --pretty=format:"* %s (%h)" $PREVIOUS_TAG..${{ env.VERSION }})
-              echo "CHANGELOG_TITLE=Changes Since $PREVIOUS_TAG" >> $GITHUB_ENV
+              CHANGELOG=$(git log --pretty=format:"* %s (%h)" "$PREVIOUS_TAG..$RELEASE_REF")
+              echo "CHANGELOG_TITLE=Changes Since $PREVIOUS_TAG" >> "$GITHUB_ENV"
             fi
           else
-            # Manual release: get commits since the previous tag (up to 10 most recent)
+            PREVIOUS_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+
             if [ -z "$PREVIOUS_TAG" ]; then
-              # If there's no previous tag, get the most recent 10 commits
               CHANGELOG=$(git log --pretty=format:"* %s (%h)" -n 10)
-              echo "CHANGELOG_TITLE=Recent Changes (Last 10 Commits)" >> $GITHUB_ENV
+              echo "CHANGELOG_TITLE=Recent Changes (Last 10 Commits)" >> "$GITHUB_ENV"
             else
-              # Get up to 10 most recent commits since the previous tag
-              CHANGELOG=$(git log --pretty=format:"* %s (%h)" $PREVIOUS_TAG..HEAD -n 10)
-              echo "CHANGELOG_TITLE=Recent Changes Since $PREVIOUS_TAG (Last 10 Commits)" >> $GITHUB_ENV
+              CHANGELOG=$(git log --pretty=format:"* %s (%h)" -n 10 "$PREVIOUS_TAG..HEAD")
+              echo "CHANGELOG_TITLE=Recent Changes Since $PREVIOUS_TAG (Last 10 Commits)" >> "$GITHUB_ENV"
             fi
           fi
           
@@ -104,7 +117,7 @@ jobs:
 
       - name: Create GitHub Release
         id: create_release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ env.VERSION }}
           name: ${{ env.VERSION }}

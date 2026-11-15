@@ -7,7 +7,12 @@
 .wxt/
 
 # 笔记或参考
-/docs
+/docs/*
+!/docs/agents/
+!/docs/agents/**
+!/docs/adr/
+!/docs/adr/**
+docs-myself/
 
 # 开发工具文件
 /.idea
@@ -19,8 +24,8 @@
 .cursorindexingignore
 .spec-workflow/
 .claude/
-CLAUDE.md
 paseo.json
+/.roo/
 
 # 系统文件
 .DS_Store
@@ -50,7 +55,6 @@ store-packages/
 *.pem
 store-screenshots-raw/
 build-temp/
-AGENTS.md
 /menav
 /.serena
 /eabookmark

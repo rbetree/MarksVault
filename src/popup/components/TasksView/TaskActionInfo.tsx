@@ -4,7 +4,7 @@ import Box from '@mui/material/Box';
 import BackupIcon from '@mui/icons-material/Backup';
 import CleaningServicesIcon from '@mui/icons-material/CleaningServices';
 import UploadIcon from '@mui/icons-material/Upload';
-import { Action, ActionType, BackupAction } from '../../../types/task';
+import { Action, ActionType, BackupAction, SelectivePushAction } from '../../../types/task';
 
 interface TaskActionInfoProps {
   action: Action;
@@ -102,6 +102,47 @@ const TaskActionInfo: React.FC<TaskActionInfoProps> = ({ action, compact = false
     );
   };
   
+  // 渲染选择性推送操作信息
+  const renderSelectivePushAction = () => {
+    if (action.type !== ActionType.SELECTIVE_PUSH) return null;
+
+    const selectivePushAction = action as SelectivePushAction;
+    const { target, options } = selectivePushAction;
+
+    if (compact) {
+      return (
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <UploadIcon fontSize="small" color="action" sx={{ fontSize: '14px' }} />
+          <Typography variant="body2" sx={{ ml: 0.75, fontSize: '11px' }}>
+            选择性推送书签到 {target}/{options.repoName}
+          </Typography>
+        </Box>
+      );
+    }
+
+    return (
+      <Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+          <UploadIcon fontSize="small" color="action" sx={{ fontSize: '14px' }} />
+          <Typography variant="subtitle2" sx={{ ml: 0.75, fontSize: '12px' }}>
+            选择性推送书签
+          </Typography>
+        </Box>
+        <Typography variant="body2" color="text.secondary" sx={{ ml: 3, fontSize: '11px' }}>
+          目标: {target}/{options.repoName}
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ ml: 3, fontSize: '11px' }}>
+          路径: {options.folderPath}
+        </Typography>
+        {options.commitMessage && (
+          <Typography variant="body2" color="text.secondary" sx={{ ml: 3, fontSize: '11px' }}>
+            提交消息: {options.commitMessage}
+          </Typography>
+        )}
+      </Box>
+    );
+  };
+
   // 渲染整理操作信息
   const renderOrganizeAction = () => {
     if (action.type !== ActionType.ORGANIZE) return null;
@@ -138,6 +179,7 @@ const TaskActionInfo: React.FC<TaskActionInfoProps> = ({ action, compact = false
     <>
       {renderBackupAction()}
       {renderPushAction()}
+      {renderSelectivePushAction()}
       {renderOrganizeAction()}
     </>
   );

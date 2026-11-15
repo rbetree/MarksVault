@@ -1,7 +1,19 @@
 import { browser } from 'wxt/browser';
 import taskExecutor, { TaskExecutor, EXECUTION_LEASE_KEY_PREFIX, BOOKMARK_WRITE_LEASE_KEY } from './task-executor';
+import * as taskExecutorLease from './task-executor-lease';
 import taskService from './task-service';
+import storageService from '../utils/storage-service';
 import { RetryableError, RetryableErrorCategory, GitHubApiError } from './github-service';
+import { resolveActionTimeout, runWithTimeout } from './task-executor-timeout';
+import { getExecutionLeaseLockName } from './lease-lock';
+import {
+  ACTION_TIMEOUTS,
+  BOOKMARK_WRITE_LEASE_DURATION,
+  DEFAULT_CONFIG,
+  EXECUTION_LEASE_DURATION,
+  LEASE_TIMEOUT_BUFFER,
+  resolveExecutionLeaseDuration,
+} from './task-executor-types';
 import {
   BackupAction,
   BookmarkSelection,
@@ -584,7 +596,7 @@ describe('task-executor 三态结果与中断恢复', () => {
     await createBackupTask(taskId);
 
     const executor = TaskExecutor.getInstance();
-    executor.updateConfig({ timeout: 50 });
+    executor.updateConfig({ actionTimeouts: { backup: 50 } });
     const backupSpy = hangExecution(executor);
 
     const result = await executor.executeTask(taskId);
@@ -597,9 +609,10 @@ describe('task-executor 三态结果与中断恢复', () => {
     // 不进入重试：动作执行器只被调用一次
     expect(backupSpy).toHaveBeenCalledTimes(1);
 
-    // 任务不标记为 FAILED：保持 RUNNING，由租约驱动的恢复逻辑处理
+    // 执行结果不改变启用状态：任务恢复为 ENABLED，
+    // 未到期执行租约保留以阻止并发重入
     const task = (await taskService.getTaskById(taskId)).data as Task;
-    expect(task.status).toBe(TaskStatus.RUNNING);
+    expect(task.status).toBe(TaskStatus.ENABLED);
     expect(task.history.lastExecution?.outcome).toBe(ExecutionOutcome.UNCERTAIN);
     expect(task.history.lastExecution?.success).toBe(false);
   });
@@ -675,29 +688,41 @@ describe('task-executor 三态结果与中断恢复', () => {
     expect(task.history.lastExecution?.success).toBe(false);
     expect(task.history.lastExecution?.source).toBe('manual');
 
-    // 执行中断的任务标记为 FAILED（与旧恢复行为一致）
-    expect(task.status).toBe(TaskStatus.FAILED);
+    // 执行中断只记录结果，不改变启用状态：任务保持 ENABLED
+    expect(task.status).toBe(TaskStatus.ENABLED);
 
     // 已到期租约被清理，快照（执行输入）已清理
     expect(await readLease(taskId)).toBeUndefined();
     expect(await executor2.getPendingSnapshot(taskId)).toBeNull();
+
+    // 中断后任务仍启用：可以再次发起执行，不会因一次中断永久停掉自动任务
+    jest.spyOn(executor2 as any, 'executeBackupAction').mockResolvedValue({
+      success: true,
+      timestamp: Date.now(),
+      details: '中断后重新执行完成',
+    });
+    const rerun = await executor2.executeTask(taskId);
+    expect(rerun.success).toBe(true);
 
     // 清理重启前的悬挂执行
     gate.resolve();
     await firstRun;
   });
 
-  test('验收4：不再一律恢复为 FAILED——无遗留执行的 RUNNING 残留恢复为 ENABLED 且不重复写入历史', async () => {
+  test('验收4：无遗留执行的 RUNNING 残留恢复为 ENABLED 且不重复写入历史', async () => {
     const taskId = 'recover_stale_running_task';
     await createBackupTask(taskId);
 
-    // 超时收尾后：任务保持 RUNNING，快照与执行租约已在收尾时清理
+    // 超时收尾后：执行结果已写入历史，启用状态已恢复 ENABLED
     const executor = TaskExecutor.getInstance();
-    executor.updateConfig({ timeout: 30 });
+    executor.updateConfig({ actionTimeouts: { backup: 30 } });
     hangExecution(executor);
     const result = await executor.executeTask(taskId);
     expect(result.outcome).toBe(ExecutionOutcome.UNCERTAIN);
-    expect((await taskService.getTaskById(taskId)).data.status).toBe(TaskStatus.RUNNING);
+    expect((await taskService.getTaskById(taskId)).data.status).toBe(TaskStatus.ENABLED);
+
+    // 模拟收尾前 SW 中断留下的 RUNNING 残留（无快照、无执行租约）
+    await taskService.setTaskStatus(taskId, TaskStatus.RUNNING);
 
     // 模拟 Service Worker 重启：重建执行引擎实例并重新初始化
     TaskExecutor.resetForTesting();
@@ -716,7 +741,7 @@ describe('task-executor 三态结果与中断恢复', () => {
     await createBackupTask(taskId);
 
     const executor = TaskExecutor.getInstance();
-    executor.updateConfig({ timeout: 30, maxRetries: 3 });
+    executor.updateConfig({ actionTimeouts: { backup: 30 }, maxRetries: 3 });
     const backupSpy = hangExecution(executor);
     const executeSpy = jest.spyOn(executor, 'executeTask');
 
@@ -746,7 +771,7 @@ describe('task-executor 三态结果与中断恢复', () => {
     expect(successTask.history.lastExecution?.outcome).toBe(ExecutionOutcome.SUCCESS);
     expect(successTask.status).toBe(TaskStatus.ENABLED);
 
-    // 失败路径：历史记录携带 outcome=failure，任务状态为 FAILED
+    // 失败路径：历史记录携带 outcome=failure，启用状态保持 ENABLED
     const failureId = 'outcome_failure_task';
     await createBackupTask(failureId);
     jest.spyOn(executor as any, 'executeBackupAction').mockResolvedValue({
@@ -759,7 +784,7 @@ describe('task-executor 三态结果与中断恢复', () => {
 
     const failureTask = (await taskService.getTaskById(failureId)).data as Task;
     expect(failureTask.history.lastExecution?.outcome).toBe(ExecutionOutcome.FAILURE);
-    expect(failureTask.status).toBe(TaskStatus.FAILED);
+    expect(failureTask.status).toBe(TaskStatus.ENABLED);
   });
 });
 
@@ -1221,6 +1246,593 @@ describe('task-executor 重试策略', () => {
     expect(backupSpy).toHaveBeenCalledTimes(2);
   });
 
+  test('P1：重试链使用首次固化的任务定义，重试窗口内编辑任务不影响本次执行', async () => {
+    const taskId = 'retry_snapshot_isolation_task';
+    const action = createBackupAction('backup') as BackupAction;
+    action.options.commitMessage = '首次固化的配置';
+    await taskService.createTask({
+      id: taskId,
+      name: '重试快照隔离测试',
+      status: TaskStatus.ENABLED,
+      trigger: createManualTrigger('手动'),
+      action,
+    });
+
+    const executor = TaskExecutor.getInstance();
+    executor.updateConfig({ retryDelay: 10, maxRetries: 3 });
+
+    const usedMessages: string[] = [];
+    let callCount = 0;
+    const backupSpy = jest.spyOn(executor as any, 'executeBackupAction').mockImplementation(async (task: unknown) => {
+      callCount++;
+      const currentTask = task as Task;
+      usedMessages.push((currentTask.action as BackupAction).options.commitMessage ?? '');
+      if (callCount === 1) {
+        // 重试窗口内任务被编辑：持久化配置变化不应影响本次执行
+        const editedAction = createBackupAction('backup') as BackupAction;
+        editedAction.options.commitMessage = '重试窗口内的新配置';
+        await taskService.updateTask(taskId, { action: editedAction });
+        return {
+          success: false,
+          timestamp: Date.now(),
+          retryable: true,
+          error: '网络错误',
+        };
+      }
+      return { success: true, timestamp: Date.now(), details: '备份成功' };
+    });
+
+    const result = await executor.executeTask(taskId, 0, 'manual');
+
+    expect(result.success).toBe(true);
+    expect(backupSpy).toHaveBeenCalledTimes(2);
+    // 首次尝试与重试都使用执行开始时的任务定义
+    expect(usedMessages).toEqual(['首次固化的配置', '首次固化的配置']);
+    const persisted = (await taskService.getTaskById(taskId)).data as Task;
+    expect((persisted.action as BackupAction).options.commitMessage).toBe('重试窗口内的新配置');
+  });
+
+  test('P1：选择性推送重试保留执行输入（selections），不回退为持久化配置', async () => {
+    const taskId = 'retry_selective_input_task';
+    await taskService.createTask({
+      id: taskId,
+      name: '选择性推送重试',
+      status: TaskStatus.ENABLED,
+      trigger: createManualTrigger('手动'),
+      action: createSelectivePushAction('menav', 'bookmarks', '选择性推送'),
+    });
+
+    const task = (await taskService.getTaskById(taskId)).data as Task;
+    const selections: BookmarkSelection[] = [
+      { id: 'bm1', title: '书签1', type: 'bookmark', url: 'https://example.com/1' },
+      { id: 'bm2', title: '书签2', type: 'bookmark', url: 'https://example.com/2' },
+    ];
+    const selectiveAction = task.action as SelectivePushAction;
+    const taskWithSelections: Task = {
+      ...task,
+      action: {
+        ...selectiveAction,
+        options: {
+          ...selectiveAction.options,
+          selections,
+        },
+      },
+    };
+
+    const executor = TaskExecutor.getInstance();
+    executor.updateConfig({ retryDelay: 10, maxRetries: 3 });
+
+    const observedSelectionCounts: number[] = [];
+    let callCount = 0;
+    const selectiveSpy = jest.spyOn(executor as any, 'executeSelectivePush').mockImplementation(async (t: unknown) => {
+      callCount++;
+      const currentTask = t as Task;
+      observedSelectionCounts.push(((currentTask.action as SelectivePushAction).options.selections ?? []).length);
+      if (callCount === 1) {
+        return {
+          success: false,
+          timestamp: Date.now(),
+          retryable: true,
+          error: '网络错误',
+        };
+      }
+      return { success: true, timestamp: Date.now(), details: '推送成功' };
+    });
+
+    const result = await executor.executeTaskWithData(taskWithSelections, 0, 'manual');
+
+    expect(result.success).toBe(true);
+    expect(selectiveSpy).toHaveBeenCalledTimes(2);
+    // 重试仍能读到本次选择的书签，而非持久化配置中的空值
+    expect(observedSelectionCounts).toEqual([2, 2]);
+    const persisted = (await taskService.getTaskById(taskId)).data as Task;
+    expect((persisted.action as SelectivePushAction).options.selections).toBeUndefined();
+  });
+
+  test('P1：恢复任务重试保留执行输入（backupFilePath），不回退为持久化配置', async () => {
+    const taskId = 'retry_restore_input_task';
+    const action = createBackupAction('restore') as BackupAction;
+    action.options.backupFilePath = '';
+    await taskService.createTask({
+      id: taskId,
+      name: '恢复重试',
+      status: TaskStatus.ENABLED,
+      trigger: createManualTrigger('手动'),
+      action,
+    });
+
+    const persistedTask = (await taskService.getTaskById(taskId)).data as Task;
+    const selectedFilePath = 'backups/bookmarks-2026-11-15.html';
+    const taskWithFile: Task = {
+      ...persistedTask,
+      action: {
+        ...(persistedTask.action as BackupAction),
+        options: {
+          ...(persistedTask.action as BackupAction).options,
+          backupFilePath: selectedFilePath,
+        },
+      },
+    };
+
+    const executor = TaskExecutor.getInstance();
+    executor.updateConfig({ retryDelay: 10, maxRetries: 3 });
+
+    const observedPaths: Array<string | undefined> = [];
+    const snapshotPaths: Array<string | undefined> = [];
+    let callCount = 0;
+    const backupSpy = jest.spyOn(executor as any, 'executeBackupAction').mockImplementation(async (t: unknown) => {
+      callCount++;
+      const currentTask = t as Task;
+      observedPaths.push((currentTask.action as BackupAction).options.backupFilePath);
+      // 执行输入随快照持久化，SW 中断后仍可从快照读取
+      const snapshot = await executor.getPendingSnapshot(taskId);
+      snapshotPaths.push(((snapshot?.task.action as BackupAction | undefined)?.options)?.backupFilePath);
+      if (callCount === 1) {
+        return {
+          success: false,
+          timestamp: Date.now(),
+          retryable: true,
+          error: '网络错误',
+        };
+      }
+      return { success: true, timestamp: Date.now(), details: '恢复成功' };
+    });
+
+    const result = await executor.executeTaskWithData(taskWithFile, 0, 'manual');
+
+    expect(result.success).toBe(true);
+    expect(backupSpy).toHaveBeenCalledTimes(2);
+    // 重试仍使用本次选择的备份文件，而非持久化配置中的空路径
+    expect(observedPaths).toEqual([selectedFilePath, selectedFilePath]);
+    // 执行输入已纳入执行快照，可用于 SW 中断后的恢复判定
+    expect(snapshotPaths).toEqual([selectedFilePath, selectedFilePath]);
+    const persisted = (await taskService.getTaskById(taskId)).data as Task;
+    expect((persisted.action as BackupAction).options.backupFilePath).toBe('');
+  });
+
+  test('P2：重试链为每次执行尝试续期执行租约，累计耗时超过原租约时长仍可重试', async () => {
+    const taskId = 'retry_lease_renewal_task';
+    await createBackupTask(taskId);
+
+    // 用可控时钟模拟执行耗时推进，避免依赖实时余量造成 CI 抖动
+    const baseNow = Date.now();
+    let timeOffset = 0;
+    jest.spyOn(Date, 'now').mockImplementation(() => baseNow + timeOffset);
+
+    const executor = TaskExecutor.getInstance();
+    executor.updateConfig({ retryDelay: 10, maxRetries: 2 });
+
+    const renewSpy = jest.spyOn(taskExecutorLease, 'renewExecutionLease');
+
+    let callCount = 0;
+    const leaseIds: string[] = [];
+    const backupSpy = jest.spyOn(executor as any, 'executeBackupAction').mockImplementation(async () => {
+      callCount++;
+      const lease = await readLease(taskId);
+      leaseIds.push(lease?.executionId);
+      if (callCount === 1) {
+        // 首次尝试已消耗大部分租约：剩余有效期 450ms
+        await browser.storage.local.set({
+          [leaseKey(taskId)]: { ...(lease as object), expiresAt: Date.now() + 450 },
+        });
+        // 第二次尝试开始时（300ms）租约仍有效
+        timeOffset = 300;
+        return {
+          success: false,
+          timestamp: Date.now(),
+          retryable: true,
+          error: '网络错误',
+        };
+      }
+      if (callCount === 2) {
+        // 第三次尝试开始时（600ms）未续期租约已到期，续期后仍有效
+        timeOffset = 600;
+        return {
+          success: false,
+          timestamp: Date.now(),
+          retryable: true,
+          error: '网络错误',
+        };
+      }
+      return { success: true, timestamp: Date.now(), details: '备份成功' };
+    });
+
+    const result = await executor.executeTask(taskId, 0, 'manual');
+
+    // 首次尝试 + 2 次重试：第三次尝试开始时已超过未续期租约的到期时间
+    expect(result.success).toBe(true);
+    expect(backupSpy).toHaveBeenCalledTimes(3);
+    // 每次重试尝试各续期一次，共 2 次
+    expect(renewSpy).toHaveBeenCalledTimes(2);
+    // 重试延续同一执行租约，未重新获取
+    expect(new Set(leaseIds).size).toBe(1);
+    expect(await readLease(taskId)).toBeUndefined();
+  });
+
+  test('P1：第一次尝试期间禁用任务后重试，不覆盖 DISABLED 状态', async () => {
+    const taskId = 'retry_disabled_during_first_attempt';
+    await createBackupTask(taskId);
+
+    const executor = TaskExecutor.getInstance();
+    executor.updateConfig({ retryDelay: 10, maxRetries: 3 });
+
+    let callCount = 0;
+    const backupSpy = jest.spyOn(executor as any, 'executeBackupAction').mockImplementation(async () => {
+      callCount++;
+      if (callCount === 1) {
+        // 第一次尝试期间用户禁用任务，随后失败进入正常重试
+        await taskService.setTaskStatus(taskId, TaskStatus.DISABLED);
+        return {
+          success: false,
+          timestamp: Date.now(),
+          retryable: true,
+          error: '网络错误',
+        };
+      }
+      return { success: true, timestamp: Date.now(), details: '重试成功' };
+    });
+
+    const result = await executor.executeTask(taskId, 0, 'manual');
+
+    expect(result.success).toBe(true);
+    // 重试正常执行（同一任务执行的后续尝试），但状态不覆盖用户的禁用意图
+    expect(backupSpy).toHaveBeenCalledTimes(2);
+    const task = (await taskService.getTaskById(taskId)).data as Task;
+    expect(task.status).toBe(TaskStatus.DISABLED);
+    expect(task.history.executions.length).toBe(1);
+    expect(task.history.lastExecution?.success).toBe(true);
+  });
+
+  test('P2：续期发现其他执行已接管时，不改状态/历史且不删除新执行快照', async () => {
+    const taskId = 'retry_lease_taken_over_task';
+    await createBackupTask(taskId);
+
+    const executor = TaskExecutor.getInstance();
+    executor.updateConfig({ retryDelay: 10, maxRetries: 3 });
+
+    const otherExecutionId = 'other-execution';
+    let callCount = 0;
+    const backupSpy = jest.spyOn(executor as any, 'executeBackupAction').mockImplementation(async () => {
+      callCount++;
+      if (callCount === 1) {
+        const task = (await taskService.getTaskById(taskId)).data as Task;
+        // 模拟其他执行在重试窗口内合法接管：持有未到期租约并写入自己的快照
+        await browser.storage.local.set({
+          [leaseKey(taskId)]: {
+            taskId,
+            executionId: otherExecutionId,
+            acquiredAt: Date.now(),
+            expiresAt: Date.now() + 120000,
+          },
+          execution_snapshots: {
+            [taskId]: {
+              taskId,
+              task: { ...task, name: '其他执行的快照' },
+              source: 'event',
+              createdAt: Date.now(),
+            },
+          },
+        });
+        return {
+          success: false,
+          timestamp: Date.now(),
+          retryable: true,
+          error: '网络错误',
+        };
+      }
+      return { success: true, timestamp: Date.now(), details: '不应执行' };
+    });
+
+    const result = await executor.executeTask(taskId, 0, 'manual');
+
+    // 原执行停止重试，且不产生第二次执行尝试
+    expect(backupSpy).toHaveBeenCalledTimes(1);
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('接管');
+    // 不改写任务状态/历史：由接管的新执行负责
+    const task = (await taskService.getTaskById(taskId)).data as Task;
+    expect(task.status).toBe(TaskStatus.RUNNING);
+    expect(task.history.executions.length).toBe(0);
+    // 不删除新执行写入的快照与租约
+    const snapshot = await executor.getPendingSnapshot(taskId);
+    expect(snapshot?.task.name).toBe('其他执行的快照');
+    expect(snapshot?.source).toBe('event');
+    expect((await readLease(taskId))?.executionId).toBe(otherExecutionId);
+  });
+
+  test('P2：租约由其他执行持有且已到期时，按接管处理，不清理状态/快照', async () => {
+    const taskId = 'retry_foreign_expired_lease_task';
+    await createBackupTask(taskId);
+
+    const executor = TaskExecutor.getInstance();
+    executor.updateConfig({ retryDelay: 10, maxRetries: 3 });
+
+    const foreignExecutionId = 'foreign-expired-execution';
+    let callCount = 0;
+    const backupSpy = jest.spyOn(executor as any, 'executeBackupAction').mockImplementation(async () => {
+      callCount++;
+      if (callCount === 1) {
+        const task = (await taskService.getTaskById(taskId)).data as Task;
+        // 其他执行的租约已到期，但仍不属于本执行
+        await browser.storage.local.set({
+          [leaseKey(taskId)]: {
+            taskId,
+            executionId: foreignExecutionId,
+            acquiredAt: Date.now() - 200000,
+            expiresAt: Date.now() - 1000,
+          },
+          execution_snapshots: {
+            [taskId]: {
+              taskId,
+              task: { ...task, name: '其他执行的快照' },
+              source: 'event',
+              createdAt: Date.now(),
+            },
+          },
+        });
+        return {
+          success: false,
+          timestamp: Date.now(),
+          retryable: true,
+          error: '网络错误',
+        };
+      }
+      return { success: true, timestamp: Date.now(), details: '不应执行' };
+    });
+
+    const result = await executor.executeTask(taskId, 0, 'manual');
+
+    // 非本执行的租约无论是否到期都按接管处理：不改状态/历史，不删快照
+    expect(backupSpy).toHaveBeenCalledTimes(1);
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('接管');
+    const task = (await taskService.getTaskById(taskId)).data as Task;
+    expect(task.status).toBe(TaskStatus.RUNNING);
+    expect(task.history.executions.length).toBe(0);
+    expect((await executor.getPendingSnapshot(taskId))?.task.name).toBe('其他执行的快照');
+    expect((await readLease(taskId))?.executionId).toBe(foreignExecutionId);
+  });
+
+  test('P2：清理前二次校验发现他人未到期租约时跳过清理', async () => {
+    const taskId = 'retry_secondary_check_task';
+    await createBackupTask(taskId);
+
+    const executor = TaskExecutor.getInstance();
+    executor.updateConfig({ retryDelay: 10, maxRetries: 3 });
+
+    // 续期读到本执行的已到期租约；清理前的二次校验读到他人未到期租约
+    const foreignActiveLease = {
+      taskId,
+      executionId: 'foreign-active-execution',
+      acquiredAt: Date.now(),
+      expiresAt: Date.now() + 120000,
+    };
+    let afterFirstAttempt = false;
+    let leaseReadsAfterFirstAttempt = 0;
+    const originalGetStorageData = storageService.getStorageData.bind(storageService);
+    jest.spyOn(storageService, 'getStorageData').mockImplementation(async (key: string) => {
+      if (key === leaseKey(taskId) && afterFirstAttempt) {
+        leaseReadsAfterFirstAttempt++;
+        // 第一次是续期读取（返回真实的已到期租约），第二次是清理前二次校验
+        if (leaseReadsAfterFirstAttempt >= 2) {
+          return { success: true, data: foreignActiveLease };
+        }
+      }
+      return originalGetStorageData(key);
+    });
+
+    let callCount = 0;
+    const backupSpy = jest.spyOn(executor as any, 'executeBackupAction').mockImplementation(async () => {
+      callCount++;
+      if (callCount === 1) {
+        // 本执行租约在第一次尝试后到期
+        const lease = await readLease(taskId);
+        await browser.storage.local.set({
+          [leaseKey(taskId)]: { ...(lease as object), expiresAt: Date.now() - 1 },
+        });
+        afterFirstAttempt = true;
+        return {
+          success: false,
+          timestamp: Date.now(),
+          retryable: true,
+          error: '网络错误',
+        };
+      }
+      return { success: true, timestamp: Date.now(), details: '不应执行' };
+    });
+
+    const result = await executor.executeTask(taskId, 0, 'manual');
+
+    expect(backupSpy).toHaveBeenCalledTimes(1);
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('接管');
+    // 二次校验发现他人租约：不覆盖状态/历史，不删除快照，不释放/改写租约
+    const task = (await taskService.getTaskById(taskId)).data as Task;
+    expect(task.status).toBe(TaskStatus.RUNNING);
+    expect(task.history.executions.length).toBe(0);
+    expect(await executor.getPendingSnapshot(taskId)).not.toBeNull();
+    const storedLease = await readLease(taskId);
+    expect(storedLease?.executionId).not.toBe(foreignActiveLease.executionId);
+    expect(storedLease.expiresAt).toBeLessThanOrEqual(Date.now());
+  });
+
+  test('P2：任务在重试窗口被删除时终止重试，并清理快照与执行租约', async () => {
+    const taskId = 'retry_task_deleted_task';
+    await createBackupTask(taskId);
+
+    const executor = TaskExecutor.getInstance();
+    executor.updateConfig({ retryDelay: 10, maxRetries: 3 });
+
+    let callCount = 0;
+    const backupSpy = jest.spyOn(executor as any, 'executeBackupAction').mockImplementation(async () => {
+      callCount++;
+      if (callCount === 1) {
+        // 第一次尝试失败后、重试开始前任务被删除
+        await taskService.deleteTask(taskId);
+        return {
+          success: false,
+          timestamp: Date.now(),
+          retryable: true,
+          error: '网络错误',
+        };
+      }
+      return { success: true, timestamp: Date.now(), details: '不应执行' };
+    });
+
+    const result = await executor.executeTask(taskId, 0, 'manual');
+
+    expect(backupSpy).toHaveBeenCalledTimes(1);
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('停止重试');
+    // 任务已删除：不再执行动作，也不写历史/状态
+    expect((await taskService.getTaskById(taskId)).success).toBe(false);
+    // 删除任务时已清理执行状态，重试终止后不留孤儿快照与租约
+    expect(await executor.getPendingSnapshot(taskId)).toBeNull();
+    expect(await readLease(taskId)).toBeUndefined();
+  });
+
+  test('P2：任务存在性检查瞬时读取失败时重读一次并继续重试', async () => {
+    const taskId = 'retry_task_read_transient_failure';
+    await createBackupTask(taskId);
+
+    const executor = TaskExecutor.getInstance();
+    executor.updateConfig({ retryDelay: 10, maxRetries: 3 });
+
+    let failNextTaskRead = false;
+    const originalGetStorageData = storageService.getStorageData.bind(storageService);
+    jest.spyOn(storageService, 'getStorageData').mockImplementation(async (key: string) => {
+      if (failNextTaskRead && key === 'tasks_data') {
+        // 只失败一次：重读时应成功
+        failNextTaskRead = false;
+        return { success: false, error: '模拟瞬时读取失败' };
+      }
+      return originalGetStorageData(key);
+    });
+
+    let callCount = 0;
+    const backupSpy = jest.spyOn(executor as any, 'executeBackupAction').mockImplementation(async () => {
+      callCount++;
+      if (callCount === 1) {
+        failNextTaskRead = true;
+        return {
+          success: false,
+          timestamp: Date.now(),
+          retryable: true,
+          error: '网络错误',
+        };
+      }
+      return { success: true, timestamp: Date.now(), details: '重试成功' };
+    });
+
+    const result = await executor.executeTask(taskId, 0, 'manual');
+
+    // 重读成功后继续重试，不把瞬时读取失败当作任务删除
+    expect(result.success).toBe(true);
+    expect(backupSpy).toHaveBeenCalledTimes(2);
+    const task = (await taskService.getTaskById(taskId)).data as Task;
+    expect(task.history.lastExecution?.success).toBe(true);
+  });
+
+  test('P2：续期存储写入失败但租约仍归本执行时，释放租约避免阻塞', async () => {
+    const taskId = 'retry_renewal_storage_error_task';
+    await createBackupTask(taskId);
+
+    const executor = TaskExecutor.getInstance();
+    executor.updateConfig({ retryDelay: 10, maxRetries: 3 });
+
+    let failLeaseWrite = false;
+    const originalSetStorageData = storageService.setStorageData.bind(storageService);
+    jest.spyOn(storageService, 'setStorageData').mockImplementation(async (key: string, data: any) => {
+      if (failLeaseWrite && key === leaseKey(taskId)) {
+        return { success: false, error: '模拟存储写入失败' };
+      }
+      return originalSetStorageData(key, data);
+    });
+
+    const backupSpy = jest.spyOn(executor as any, 'executeBackupAction').mockImplementation(async () => {
+      // 第一次尝试后让续期写入失败（读取仍成功，可确认租约归属）
+      failLeaseWrite = true;
+      return {
+        success: false,
+        timestamp: Date.now(),
+        retryable: true,
+        error: '网络错误',
+      };
+    });
+
+    const result = await executor.executeTask(taskId, 0, 'manual');
+
+    expect(backupSpy).toHaveBeenCalledTimes(1);
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('停止重试');
+    // 按失败收尾：结果写入历史，启用状态保持 ENABLED
+    const task = (await taskService.getTaskById(taskId)).data as Task;
+    expect(task.status).toBe(TaskStatus.ENABLED);
+    expect(task.history.executions.length).toBe(1);
+    // 快照清理，且仍归本执行的租约被释放，不阻塞后续执行 120 秒
+    expect(await executor.getPendingSnapshot(taskId)).toBeNull();
+    expect(await readLease(taskId)).toBeUndefined();
+  });
+
+  test('P2：续期读取失败无法确认归属时，不触碰状态/历史/快照', async () => {
+    const taskId = 'retry_renewal_storage_read_error_task';
+    await createBackupTask(taskId);
+
+    const executor = TaskExecutor.getInstance();
+    executor.updateConfig({ retryDelay: 10, maxRetries: 3 });
+
+    let failLeaseRead = false;
+    const originalGetStorageData = storageService.getStorageData.bind(storageService);
+    jest.spyOn(storageService, 'getStorageData').mockImplementation(async (key: string) => {
+      if (failLeaseRead && key === leaseKey(taskId)) {
+        return { success: false, error: '模拟存储读取失败' };
+      }
+      return originalGetStorageData(key);
+    });
+
+    const backupSpy = jest.spyOn(executor as any, 'executeBackupAction').mockImplementation(async () => {
+      // 第一次尝试后让续期读取失败：无法确认租约是否仍归本执行
+      failLeaseRead = true;
+      return {
+        success: false,
+        timestamp: Date.now(),
+        retryable: true,
+        error: '网络错误',
+      };
+    });
+
+    const result = await executor.executeTask(taskId, 0, 'manual');
+
+    expect(backupSpy).toHaveBeenCalledTimes(1);
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('无法确认');
+    // 归属未知：不改写任务状态/历史，也不删除快照
+    const task = (await taskService.getTaskById(taskId)).data as Task;
+    expect(task.status).toBe(TaskStatus.RUNNING);
+    expect(task.history.executions.length).toBe(0);
+    expect(await executor.getPendingSnapshot(taskId)).not.toBeNull();
+  });
+
   test('验收2：重试前执行租约已失效，停止重试并按失败收尾', async () => {
     const taskId = 'retry_lease_expired_task';
     await createBackupTask(taskId);
@@ -1249,11 +1861,17 @@ describe('task-executor 重试策略', () => {
     expect(result.success).toBe(false);
     expect(result.outcome).toBe(ExecutionOutcome.FAILURE);
     expect(result.error).toContain('停止重试');
-    // 按失败收尾：任务标记为 FAILED，历史只记录最终失败
+    // 按失败收尾：历史只记录最终失败，启用状态保持 ENABLED
     const task = (await taskService.getTaskById(taskId)).data as Task;
-    expect(task.status).toBe(TaskStatus.FAILED);
+    expect(task.status).toBe(TaskStatus.ENABLED);
     expect(task.history.executions.length).toBe(1);
     expect(task.history.lastExecution?.outcome).toBe(ExecutionOutcome.FAILURE);
+    // 重试链在此终止：执行快照必须清理，不能因外层 finally 跳过快照删除而残留
+    expect(await executor.getPendingSnapshot(taskId)).toBeNull();
+    const snapshotStorage = await browser.storage.local.get('execution_snapshots');
+    expect(
+      (snapshotStorage.execution_snapshots as Record<string, unknown> | undefined)?.[taskId]
+    ).toBeUndefined();
   });
 
   test('验收3：结果不确定的执行不会重试，即使结果携带可重试标记', async () => {
@@ -1276,9 +1894,9 @@ describe('task-executor 重试策略', () => {
     expect(backupSpy).toHaveBeenCalledTimes(1);
     expect(result.success).toBe(false);
     expect(result.outcome).toBe(ExecutionOutcome.UNCERTAIN);
-    // 结果不确定不标记 FAILED
+    // 结果不确定不改变启用状态
     const task = (await taskService.getTaskById(taskId)).data as Task;
-    expect(task.status).toBe(TaskStatus.RUNNING);
+    expect(task.status).toBe(TaskStatus.ENABLED);
   });
 
   test('验收4：错误消息包含旧关键词（timeout/network）不再触发重试，判定仅依赖结构化信息', async () => {
@@ -1299,7 +1917,7 @@ describe('task-executor 重试策略', () => {
     expect(result.success).toBe(false);
     expect(result.outcome).toBe(ExecutionOutcome.FAILURE);
     const task = (await taskService.getTaskById(taskId)).data as Task;
-    expect(task.status).toBe(TaskStatus.FAILED);
+    expect(task.status).toBe(TaskStatus.ENABLED);
   });
 
   test('验收1：达到重试上限后停止重试，按失败收尾且历史只记录最终失败', async () => {
@@ -1324,7 +1942,7 @@ describe('task-executor 重试策略', () => {
     expect(result.success).toBe(false);
     expect(result.outcome).toBe(ExecutionOutcome.FAILURE);
     const task = (await taskService.getTaskById(taskId)).data as Task;
-    expect(task.status).toBe(TaskStatus.FAILED);
+    expect(task.status).toBe(TaskStatus.ENABLED);
     // 重试属于同一任务执行：历史只记录最终失败结果
     expect(task.history.executions.length).toBe(1);
     expect(task.history.lastExecution?.details).toContain('已重试 2 次');
@@ -1367,6 +1985,202 @@ describe('task-executor 重试策略', () => {
     gate.resolve();
     const result = await executionPromise;
     expect(result.success).toBe(true);
+  });
+});
+
+describe('task-executor 任务删除后的执行状态清理', () => {
+  beforeEach(async () => {
+    await browser.storage.local.clear();
+    await browser.storage.sync.clear();
+    jest.restoreAllMocks();
+    TaskExecutor.resetForTesting();
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  const leaseKey = (taskId: string) => `${EXECUTION_LEASE_KEY_PREFIX}${taskId}`;
+
+  const readLease = async (taskId: string): Promise<any> => {
+    const result = await browser.storage.local.get(leaseKey(taskId));
+    return result[leaseKey(taskId)];
+  };
+
+  const buildTask = (id: string): Task => ({
+    id,
+    name: `清理测试任务 ${id}`,
+    status: TaskStatus.ENABLED,
+    createdAt: 1,
+    updatedAt: 1,
+    trigger: createManualTrigger('手动'),
+    action: createBackupAction('backup'),
+    history: { executions: [] },
+  });
+
+  const createBackupTask = async (id: string): Promise<void> => {
+    await taskService.createTask({
+      id,
+      name: `清理测试任务 ${id}`,
+      status: TaskStatus.ENABLED,
+      trigger: createManualTrigger('手动'),
+      action: createBackupAction('backup'),
+    });
+  };
+
+  const buildSnapshot = (taskId: string) => ({
+    taskId,
+    task: buildTask(taskId),
+    source: 'manual' as const,
+    createdAt: Date.now(),
+  });
+
+  test('删除任务时清理该任务的执行快照、执行租约与书签写入租约', async () => {
+    const taskId = 'delete_cleanup_task';
+    const otherTaskId = 'delete_cleanup_other_task';
+    await createBackupTask(taskId);
+    await createBackupTask(otherTaskId);
+
+    const now = Date.now();
+    await browser.storage.local.set({
+      execution_snapshots: {
+        [taskId]: buildSnapshot(taskId),
+        [otherTaskId]: buildSnapshot(otherTaskId),
+      },
+      [leaseKey(taskId)]: {
+        taskId,
+        executionId: 'delete-execution',
+        acquiredAt: now,
+        expiresAt: now + 120000,
+      },
+      [BOOKMARK_WRITE_LEASE_KEY]: {
+        taskId,
+        executionId: 'delete-execution',
+        acquiredAt: now,
+        expiresAt: now + 120000,
+      },
+    });
+
+    const result = await taskService.deleteTask(taskId);
+
+    expect(result.success).toBe(true);
+    const stored = await browser.storage.local.get(null);
+    const snapshots = stored.execution_snapshots as Record<string, unknown>;
+    // 只清理被删除任务的快照，其他任务的快照保留
+    expect(snapshots[taskId]).toBeUndefined();
+    expect(snapshots[otherTaskId]).toBeDefined();
+    expect(stored[leaseKey(taskId)]).toBeUndefined();
+    expect(stored[BOOKMARK_WRITE_LEASE_KEY]).toBeUndefined();
+  });
+
+  test('删除任务不影响其他任务持有的书签写入租约', async () => {
+    const taskId = 'delete_cleanup_keep_write_lease';
+    await createBackupTask(taskId);
+
+    const now = Date.now();
+    await browser.storage.local.set({
+      [BOOKMARK_WRITE_LEASE_KEY]: {
+        taskId: 'other_write_task',
+        executionId: 'other-execution',
+        acquiredAt: now,
+        expiresAt: now + 120000,
+      },
+    });
+
+    const result = await taskService.deleteTask(taskId);
+
+    expect(result.success).toBe(true);
+    const stored = await browser.storage.local.get(BOOKMARK_WRITE_LEASE_KEY);
+    expect(stored[BOOKMARK_WRITE_LEASE_KEY]).toEqual(expect.objectContaining({
+      taskId: 'other_write_task',
+    }));
+  });
+
+  test('重试前任务被直接移除时，确认删除后清理残留快照与租约', async () => {
+    const taskId = 'retry_task_removed_directly';
+    await createBackupTask(taskId);
+
+    const executor = TaskExecutor.getInstance();
+    executor.updateConfig({ retryDelay: 10, maxRetries: 3 });
+
+    let callCount = 0;
+    const backupSpy = jest.spyOn(executor as any, 'executeBackupAction').mockImplementation(async () => {
+      callCount++;
+      if (callCount === 1) {
+        // 绕过 deleteTask，直接删除任务存储，模拟旧版本残留或清理失败的孤儿状态
+        const stored = await browser.storage.local.get('tasks_data');
+        const taskStorage = stored.tasks_data as { tasks: Record<string, Task> };
+        delete taskStorage.tasks[taskId];
+        await browser.storage.local.set({ tasks_data: taskStorage });
+        return {
+          success: false,
+          timestamp: Date.now(),
+          retryable: true,
+          error: '网络错误',
+        };
+      }
+      return { success: true, timestamp: Date.now(), details: '不应执行' };
+    });
+
+    const result = await executor.executeTask(taskId, 0, 'manual');
+
+    expect(backupSpy).toHaveBeenCalledTimes(1);
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('任务不存在');
+    // 重试层确认任务已删除后，清理本次执行残留
+    expect(await executor.getPendingSnapshot(taskId)).toBeNull();
+    expect(await readLease(taskId)).toBeUndefined();
+  });
+
+  test('init 清理已删除任务的过期/缺失执行状态，保留未到期租约', async () => {
+    const expiredTaskId = 'orphan_expired_lease';
+    const missingLeaseTaskId = 'orphan_missing_lease';
+    const activeLeaseTaskId = 'orphan_active_lease';
+    const existingTaskId = 'orphan_existing_task';
+    await createBackupTask(existingTaskId);
+
+    const now = Date.now();
+    await browser.storage.local.set({
+      execution_snapshots: {
+        [expiredTaskId]: buildSnapshot(expiredTaskId),
+        [missingLeaseTaskId]: buildSnapshot(missingLeaseTaskId),
+        [activeLeaseTaskId]: buildSnapshot(activeLeaseTaskId),
+        [existingTaskId]: buildSnapshot(existingTaskId),
+      },
+      [leaseKey(expiredTaskId)]: {
+        taskId: expiredTaskId,
+        executionId: 'expired-execution',
+        acquiredAt: now - 200000,
+        expiresAt: now - 1000,
+      },
+      [leaseKey(activeLeaseTaskId)]: {
+        taskId: activeLeaseTaskId,
+        executionId: 'active-execution',
+        acquiredAt: now,
+        expiresAt: now + 120000,
+      },
+      [BOOKMARK_WRITE_LEASE_KEY]: {
+        taskId: expiredTaskId,
+        executionId: 'expired-execution',
+        acquiredAt: now - 200000,
+        expiresAt: now - 1000,
+      },
+    });
+
+    const executor = TaskExecutor.getInstance();
+    await executor.init();
+
+    const stored = await browser.storage.local.get(null);
+    const snapshots = stored.execution_snapshots as Record<string, unknown>;
+    expect(snapshots[expiredTaskId]).toBeUndefined();
+    expect(snapshots[missingLeaseTaskId]).toBeUndefined();
+    // 未到期租约可能仍由运行中的执行持有：快照与租约都保留
+    expect(snapshots[activeLeaseTaskId]).toBeDefined();
+    expect(stored[leaseKey(activeLeaseTaskId)]).toBeDefined();
+    // 仍然存在的任务不受孤儿清理影响
+    expect(snapshots[existingTaskId]).toBeDefined();
+    expect(stored[leaseKey(expiredTaskId)]).toBeUndefined();
+    expect(stored[BOOKMARK_WRITE_LEASE_KEY]).toBeUndefined();
   });
 });
 
@@ -1437,18 +2251,18 @@ describe('task-executor bug 修复回归', () => {
     await createBackupTask(taskId);
 
     const executor = TaskExecutor.getInstance();
-    executor.updateConfig({ timeout: 50 });
+    executor.updateConfig({ actionTimeouts: { backup: 50 } });
     hangExecution(executor);
 
     const result = await executor.executeTask(taskId);
     expect(result.success).toBe(false);
     expect(result.outcome).toBe(ExecutionOutcome.UNCERTAIN);
 
-    // ① 执行历史 1 条且 outcome=uncertain，任务保持 RUNNING（不标记 FAILED）
+    // ① 执行历史 1 条且 outcome=uncertain，启用状态保持 ENABLED
     const task = (await taskService.getTaskById(taskId)).data as Task;
     expect(task.history.executions.length).toBe(1);
     expect(task.history.lastExecution?.outcome).toBe(ExecutionOutcome.UNCERTAIN);
-    expect(task.status).toBe(TaskStatus.RUNNING);
+    expect(task.status).toBe(TaskStatus.ENABLED);
 
     // ② 执行租约仍保留在 storage（未在超时收尾时误删）
     const lease = await readLease(taskId);
@@ -1473,7 +2287,7 @@ describe('task-executor bug 修复回归', () => {
     await createOrganizeTask(organizeId);
 
     const executor = TaskExecutor.getInstance();
-    executor.updateConfig({ timeout: 50 });
+    executor.updateConfig({ actionTimeouts: { restore: 50 } });
     hangExecution(executor);
 
     const result = await executor.executeTask(restoreId, 0, 'manual');
@@ -1527,6 +2341,126 @@ describe('task-executor bug 修复回归', () => {
     // 被拒请求不产生执行历史，且执行租约已被释放
     expect(task.history.executions.length).toBe(0);
     expect(await readLease(taskId)).toBeUndefined();
+  });
+
+  test('P2：重试入口租约失效时清理执行快照且保留用户的禁用意图', async () => {
+    const taskId = 'regression_lease_invalid_snapshot';
+    await createBackupTask(taskId);
+
+    const executor = TaskExecutor.getInstance();
+    executor.updateConfig({ retryDelay: 10, maxRetries: 3 });
+
+    const backupSpy = jest.spyOn(executor as any, 'executeBackupAction').mockImplementation(async () => {
+      // 执行期间用户主动禁用任务
+      await taskService.setTaskStatus(taskId, TaskStatus.DISABLED);
+      // 重试窗口内执行租约到期
+      const lease = await readLease(taskId);
+      await browser.storage.local.set({
+        [leaseKey(taskId)]: { ...(lease as object), expiresAt: Date.now() - 1 },
+      });
+      return {
+        success: false,
+        timestamp: Date.now(),
+        retryable: true,
+        error: '网络错误',
+      };
+    });
+
+    const result = await executor.executeTask(taskId, 0, 'manual');
+
+    expect(backupSpy).toHaveBeenCalledTimes(1);
+    expect(result.error).toContain('停止重试');
+    // 收尾不覆盖用户的禁用意图
+    const task = (await taskService.getTaskById(taskId)).data as Task;
+    expect(task.status).toBe(TaskStatus.DISABLED);
+    expect(task.history.executions.length).toBe(1);
+    // 快照随重试链终止一并清理，不在 storage.local 残留
+    expect(await executor.getPendingSnapshot(taskId)).toBeNull();
+    const snapshotStorage = await browser.storage.local.get('execution_snapshots');
+    expect(
+      (snapshotStorage.execution_snapshots as Record<string, unknown> | undefined)?.[taskId]
+    ).toBeUndefined();
+  });
+
+  test('P2：重试被写入租约阻止时保留用户的禁用意图（不覆盖为 ENABLED）', async () => {
+    const taskId = 'regression_retry_blocked_disabled';
+    await createOrganizeTask(taskId);
+
+    const executor = TaskExecutor.getInstance();
+    executor.updateConfig({ retryDelay: 10, maxRetries: 3 });
+
+    jest.spyOn(executor as any, 'executeOrganizeAction').mockImplementation(async () => {
+      // 执行期间用户主动禁用任务，同时预置其他任务的写入租约阻止重试
+      await taskService.setTaskStatus(taskId, TaskStatus.DISABLED);
+      await browser.storage.local.set({
+        [BOOKMARK_WRITE_LEASE_KEY]: {
+          taskId: 'other',
+          executionId: 'other-lease',
+          acquiredAt: Date.now(),
+          expiresAt: Date.now() + 120000,
+        },
+      });
+      throw new RetryableError(RetryableErrorCategory.NETWORK, '模拟网络错误');
+    });
+
+    const result = await executor.executeTask(taskId, 0, 'manual');
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('另一个任务正在修改书签树，请稍后重试');
+    // 重试被拒时恢复状态为 ENABLED，但不覆盖用户的禁用意图
+    const task = (await taskService.getTaskById(taskId)).data as Task;
+    expect(task.status).toBe(TaskStatus.DISABLED);
+    expect(task.history.executions.length).toBe(0);
+    expect(await readLease(taskId)).toBeUndefined();
+  });
+
+  test('P3：失败收尾只写入历史并恢复 ENABLED，不写入 FAILED 状态', async () => {
+    const taskId = 'regression_failure_status_atomic';
+    await createBackupTask(taskId);
+
+    const executor = TaskExecutor.getInstance();
+    jest.spyOn(executor as any, 'executeBackupAction').mockResolvedValue({
+      success: false,
+      timestamp: Date.now(),
+      error: '模拟不可重试失败',
+    });
+
+    const setStatusSpy = jest.spyOn(taskService, 'setTaskStatus');
+
+    const result = await executor.executeTask(taskId, 0, 'manual');
+
+    expect(result.success).toBe(false);
+    // 执行结果只写入历史；收尾只把 RUNNING 恢复为 ENABLED，不写 FAILED
+    expect(
+      setStatusSpy.mock.calls.filter(([, status]) => status === TaskStatus.FAILED)
+    ).toHaveLength(0);
+    const task = (await taskService.getTaskById(taskId)).data as Task;
+    expect(task.status).toBe(TaskStatus.ENABLED);
+    expect(task.history.executions.length).toBe(1);
+  });
+
+  test('P3：禁用任务失败收尾不打印“状态为 FAILED”', async () => {
+    const taskId = 'regression_disabled_failure_log';
+    await createBackupTask(taskId);
+
+    const executor = TaskExecutor.getInstance();
+    jest.spyOn(executor as any, 'executeBackupAction').mockImplementation(async () => {
+      // 执行期间用户禁用任务，随后以不可重试错误失败
+      await taskService.setTaskStatus(taskId, TaskStatus.DISABLED);
+      return { success: false, timestamp: Date.now(), error: '配置错误' };
+    });
+
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await executor.executeTask(taskId, 0, 'manual');
+
+    const failedStatusLogs = logSpy.mock.calls
+      .map((call) => String(call[0]))
+      .filter((message) => message.includes('状态为 FAILED'));
+    expect(failedStatusLogs).toHaveLength(0);
+    const task = (await taskService.getTaskById(taskId)).data as Task;
+    expect(task.status).toBe(TaskStatus.DISABLED);
   });
 
   test('P2-3：无快照 + 已到期执行租约，init 恢复 ENABLED 并清理到期租约，不写历史', async () => {
@@ -1611,11 +2545,11 @@ describe('task-executor bug 修复回归', () => {
     gate.resolve();
     const result = await executionPromise;
 
-    // 重试耗尽后按失败收尾：任务 FAILED、历史只记录最终失败、快照已清理
+    // 重试耗尽后按失败收尾：启用状态保持 ENABLED、历史只记录最终失败、快照已清理
     expect(result.success).toBe(false);
     expect(result.outcome).toBe(ExecutionOutcome.FAILURE);
     const task = (await taskService.getTaskById(taskId)).data as Task;
-    expect(task.status).toBe(TaskStatus.FAILED);
+    expect(task.status).toBe(TaskStatus.ENABLED);
     expect(task.history.executions.length).toBe(1);
     expect(await executor.getPendingSnapshot(taskId)).toBeNull();
   });
@@ -1650,5 +2584,376 @@ describe('task-executor bug 修复回归', () => {
     const task = (await taskService.getTaskById(taskId)).data as Task;
     expect(task.history.executions.length).toBe(1);
     expect(task.history.lastExecution?.success).toBe(true);
+  });
+});
+
+describe('task-executor 动作级超时', () => {
+  const buildTask = (action: Task['action']): Task => ({
+    id: 'timeout_resolution_task',
+    name: '动作级超时解析',
+    status: TaskStatus.ENABLED,
+    createdAt: 0,
+    updatedAt: 0,
+    trigger: createManualTrigger('手动'),
+    action,
+    history: { executions: [] },
+  });
+
+  test('按动作类型解析到不同的集中定义超时', () => {
+    expect(resolveActionTimeout(buildTask(createBackupAction('backup')), DEFAULT_CONFIG))
+      .toBe(ACTION_TIMEOUTS.backup);
+    expect(resolveActionTimeout(buildTask(createBackupAction('restore')), DEFAULT_CONFIG))
+      .toBe(ACTION_TIMEOUTS.restore);
+    expect(resolveActionTimeout(buildTask(createPushAction()), DEFAULT_CONFIG))
+      .toBe(ACTION_TIMEOUTS.push);
+    expect(resolveActionTimeout(buildTask(createSelectivePushAction()), DEFAULT_CONFIG))
+      .toBe(ACTION_TIMEOUTS.selectivePush);
+
+    const organizeAction = createOrganizeAction();
+    expect(resolveActionTimeout(buildTask(organizeAction), DEFAULT_CONFIG))
+      .toBe(ACTION_TIMEOUTS.organize);
+
+    organizeAction.operations = [{ operation: 'validate', filters: { pattern: '*' } }];
+    expect(resolveActionTimeout(buildTask(organizeAction), DEFAULT_CONFIG))
+      .toBe(ACTION_TIMEOUTS.organizeValidate);
+  });
+
+  test('未匹配动作类型时保持默认超时', () => {
+    expect(DEFAULT_CONFIG.timeout).toBe(60000);
+    expect(resolveActionTimeout(buildTask({ type: 'unknown' } as unknown as Task['action']), DEFAULT_CONFIG))
+      .toBe(DEFAULT_CONFIG.timeout);
+  });
+
+  test('显式动作级超时覆盖优先于集中定义', () => {
+    const config = {
+      ...DEFAULT_CONFIG,
+      actionTimeouts: { backup: 1000, restore: 2000, organizeValidate: 3000 },
+    };
+
+    expect(resolveActionTimeout(buildTask(createBackupAction('backup')), config)).toBe(1000);
+    expect(resolveActionTimeout(buildTask(createBackupAction('restore')), config)).toBe(2000);
+
+    const organizeAction = createOrganizeAction();
+    organizeAction.operations = [{ operation: 'validate' }];
+    expect(resolveActionTimeout(buildTask(organizeAction), config)).toBe(3000);
+  });
+
+  test('租约时长覆盖动作超时加缓冲，短动作保持默认租约时长', () => {
+    expect(resolveExecutionLeaseDuration(ACTION_TIMEOUTS.push))
+      .toBe(ACTION_TIMEOUTS.push + LEASE_TIMEOUT_BUFFER);
+    expect(resolveExecutionLeaseDuration(ACTION_TIMEOUTS.restore))
+      .toBe(ACTION_TIMEOUTS.restore + LEASE_TIMEOUT_BUFFER);
+    // 动作超时加缓冲小于默认租约时长时，仍使用默认租约时长
+    expect(resolveExecutionLeaseDuration(60000)).toBe(EXECUTION_LEASE_DURATION);
+  });
+});
+
+describe('task-executor 租约时长与动作超时联动', () => {
+  beforeEach(async () => {
+    await browser.storage.local.clear();
+    await browser.storage.sync.clear();
+    jest.restoreAllMocks();
+    TaskExecutor.resetForTesting();
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  const leaseKey = (taskId: string) => `${EXECUTION_LEASE_KEY_PREFIX}${taskId}`;
+
+  const readLease = async (taskId: string): Promise<any> => {
+    const result = await browser.storage.local.get(leaseKey(taskId));
+    return result[leaseKey(taskId)];
+  };
+
+  const readWriteLease = async (): Promise<any> => {
+    const result = await browser.storage.local.get(BOOKMARK_WRITE_LEASE_KEY);
+    return result[BOOKMARK_WRITE_LEASE_KEY];
+  };
+
+  const waitForCall = async (spy: jest.SpyInstance): Promise<void> => {
+    await waitFor(() => spy.mock.calls.length > 0);
+  };
+
+  const createRestoreTask = async (id: string): Promise<void> => {
+    await taskService.createTask({
+      id,
+      name: `恢复租约时长任务 ${id}`,
+      status: TaskStatus.ENABLED,
+      trigger: createManualTrigger('手动'),
+      action: createBackupAction('restore'),
+    });
+  };
+
+  const createOrganizeTask = async (id: string): Promise<void> => {
+    await taskService.createTask({
+      id,
+      name: `整理租约时长任务 ${id}`,
+      status: TaskStatus.ENABLED,
+      trigger: createManualTrigger('手动'),
+      action: createOrganizeAction(),
+    });
+  };
+
+  test('长动作（恢复）的执行租约与写入租约均覆盖动作超时加缓冲', async () => {
+    const taskId = 'lease_duration_restore_task';
+    await createRestoreTask(taskId);
+
+    const executor = TaskExecutor.getInstance();
+    const gate = createDeferred();
+    const actionSpy = jest
+      .spyOn(executor as any, 'executeBackupAction')
+      .mockImplementation(async () => {
+        await gate.promise;
+        return { success: true, timestamp: Date.now(), details: '恢复完成' };
+      });
+
+    const executionPromise = executor.executeTask(taskId, 0, 'manual');
+    await waitForCall(actionSpy);
+
+    const lease = await readLease(taskId);
+    expect(lease.expiresAt - lease.acquiredAt)
+      .toBeGreaterThanOrEqual(ACTION_TIMEOUTS.restore);
+    expect(lease.expiresAt - lease.acquiredAt)
+      .toBeGreaterThanOrEqual(ACTION_TIMEOUTS.restore + LEASE_TIMEOUT_BUFFER);
+
+    const writeLease = await readWriteLease();
+    expect(writeLease.expiresAt - writeLease.acquiredAt)
+      .toBeGreaterThanOrEqual(ACTION_TIMEOUTS.restore + LEASE_TIMEOUT_BUFFER);
+
+    gate.resolve();
+    expect((await executionPromise).success).toBe(true);
+  });
+
+  test('短动作仍使用默认执行租约与写入租约时长', async () => {
+    const taskId = 'lease_duration_organize_task';
+    await createOrganizeTask(taskId);
+
+    const executor = TaskExecutor.getInstance();
+    // 动作超时加缓冲小于默认租约时长：租约保持默认值
+    executor.updateConfig({ actionTimeouts: { organize: 60000 } });
+
+    const gate = createDeferred();
+    const actionSpy = jest
+      .spyOn(executor as any, 'executeOrganizeAction')
+      .mockImplementation(async () => {
+        await gate.promise;
+        return { success: true, timestamp: Date.now(), details: '整理完成' };
+      });
+
+    const executionPromise = executor.executeTask(taskId, 0, 'manual');
+    await waitForCall(actionSpy);
+
+    const lease = await readLease(taskId);
+    expect(lease.expiresAt - lease.acquiredAt).toBe(EXECUTION_LEASE_DURATION);
+    const writeLease = await readWriteLease();
+    expect(writeLease.expiresAt - writeLease.acquiredAt).toBe(BOOKMARK_WRITE_LEASE_DURATION);
+
+    gate.resolve();
+    expect((await executionPromise).success).toBe(true);
+  });
+
+  test('重试前的续期同样按动作超时计算执行租约时长', async () => {
+    const taskId = 'lease_duration_retry_restore_task';
+    await createRestoreTask(taskId);
+
+    const executor = TaskExecutor.getInstance();
+    executor.updateConfig({ retryDelay: 10, maxRetries: 1 });
+
+    let callCount = 0;
+    const retryLeaseDurations: number[] = [];
+    const actionSpy = jest
+      .spyOn(executor as any, 'executeBackupAction')
+      .mockImplementation(async () => {
+        callCount++;
+        if (callCount === 1) {
+          return {
+            success: false,
+            timestamp: Date.now(),
+            retryable: true,
+            error: '网络错误',
+          };
+        }
+        const lease = await readLease(taskId);
+        retryLeaseDurations.push(lease.expiresAt - lease.acquiredAt);
+        return { success: true, timestamp: Date.now(), details: '恢复成功' };
+      });
+
+    const result = await executor.executeTask(taskId, 0, 'manual');
+
+    expect(result.success).toBe(true);
+    expect(actionSpy).toHaveBeenCalledTimes(2);
+    expect(retryLeaseDurations.length).toBe(1);
+    expect(retryLeaseDurations[0])
+      .toBeGreaterThanOrEqual(ACTION_TIMEOUTS.restore + LEASE_TIMEOUT_BUFFER);
+  });
+});
+
+describe('task-executor 超时工具', () => {
+  afterEach(() => {
+    jest.useRealTimers();
+    jest.restoreAllMocks();
+  });
+
+  test('P2：startOperation 同步抛错时清理超时定时器，不产生未处理的超时 rejection', async () => {
+    jest.useFakeTimers();
+    const syncError = new Error('同步抛错');
+    const startOperation = (): Promise<never> => {
+      throw syncError;
+    };
+
+    await expect(runWithTimeout(startOperation, 1000)).rejects.toThrow('同步抛错');
+
+    // 定时器已在 finally 中清理；若残留，推进时间会产生未处理的 ExecutionTimeoutError
+    expect(jest.getTimerCount()).toBe(0);
+    expect(() => jest.advanceTimersByTime(5000)).not.toThrow();
+  });
+});
+
+describe('task-executor 跨上下文租约互斥', () => {
+  interface LockRequestRecord {
+    name: string;
+    mode: string;
+  }
+
+  // 模拟其他上下文持有的同名 Web Lock：请求按名称排队
+  class FakeLockManager {
+    readonly requests: LockRequestRecord[] = [];
+    private tails = new Map<string, Promise<void>>();
+
+    request<T>(name: string, options: LockOptions, callback: () => Promise<T>): Promise<T> {
+      this.requests.push({ name, mode: options.mode ?? 'exclusive' });
+      const previous = this.tails.get(name) ?? Promise.resolve();
+      let releaseCurrent!: () => void;
+      const current = new Promise<void>((resolve) => {
+        releaseCurrent = resolve;
+      });
+      this.tails.set(name, previous.then(() => current));
+
+      return previous.then(async () => {
+        try {
+          return await callback();
+        } finally {
+          releaseCurrent();
+        }
+      });
+    }
+  }
+
+  const originalNavigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+
+  const installNavigatorLocks = (locks?: FakeLockManager): void => {
+    Object.defineProperty(globalThis, 'navigator', {
+      value: locks ? { locks } : {},
+      configurable: true,
+      writable: true,
+    });
+  };
+
+  const createBackupTask = async (id: string): Promise<void> => {
+    await taskService.createTask({
+      id,
+      name: `跨上下文租约任务 ${id}`,
+      status: TaskStatus.ENABLED,
+      trigger: createManualTrigger('手动'),
+      action: createBackupAction('backup'),
+    });
+  };
+
+  const readLease = async (taskId: string): Promise<any> => {
+    const key = `${EXECUTION_LEASE_KEY_PREFIX}${taskId}`;
+    const result = await browser.storage.local.get(key);
+    return result[key];
+  };
+
+  beforeEach(async () => {
+    await browser.storage.local.clear();
+    await browser.storage.sync.clear();
+    jest.restoreAllMocks();
+    TaskExecutor.resetForTesting();
+  });
+
+  afterEach(() => {
+    if (originalNavigatorDescriptor) {
+      Object.defineProperty(globalThis, 'navigator', originalNavigatorDescriptor);
+    } else {
+      delete (globalThis as { navigator?: unknown }).navigator;
+    }
+  });
+
+  test('其他上下文持有执行租约锁时，本上下文的执行请求等待锁释放后再获取租约', async () => {
+    const taskId = 'cross_context_execution_lease';
+    await createBackupTask(taskId);
+
+    const locks = new FakeLockManager();
+    installNavigatorLocks(locks);
+
+    const foreignHeld = createDeferred();
+    const foreignGate = createDeferred();
+    const foreignRequest = locks.request(
+      getExecutionLeaseLockName(taskId),
+      { mode: 'exclusive' },
+      async () => {
+        foreignHeld.resolve();
+        await foreignGate.promise;
+      }
+    );
+    await foreignHeld.promise;
+
+    const executor = TaskExecutor.getInstance();
+    const actionSpy = jest.spyOn(executor as any, 'executeBackupAction').mockResolvedValue({
+      success: true,
+      timestamp: Date.now(),
+      details: '备份完成',
+    });
+
+    const executionPromise = executor.executeTask(taskId, 0, 'manual');
+
+    // 锁被其他上下文持有期间，本上下文不得完成检查-获取
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(await readLease(taskId)).toBeUndefined();
+    expect(actionSpy).not.toHaveBeenCalled();
+
+    foreignGate.resolve();
+    await foreignRequest;
+
+    const result = await executionPromise;
+    expect(result.success).toBe(true);
+    expect(actionSpy).toHaveBeenCalledTimes(1);
+    // 执行请求在外部持有者之后排队，使用该任务的执行租约锁名与独占模式
+    expect(locks.requests[locks.requests.length - 1]).toEqual({
+      name: getExecutionLeaseLockName(taskId),
+      mode: 'exclusive',
+    });
+    // 执行结束后租约已释放
+    expect(await readLease(taskId)).toBeUndefined();
+  });
+
+  test('环境不支持 navigator.locks 时回退本地互斥，同一任务并发仍只有一个被接受', async () => {
+    const taskId = 'fallback_concurrent_execution_lease';
+    await createBackupTask(taskId);
+
+    installNavigatorLocks();
+
+    const executor = TaskExecutor.getInstance();
+    const gate = createDeferred();
+    jest.spyOn(executor as any, 'executeBackupAction').mockImplementation(async () => {
+      await gate.promise;
+      return { success: true, timestamp: Date.now(), details: '备份完成' };
+    });
+
+    const firstRun = executor.executeTask(taskId, 0, 'manual');
+    const secondRun = executor.executeTask(taskId, 0, 'manual');
+
+    const rejected = await secondRun;
+    expect(rejected.success).toBe(false);
+    expect(rejected.error).toBe('任务正在执行中');
+
+    gate.resolve();
+    expect((await firstRun).success).toBe(true);
+
+    const task = (await taskService.getTaskById(taskId)).data as Task;
+    expect(task.history.executions.length).toBe(1);
   });
 });

@@ -3,6 +3,42 @@
  * 提供统一的日期和时间格式化功能
  */
 
+import { ExecutionOutcome } from '../types/task';
+
+/**
+ * 解析执行结果分类：显式 outcome 优先，缺省时按 success 推断，
+ * 兼容旧记录与旧格式结果
+ */
+export const resolveExecutionOutcome = (
+  success: boolean,
+  outcome?: ExecutionOutcome
+): ExecutionOutcome => {
+  return outcome ?? (success ? ExecutionOutcome.SUCCESS : ExecutionOutcome.FAILURE);
+};
+
+/**
+ * 获取执行结果文案。
+ * 执行中断与结果不确定不能被归为“失败”，否则会误导用户重复执行
+ * 可能已产生外部副作用的操作。
+ */
+export const getExecutionOutcomeLabel = (
+  success: boolean,
+  outcome?: ExecutionOutcome
+): string => {
+  switch (resolveExecutionOutcome(success, outcome)) {
+    case ExecutionOutcome.SUCCESS:
+      return '成功';
+    case ExecutionOutcome.FAILURE:
+      return '失败';
+    case ExecutionOutcome.INTERRUPTED:
+      return '执行中断';
+    case ExecutionOutcome.UNCERTAIN:
+      return '结果不确定';
+    default:
+      return success ? '成功' : '失败';
+  }
+};
+
 /**
  * 格式化日期时间为本地字符串
  * @param timestamp 时间戳（毫秒）
@@ -78,11 +114,17 @@ export const formatTimestamp = (timestamp?: number): string => {
  * @param timestamp 执行时间戳
  * @param success 是否执行成功
  * @param error 可选的错误信息
+ * @param outcome 可选的执行结果分类，缺省时按 success 推断
  * @returns 格式化后的执行结果文本
  */
-export const getExecutionResultText = (timestamp: number, success: boolean, error?: string): string => {
+export const getExecutionResultText = (
+  timestamp: number,
+  success: boolean,
+  error?: string,
+  outcome?: ExecutionOutcome
+): string => {
   const dateStr = formatDate(timestamp);
-  const result = success ? '成功' : '失败';
-  
+  const result = getExecutionOutcomeLabel(success, outcome);
+
   return `${dateStr} - ${result}${error ? `: ${error}` : ''}`;
-}; 
+};

@@ -336,47 +336,6 @@ const BookmarkSelector: React.FC<BookmarkSelectorProps> = ({
     return flattened;
   };
 
-  // 从扁平化数组重建嵌套结构
-  const rebuildNestedStructure = (flattened: FlattenedItem[]): BookmarkSelection[] => {
-    if (flattened.length === 0) return [];
-
-    // 创建所有项的副本
-    const itemsCopy: BookmarkSelection[] = flattened.map(item => ({
-      ...item.selection,
-      children: item.selection.children ? [] : undefined
-    }));
-
-    // 按路径重建树结构
-    const root: BookmarkSelection[] = [];
-    
-    flattened.forEach((item, index) => {
-      const { path } = item;
-      const itemCopy = itemsCopy[index];
-
-      if (path.length === 1) {
-        // 顶层项
-        root.push(itemCopy);
-      } else {
-        // 查找父项
-        let parent: BookmarkSelection | BookmarkSelection[] = root;
-        for (let i = 0; i < path.length - 1; i++) {
-          if (Array.isArray(parent)) {
-            parent = parent[path[i]];
-          } else if (parent.children) {
-            parent = parent.children[path[i]];
-          }
-        }
-        
-        // 添加到父项的 children
-        if (!Array.isArray(parent) && parent.children) {
-          parent.children.push(itemCopy);
-        }
-      }
-    });
-
-    return root;
-  };
-
   // 从嵌套结构中移除指定路径的项
   const removeItemByPath = (
     selections: BookmarkSelection[],
@@ -609,7 +568,7 @@ const BookmarkSelector: React.FC<BookmarkSelectorProps> = ({
 
         {isFolder && hasChildren && isExpanded && (
           <Box>
-            {node.children!.map(child => renderBookmarkNode(child, depth + 1))}
+            {node.children?.map(child => renderBookmarkNode(child, depth + 1))}
           </Box>
         )}
       </Box>

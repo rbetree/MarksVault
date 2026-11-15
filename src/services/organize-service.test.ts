@@ -50,6 +50,49 @@ describe('organize-service 失败处理', () => {
     } as any);
   });
 
+  test('delete 操作缺少匹配规则时应拒绝删除，不调用删除接口', async () => {
+    const [result] = await organizeService.organizeBookmarks([
+      { operation: 'delete', filters: { pattern: '' } },
+    ]);
+
+    expect(result.success).toBe(false);
+    expect(result.processedCount).toBe(0);
+    expect(result.error).toContain('删除操作需要指定匹配规则');
+    expect(mockedBookmarkService.removeBookmark).not.toHaveBeenCalled();
+  });
+
+  test('delete 操作匹配规则只有空白字符时应拒绝删除', async () => {
+    const [result] = await organizeService.organizeBookmarks([
+      { operation: 'delete', filters: { pattern: '   ' } },
+    ]);
+
+    expect(result.success).toBe(false);
+    expect(result.processedCount).toBe(0);
+    expect(result.error).toContain('删除操作需要指定匹配规则');
+    expect(mockedBookmarkService.removeBookmark).not.toHaveBeenCalled();
+  });
+
+  test('delete 操作未提供过滤条件时应拒绝删除', async () => {
+    const [result] = await organizeService.organizeBookmarks([
+      { operation: 'delete' },
+    ]);
+
+    expect(result.success).toBe(false);
+    expect(result.processedCount).toBe(0);
+    expect(result.error).toContain('删除操作需要指定匹配规则');
+    expect(mockedBookmarkService.removeBookmark).not.toHaveBeenCalled();
+  });
+
+  test('delete 操作指定非空匹配规则时仍正常删除', async () => {
+    const [result] = await organizeService.organizeBookmarks([
+      { operation: 'delete', filters: { pattern: 'example.com' } },
+    ]);
+
+    expect(result.success).toBe(true);
+    expect(result.processedCount).toBe(1);
+    expect(mockedBookmarkService.removeBookmark).toHaveBeenCalledWith('bookmark-1');
+  });
+
   test('delete 分支应识别 removeBookmark 返回的失败结果', async () => {
     mockedBookmarkService.removeBookmark.mockResolvedValue({
       success: false,
@@ -125,7 +168,7 @@ describe('organize-service 失败处理', () => {
     expect(result.details).toContain('异常 1 个');
   });
 
-  test('validate 分支在 HEAD 失败时应回退 GET(no-cors)', async () => {
+  test('validate 分支在 HEAD 失败时应回退 GET(no-cors)，只标记为网络可达', async () => {
     mockedFetch
       .mockRejectedValueOnce(new Error('HEAD blocked'))
       .mockResolvedValueOnce({
@@ -142,8 +185,56 @@ describe('organize-service 失败处理', () => {
 
     expect(result.success).toBe(true);
     expect(result.processedCount).toBe(1);
+    expect(result.details).toContain('正常 0 个');
+    expect(result.details).toContain('网络可达但状态未知 1 个');
+    expect(result.details).not.toContain('正常 1 个');
     expect(mockedFetch).toHaveBeenCalledTimes(2);
     expect(mockedFetch.mock.calls[0][1].method).toBe('HEAD');
     expect(mockedFetch.mock.calls[1][1].method).toBe('GET');
   });
+
+  test('validate 分支应将 5xx 状态码判为异常', async () => {
+    mockedFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 503,
+    } as any);
+
+    const [result] = await organizeService.organizeBookmarks([
+      {
+        operation: 'validate',
+        filters: { pattern: 'example.com' },
+      },
+    ]);
+
+    expect(result.success).toBe(false);
+    expect(result.details).toContain('正常 0 个');
+    expect(result.details).toContain('异常 1 个');
+    expect(result.details).toContain('HTTP 503');
+  });
+
+  test.each([401, 403, 429])(
+    'validate 分支应将 HEAD %i 标记为状态未知而非正常',
+    async (status) => {
+      mockedFetch.mockResolvedValueOnce({
+        ok: false,
+        status,
+      } as any);
+
+      const [result] = await organizeService.organizeBookmarks([
+        {
+          operation: 'validate',
+          filters: { pattern: 'example.com' },
+        },
+      ]);
+
+      expect(result.success).toBe(true);
+      expect(result.processedCount).toBe(1);
+      expect(result.details).toContain('正常 0 个');
+      expect(result.details).toContain('网络可达但状态未知 1 个');
+      expect(result.details).toContain('需要目标站点权限');
+      expect(result.details).not.toContain('正常 1 个');
+      // HEAD 已返回状态，无需回退到 no-cors GET
+      expect(mockedFetch).toHaveBeenCalledTimes(1);
+    }
+  );
 });

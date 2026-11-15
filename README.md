@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="public/assets/images/logo.png" alt="MarksVault" width="120">
+  <img src="assets/images/logo.png" alt="MarksVault" width="120">
   <h1>MarksVault - 书签保险箱</h1>
   <p>
     一个强大的浏览器扩展，用于智能管理、整理和安全备份您的书签数据
@@ -15,7 +15,7 @@
 > 通过将书签数据安全地存储在用户自己的 GitHub 私有仓库中，确保您的数据安全且完全受您控制。
 
 <div align="center">
-  <img src="public/assets/images/marksvault_summary.png" alt="MarksVault Infographic" width="700">
+  <img src="assets/images/marksvault_summary.png" alt="MarksVault Infographic" width="700">
 </div>
 
 ## 👀 UI预览
@@ -24,11 +24,11 @@
   <table>
     <tr>
       <td align="center">
-        <img src="public/assets/images/screenshots/bookmarks-list.png" alt="书签列表视图" width="250">
+        <img src="assets/images/screenshots/bookmarks-list.png" alt="书签列表视图" width="250">
         <p><i>列表视图</i></p>
       </td>
       <td align="center">
-        <img src="public/assets/images/screenshots/bookmarks-grid.png" alt="书签网格视图" width="250">
+        <img src="assets/images/screenshots/bookmarks-grid.png" alt="书签网格视图" width="250">
         <p><i>网格视图</i></p>
       </td>
     </tr>
@@ -39,11 +39,11 @@
 
 | 分类 | 核心技术 |
 |------|---------|
-| **前端核心** | React 18.2.0, TypeScript 5.0.4, Material-UI(MUI) 5.13.0 |
+| **前端核心** | React 18.3.1, TypeScript 5.8.3, Material-UI(MUI) 5.17.1 |
 | **扩展APIs** | Chrome/Edge Manifest V3, Firefox Manifest V2, Bookmarks API, Storage API, Tabs API, Runtime API |
 | **状态管理** | React Context API + Hooks |
 | **外部集成** | GitHub API (仓库操作与内容管理) |
-| **构建与测试** | WXT（Vite）, ESLint 8.40.0, Jest 29.5.0 |
+| **构建与测试** | WXT（Vite）, ESLint 8.57.1, Jest 29.7.0 |
 | **项目结构** | 功能模块化设计, Service Worker后台, React弹出界面 |
 
 ## 🚀 功能
@@ -76,7 +76,9 @@
 
 ```
 public/                   # 静态资源（原样拷贝到输出目录）
-└── assets/               # 图标、截图等资源
+└── assets/icons/         # 扩展图标（manifest 与 UI 引用）
+
+assets/images/            # README 截图与宣传图（不参与构建）
 
 src/                      # 源代码（WXT srcDir）
 ├── entrypoints/          # WXT 入口（自动生成 manifest）
@@ -133,7 +135,7 @@ wxt.config.ts             # WXT 配置（manifest/构建）
    git clone https://github.com/rbetree/MarksVault.git
    cd MarksVault
    ```
-2. 安装项目依赖
+2. 确认 Node.js 版本满足 `^20.19.0 || >=22.12.0`（最低 20.19.0），然后安装项目依赖
    ```bash
    npm install
    ```
@@ -209,6 +211,7 @@ npm test
 
 - 数据存储：GitHub Token 存在 `browser.storage.sync`（便于跨设备），其余业务数据在 `browser.storage.local`。
 - 权限最小化：仅使用 `bookmarks` / `storage`（Chromium 额外使用 `favicon` 读取网站图标）及 GitHub API 的 `https://api.github.com/*` 访问权限。
+- Firefox 图标回退：不请求第三方 favicon 服务，书签图标使用本地默认图标占位，书签域名不会发送给图标服务商。
 
 ## 📚 更多文档
 

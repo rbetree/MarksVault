@@ -75,7 +75,7 @@ class StorageService {
 
   // 运行态数据键：不属于用户配置，不应被 importConfig 清空/覆盖
   // - bookmark_write_lease / execution_lease:* / execution_snapshots：任务执行运行态
-  //   （写书签租约、执行租约、执行快照），与 task-executor.ts 中的常量保持一致
+  //   （写书签租约、执行租约、执行快照），与 task-executor-types.ts 中的常量保持一致
   // - pending_restore_backup：书签恢复暂存数据（恢复失败时用于回滚）
   private readonly RUNTIME_STATE_KEYS = ['bookmark_write_lease', 'execution_snapshots', 'pending_restore_backup'];
   private readonly RUNTIME_STATE_KEY_PREFIXES = ['execution_lease:'];
@@ -634,12 +634,27 @@ class StorageService {
         }
       }
 
-      await browser.storage.local.clear();
-      await browser.storage.local.set(data.local as Record<string, any>);
+      // clear 后写入失败会丢失原配置：失败时用导入前的全量快照恢复
+      try {
+        await browser.storage.local.clear();
+        await browser.storage.local.set(data.local as Record<string, any>);
 
-      // 回写运行态数据（以当前运行态为准，覆盖备份文件中同名的 key）
-      if (Object.keys(runtimeState).length > 0) {
-        await browser.storage.local.set(runtimeState);
+        // 回写运行态数据（以当前运行态为准，覆盖备份文件中同名的 key）
+        if (Object.keys(runtimeState).length > 0) {
+          await browser.storage.local.set(runtimeState);
+        }
+      } catch (importLocalError) {
+        try {
+          await browser.storage.local.clear();
+          await browser.storage.local.set(allLocalData);
+        } catch (rollbackError) {
+          console.error('导入配置失败后恢复原数据失败:', rollbackError);
+          return {
+            success: false,
+            error: `导入配置失败: ${importLocalError instanceof Error ? importLocalError.message : String(importLocalError)}；恢复原数据失败: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`
+          };
+        }
+        throw importLocalError;
       }
 
       // 2) 合并导入 sync（不清空）

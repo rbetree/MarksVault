@@ -20,6 +20,8 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import HistoryIcon from '@mui/icons-material/History';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
@@ -28,19 +30,24 @@ import Tooltip from '@mui/material/Tooltip';
 import Chip from '@mui/material/Chip';
 import CircularProgress from '@mui/material/CircularProgress';
 import Alert from '@mui/material/Alert';
-import { Task, TaskStatus, TriggerType, ActionType, BackupAction } from '../../../types/task';
+import { Task, TaskStatus, TriggerType, ActionType, BackupAction, ExecutionOutcome } from '../../../types/task';
 import TaskStatusChip from './TaskStatusChip';
 import TaskTriggerInfo from './TaskTriggerInfo';
 import TaskActionInfo from './TaskActionInfo';
 import taskService from '../../../services/task-service';
-import taskExecutor from '../../../services/task-executor';
-import { 
+import {
   taskCardStyles, 
   getTaskCardBorderStyle, 
   dateDisplayStyles,
   combineStyles
 } from '../../styles/TaskStyles';
-import { formatDate, formatRelativeTime, getExecutionResultText } from '../../../utils/date-utils';
+import {
+  formatDate,
+  formatRelativeTime,
+  getExecutionOutcomeLabel,
+  getExecutionResultText,
+  resolveExecutionOutcome
+} from '../../../utils/date-utils';
 
 interface TaskCardProps {
   task: Task;
@@ -73,11 +80,11 @@ const TaskCard: React.FC<TaskCardProps> = ({
   // 处理启用/禁用任务
   const handleToggleStatus = async () => {
     if (loading) return;
-    
+
     setLoading(true);
     try {
-      const isEnabled = task.status === TaskStatus.ENABLED;
-      const result = isEnabled 
+      const isEnabled = task.status !== TaskStatus.DISABLED;
+      const result = isEnabled
         ? await taskService.disableTask(task.id)
         : await taskService.enableTask(task.id);
       
@@ -95,10 +102,26 @@ const TaskCard: React.FC<TaskCardProps> = ({
     }
   };
   
+  // 写入 popup 展示用的执行结果（真正执行发生在 background）
+  const reportExecutionResult = async (success: boolean, message: string) => {
+    try {
+      await browser.storage.local.set({
+        taskExecutionResult: {
+          taskId: task.id,
+          success,
+          timestamp: Date.now(),
+          message,
+        },
+      });
+    } catch (error) {
+      console.warn('写入任务执行结果失败:', error);
+    }
+  };
+
   // 手动执行任务
   const handleExecuteTask = async () => {
     if (executing) return;
-    
+
     // 如果是选择性推送任务，打开任务配置页面（执行模式）
     if (task.action.type === ActionType.SELECTIVE_PUSH) {
       const url = browser.runtime.getURL(`/taskconfig.html?mode=execute&taskId=${task.id}`);
@@ -115,32 +138,37 @@ const TaskCard: React.FC<TaskCardProps> = ({
       browser.tabs.create({ url });
       return;
     }
-    
-    // 其他类型的任务，直接执行
+
+    // 通过 background Service Worker 执行，popup 关闭后任务仍可继续；
+    // 与快捷备份共用 EXECUTE_TASK 消息通道
     setExecuting(true);
     try {
       console.log(`手动执行任务: ${task.id}`);
-      const result = await taskExecutor.executeTask(task.id);
-
-      await browser.storage.local.set({
-        taskExecutionResult: {
-          taskId: task.id,
-          success: result.success,
-          timestamp: Date.now(),
-          message: result.success ? '任务执行成功' : (result.error || '任务执行失败'),
-        },
+      const response = await browser.runtime.sendMessage({
+        type: 'EXECUTE_TASK',
+        payload: { taskId: task.id },
       });
+
+      const isPlainObject = (value: unknown): value is Record<string, unknown> => {
+        return typeof value === 'object' && value !== null && !Array.isArray(value);
+      };
+
+      if (!isPlainObject(response)) {
+        throw new Error('任务执行请求返回格式异常');
+      }
+
+      const success = response.success === true;
+      const errorMessage = typeof response.error === 'string' ? response.error : undefined;
+      await reportExecutionResult(
+        success,
+        success ? '任务执行成功' : (errorMessage || '任务执行失败')
+      );
     } catch (error) {
       console.error('手动执行任务失败:', error);
-
-      await browser.storage.local.set({
-        taskExecutionResult: {
-          taskId: task.id,
-          success: false,
-          timestamp: Date.now(),
-          message: error instanceof Error ? error.message : '任务执行失败',
-        },
-      });
+      await reportExecutionResult(
+        false,
+        error instanceof Error ? error.message : '任务执行失败'
+      );
     } finally {
       setExecuting(false);
     }
@@ -164,16 +192,18 @@ const TaskCard: React.FC<TaskCardProps> = ({
     return getExecutionResultText(
       lastExecution.timestamp,
       lastExecution.success,
-      lastExecution.error
+      lastExecution.error,
+      lastExecution.outcome
     );
   };
   
-  // 判断是否显示错误信息
+  // 判断是否显示错误信息：执行失败只影响结果展示，不再改变启用状态
   const shouldShowErrorInfo = () => {
-    return task.status === TaskStatus.FAILED && 
-           task.history.lastExecution && 
-           !task.history.lastExecution.success && 
-           task.history.lastExecution.error;
+    const lastExecution = task.history.lastExecution;
+    return !!lastExecution &&
+           !lastExecution.success &&
+           resolveExecutionOutcome(lastExecution.success, lastExecution.outcome) === ExecutionOutcome.FAILURE &&
+           !!lastExecution.error;
   };
   
   // 判断错误是否与GitHub凭据相关。
@@ -192,13 +222,13 @@ const TaskCard: React.FC<TaskCardProps> = ({
   const isManualTask = task.trigger.type === TriggerType.MANUAL;
   
   // 判断任务是否可以启用/禁用（手动任务不需要此功能）
-  const canToggleStatus = !isManualTask &&
-                          task.status !== TaskStatus.COMPLETED &&
-                          task.status !== TaskStatus.RUNNING;
-  
-  // 判断任务是否可以手动执行
-  const canExecuteTask = task.status !== TaskStatus.RUNNING &&
-                         task.status !== TaskStatus.DISABLED;
+  const canToggleStatus = !isManualTask && task.status !== TaskStatus.RUNNING;
+
+  // 手动执行不受启用状态限制：启用状态只约束事件自动触发
+  const canExecuteTask = task.status !== TaskStatus.RUNNING;
+
+  // 稳定的启用配置：只有 DISABLED 表示用户主动禁用
+  const isTaskEnabled = task.status !== TaskStatus.DISABLED;
   
   // 创建自定义样式对象，去除下边距
   const noBottomPaddingStyles = {
@@ -235,6 +265,28 @@ const TaskCard: React.FC<TaskCardProps> = ({
     return `${(duration / 1000).toFixed(1)}秒`;
   };
 
+  // 执行结果图标：中断与结果不确定使用警示图标，避免与失败混淆
+  const renderExecutionResultIcon = (outcome: ExecutionOutcome) => {
+    if (outcome === ExecutionOutcome.SUCCESS) {
+      return <CheckCircleOutlineIcon sx={{ fontSize: 14 }} />;
+    }
+    if (outcome === ExecutionOutcome.UNCERTAIN) {
+      return <HelpOutlineIcon sx={{ fontSize: 14 }} />;
+    }
+    if (outcome === ExecutionOutcome.INTERRUPTED) {
+      return <WarningAmberIcon sx={{ fontSize: 14 }} />;
+    }
+    return <ErrorOutlineIcon sx={{ fontSize: 14 }} />;
+  };
+
+  const lastExecution = task.history.lastExecution;
+  const lastExecutionOutcome = lastExecution
+    ? resolveExecutionOutcome(lastExecution.success, lastExecution.outcome)
+    : undefined;
+  const lastExecutionLabel = lastExecution
+    ? getExecutionOutcomeLabel(lastExecution.success, lastExecution.outcome)
+    : '';
+
   // 渲染任务执行历史记录
   const renderTaskHistory = () => {
     const { executions } = task.history;
@@ -263,6 +315,11 @@ const TaskCard: React.FC<TaskCardProps> = ({
       <List disablePadding>
         {visibleExecutions.map((execution) => {
           const isExpanded = expandedHistory === execution.timestamp.toString();
+          const outcome = resolveExecutionOutcome(execution.success, execution.outcome);
+          const outcomeLabel = getExecutionOutcomeLabel(execution.success, execution.outcome);
+          const isSuccess = outcome === ExecutionOutcome.SUCCESS;
+          const isIndeterminate = outcome === ExecutionOutcome.INTERRUPTED
+            || outcome === ExecutionOutcome.UNCERTAIN;
           const executionTime = new Date(execution.timestamp);
           const formattedTime = executionTime.toLocaleString('zh-CN', { 
             hour: '2-digit', 
@@ -284,15 +341,12 @@ const TaskCard: React.FC<TaskCardProps> = ({
                   '&:hover': {
                     backgroundColor: 'action.hover'
                   },
-                  color: execution.success ? 'success.main' : 'error.main'
+                  color: isSuccess ? 'success.main' : isIndeterminate ? 'warning.main' : 'error.main'
                 }}
                 onClick={() => handleHistoryItemClick(execution.timestamp)}
               >
                 <ListItemIcon sx={{ minWidth: 24 }}>
-                  {execution.success ? 
-                    <CheckCircleOutlineIcon sx={{ fontSize: 14 }} /> : 
-                    <ErrorOutlineIcon sx={{ fontSize: 14 }} />
-                  }
+                  {renderExecutionResultIcon(outcome)}
                 </ListItemIcon>
                 <ListItemText
                   primary={
@@ -301,7 +355,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
                         {formattedTime}
                       </Typography>
                       <Typography variant="body2" sx={{ fontSize: '10px' }}>
-                        {execution.success ? '成功' : '失败'} 
+                        {outcomeLabel}
                         {execution.duration && ` (${formatDuration(execution.duration)})`}
                       </Typography>
                     </Box>
@@ -467,16 +521,16 @@ const TaskCard: React.FC<TaskCardProps> = ({
                   </span>
                 </Tooltip>
                 
-                <Tooltip title={task.status === TaskStatus.ENABLED ? '禁用任务' : '启用任务'}>
+                <Tooltip title={isTaskEnabled ? '禁用任务' : '启用任务'}>
                   <span style={{ display: 'inline-block' }}>
                     <IconButton
                       onClick={handleToggleStatus}
                       disabled={!canToggleStatus || loading}
-                      color={task.status === TaskStatus.ENABLED ? 'primary' : 'default'}
+                      color={isTaskEnabled ? 'primary' : 'default'}
                       size="small"
                       sx={{ padding: 0.4 }}
                     >
-                      {task.status === TaskStatus.ENABLED ?
+                      {isTaskEnabled ?
                       <PauseIcon sx={{ fontSize: '14px' }} /> :
                       <PlayArrowIcon sx={{ fontSize: '14px' }} />}
                     </IconButton>
@@ -521,12 +575,12 @@ const TaskCard: React.FC<TaskCardProps> = ({
             <Tooltip title={getLastExecutionText()}>
               <span style={{ fontSize: '10px' }}>
                 上次执行: {formatRelativeTime(task.history.lastExecution.timestamp)}
-                {!task.history.lastExecution.success && (
-                  <Chip 
-                    label="失败" 
-                    color="error" 
-                    size="small" 
-                    variant="outlined" 
+                {lastExecutionOutcome && lastExecutionOutcome !== ExecutionOutcome.SUCCESS && (
+                  <Chip
+                    label={lastExecutionLabel}
+                    color={lastExecutionOutcome === ExecutionOutcome.FAILURE ? 'error' : 'warning'}
+                    size="small"
+                    variant="outlined"
                     sx={{ ml: 0.8, height: 14, fontSize: '0.55rem' }}
                   />
                 )}

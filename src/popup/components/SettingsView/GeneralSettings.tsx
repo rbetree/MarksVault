@@ -148,7 +148,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({
                             type="number"
                             min="0"
                             max="100"
-                            value={settings.backup?.maxBackupsPerType || 10}
+                            value={settings.backup?.maxBackupsPerType ?? 10}
                             onChange={(e) => onBackupLimitChange(parseInt(e.target.value) || 0)}
                             style={{
                                 width: '60px',

@@ -12,12 +12,28 @@ export interface ReleaseInfo {
   publishedAt: string;
 }
 
+/**
+ * 版本检查状态
+ * - update-available：检查成功且发现新版本
+ * - up-to-date：检查成功且已是最新版本
+ * - development：当前版本高于最新正式版本，处于开发模式
+ * - failed：检查失败（断网/API 限流等），无法确认是否有更新
+ * - skipped：处于冷却期，本次未实际发起检查
+ */
+export type VersionCheckStatus =
+  | 'update-available'
+  | 'up-to-date'
+  | 'development'
+  | 'failed'
+  | 'skipped';
+
 export interface VersionCheckResult {
   hasUpdate: boolean;
   currentVersion: string;
   latestVersion?: string;
   releaseInfo?: ReleaseInfo;
   isDevelopmentMode?: boolean;
+  checkStatus: VersionCheckStatus;
 }
 
 class VersionService {
@@ -183,7 +199,8 @@ class VersionService {
     if (!force && !this.shouldCheckVersion()) {
       return {
         hasUpdate: false,
-        currentVersion
+        currentVersion,
+        checkStatus: 'skipped'
       };
     }
     
@@ -195,7 +212,8 @@ class VersionService {
       // 不显示开发模式徽章（失败 ≠ 开发版），也不更新冷却时间，下次可继续重试
       return {
         hasUpdate: false,
-        currentVersion
+        currentVersion,
+        checkStatus: 'failed'
       };
     }
     
@@ -213,7 +231,8 @@ class VersionService {
       currentVersion,
       latestVersion: releaseInfo.version,
       releaseInfo,
-      isDevelopmentMode
+      isDevelopmentMode,
+      checkStatus: hasUpdate ? 'update-available' : isDevelopmentMode ? 'development' : 'up-to-date'
     };
   }
 }

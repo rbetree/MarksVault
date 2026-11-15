@@ -37,10 +37,6 @@ export const useBookmarkDragDrop = ({
   const [dropPosition, setDropPosition] = useState<DropPosition>('none');
   const [interactionMode, setInteractionMode] = useState<InteractionMode>('none');
 
-  // 定义拖拽区域边缘触发宽度（像素）
-  const EDGE_THRESHOLD = 20; // 对于 Grid 左右
-  const VERTICAL_THRESHOLD = 0.3; // 对于 List 上下，使用高度百分比
-
   // 拖拽开始
   const handleDragStart = useCallback((event: React.DragEvent<HTMLElement>) => {
     const dragData: DragData = {
