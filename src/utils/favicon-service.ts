@@ -25,38 +25,26 @@ export const getDomainFromUrl = (url: string): string => {
  * @returns 图标URL
  */
 export const getFaviconUrl = (url: string): string => {
-  try {
-    // 检查URL是否有效
-    if (!url) return '';
+  // 检查URL是否有效
+  if (!url) return '';
 
+  // Firefox 不支持 `_favicon` 端点，也不请求第三方图标服务：
+  // 返回空字符串，由 UI 回退到本地默认图标，HTML 导出省略 ICON 属性。
+  const isFirefox = typeof navigator !== 'undefined' && /Firefox/i.test(navigator.userAgent);
+  if (isFirefox) return '';
+
+  try {
     // Chromium（Chrome/Edge）支持内置的 `_favicon` 端点：
     // - 该端点不是 public 资源文件，因此不能直接作为 getURL 的入参（WXT 会对路径做类型收窄）
     // - 这里使用扩展根路径作为 base，再拼接 `_favicon`，避免硬编码 chrome-extension://
-    //
-    // Firefox 不支持该端点，直接回退到 Google favicon 服务
-    const isFirefox = typeof navigator !== 'undefined' && /Firefox/i.test(navigator.userAgent);
-    if (!isFirefox) {
-      // 注意：`runtime.getURL` 的入参应为相对路径，避免传入 '/' 导致部分环境出现双斜杠（`//`）。
-      const baseUrl = browser.runtime.getURL('');
-      const baseWithSlash = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
-      return `${baseWithSlash}_favicon/?pageUrl=${encodeURIComponent(url)}&size=32`;
-    }
-
-    // Firefox：使用 Google favicon 服务（图片加载失败时 UI 会自动回退到默认图标）
-    const domain = getDomainFromUrl(url);
-    if (!domain) return '';
-    return `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+    // 注意：`runtime.getURL` 的入参应为相对路径，避免传入 '/' 导致部分环境出现双斜杠（`//`）。
+    const baseUrl = browser.runtime.getURL('');
+    const baseWithSlash = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+    return `${baseWithSlash}_favicon/?pageUrl=${encodeURIComponent(url)}&size=32`;
   } catch (error) {
     console.error('获取图标URL失败:', error);
-    
-    // 如果Chrome API失败，回退到Google的favicon服务
-    try {
-      const domain = getDomainFromUrl(url);
-      if (!domain) return '';
-      return `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
-    } catch {
-      return '';
-    }
+    // 构造失败时同样不回退到外部服务，避免向第三方暴露书签域名
+    return '';
   }
 };
 

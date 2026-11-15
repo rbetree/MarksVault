@@ -211,6 +211,7 @@ npm test
 
 - 数据存储：GitHub Token 存在 `browser.storage.sync`（便于跨设备），其余业务数据在 `browser.storage.local`。
 - 权限最小化：仅使用 `bookmarks` / `storage`（Chromium 额外使用 `favicon` 读取网站图标）及 GitHub API 的 `https://api.github.com/*` 访问权限。
+- Firefox 图标回退：不请求第三方 favicon 服务，书签图标使用本地默认图标占位，书签域名不会发送给图标服务商。
 
 ## 📚 更多文档
 

@@ -1221,6 +1221,35 @@ describe('backup-service HTML 导出', () => {
     expect(html).not.toContain('<b>');
   });
 
+  test('无图标时不写入 ICON 属性，书签项结构保持完整', async () => {
+    mockedBookmark.getAllBookmarks.mockResolvedValue({
+      success: true,
+      data: [
+        {
+          id: '0',
+          title: 'root',
+          isFolder: true,
+          children: [
+            {
+              id: '1',
+              title: 'Bookmarks Bar',
+              isFolder: true,
+              children: [
+                { id: '2', title: 'Example', url: 'https://example.com/page', isFolder: false },
+              ],
+            },
+          ],
+        },
+      ],
+    } as any);
+
+    const html = await createHtmlBookmarkData();
+
+    expect(html).toMatch(/<DT><A HREF="https:\/\/example\.com\/page" ADD_DATE="\d+">Example<\/A>/);
+    expect(html).not.toContain('ICON=');
+    expect(html).not.toContain('google.com');
+  });
+
   test('获取书签失败时完整 HTML 导出抛错', async () => {
     mockedBookmark.getAllBookmarks.mockResolvedValue({
       success: false,

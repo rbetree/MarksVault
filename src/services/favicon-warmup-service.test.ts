@@ -77,7 +77,7 @@ describe('favicon-warmup-service', () => {
     } as any);
 
     mockedGetFaviconUrl.mockImplementation((pageUrl: string) => {
-      return `https://www.google.com/s2/favicons?domain=${new URL(pageUrl).hostname}&sz=64`;
+      return `https://icons.example/${new URL(pageUrl).hostname}`;
     });
 
     const result = await warmupBookmarkFavicons({ scope: 'bookmark_bar', maxDomains: 10 });
