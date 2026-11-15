@@ -23,6 +23,42 @@ describe('task-service 持久化结果', () => {
     mockedStorage.setStorageData.mockResolvedValue({ success: true } as any);
   });
 
+  test('空存储读取不写回默认任务数据', async () => {
+    mockedStorage.getStorageData.mockResolvedValue({
+      success: true,
+      data: null,
+    } as any);
+
+    const result = await taskService.getTasks();
+
+    expect(result.success).toBe(true);
+    expect(mockedStorage.setStorageData).not.toHaveBeenCalled();
+  });
+
+  test('并发创建任务不会互相覆盖', async () => {
+    let stored: any = null;
+    mockedStorage.getStorageData.mockImplementation(async () => ({
+      success: true,
+      data: stored,
+    }) as any);
+    mockedStorage.setStorageData.mockImplementation(async (_key: string, value: any) => {
+      stored = value;
+      return { success: true } as any;
+    });
+
+    const ServiceCtor = (taskService as any).constructor;
+    const serviceA = new ServiceCtor();
+    const serviceB = new ServiceCtor();
+
+    await Promise.all([
+      serviceA.createTask({ name: '并发任务 A' }),
+      serviceB.createTask({ name: '并发任务 B' }),
+    ]);
+
+    expect(stored).not.toBeNull();
+    expect(Object.keys(stored.tasks)).toHaveLength(2);
+  });
+
   test('存储层返回失败时不应误报成功', async () => {
     mockedStorage.setStorageData.mockResolvedValue({
       success: false,

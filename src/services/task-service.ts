@@ -12,6 +12,7 @@ import {
 } from '../types/task';
 import storageService, { StorageResult } from '../utils/storage-service';
 import { clearTaskExecutionState } from './task-execution-state';
+import { withLeaseLock } from './lease-lock';
 // 导入触发器服务 - 注意避免循环依赖
 // 仅在需要使用时动态导入
 
@@ -52,15 +53,18 @@ class TaskService {
    * @returns fn 的执行结果
    */
   private async withWriteMutex<T>(fn: () => Promise<T>): Promise<T> {
-    const prev = this.writeMutex;
-    let release!: () => void;
-    this.writeMutex = new Promise(r => (release = r));
-    await prev;
-    try {
-      return await fn();
-    } finally {
-      release();
-    }
+    // 本地队列串行化同一上下文，跨上下文再用 Web Locks 串行化 popup/taskconfig/SW
+    return withLeaseLock('marksvault:tasks-write', async () => {
+      const prev = this.writeMutex;
+      let release!: () => void;
+      this.writeMutex = new Promise(r => (release = r));
+      await prev;
+      try {
+        return await fn();
+      } finally {
+        release();
+      }
+    });
   }
 
   private isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -161,7 +165,8 @@ class TaskService {
     const now = Date.now();
 
     if (!raw) {
-      return { taskStorage: createDefaultTaskStorage(), migrated: true };
+      // 空存储不需要写回；读操作写回会在跨页面并发时覆盖刚创建的任务
+      return { taskStorage: createDefaultTaskStorage(), migrated: false };
     }
 
     // 旧数据：Task[]

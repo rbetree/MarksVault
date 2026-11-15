@@ -41,6 +41,11 @@ jest.mock('wxt/browser', () => ({
     storage: {
       local: {
         set: jest.fn(),
+        get: jest.fn().mockResolvedValue({
+          settings: {},
+          bookmarks: {},
+          tasks_data: { tasks: {}, lastUpdated: 0 },
+        }),
       },
     },
     alarms: {

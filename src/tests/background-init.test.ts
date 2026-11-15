@@ -19,6 +19,7 @@ jest.mock('wxt/browser', () => ({
     storage: {
       local: {
         set: jest.fn(),
+        get: jest.fn(),
       },
     },
   },
@@ -45,11 +46,13 @@ jest.mock('../services/trigger-service', () => ({
   },
 }));
 
+import { browser } from 'wxt/browser';
 import taskExecutor from '../services/task-executor';
 import taskService from '../services/task-service';
 import triggerService from '../services/trigger-service';
 import {
   ensureServicesInitializedForTesting,
+  initializeStorageIfMissing,
   resetServicesInitStateForTesting,
 } from '../entrypoints/background';
 
@@ -88,5 +91,33 @@ describe('background 初始化门闩', () => {
     expect(mockedTaskService.init).toHaveBeenCalledTimes(1);
     expect(mockedTaskExecutor.init).toHaveBeenCalledTimes(1);
     expect(mockedTriggerService.init).toHaveBeenCalledTimes(1);
+  });
+
+  test('已有任务存储时安装初始化不覆盖', async () => {
+    const mockedBrowser = browser as any;
+    mockedBrowser.storage.local.get.mockResolvedValueOnce({
+      settings: { isDarkMode: true },
+      bookmarks: { lastUpdated: 1, customData: {} },
+      tasks_data: { tasks: { task_1: { id: 'task_1' } }, lastUpdated: 1 },
+    });
+
+    await initializeStorageIfMissing();
+
+    expect(mockedBrowser.storage.local.set).not.toHaveBeenCalled();
+  });
+
+  test('缺失存储键时补齐默认值', async () => {
+    const mockedBrowser = browser as any;
+    mockedBrowser.storage.local.get.mockResolvedValueOnce({});
+
+    await initializeStorageIfMissing();
+
+    expect(mockedBrowser.storage.local.set).toHaveBeenCalledWith(
+      expect.objectContaining({
+        settings: expect.any(Object),
+        bookmarks: expect.any(Object),
+        tasks_data: expect.objectContaining({ tasks: expect.any(Object) }),
+      })
+    );
   });
 });

@@ -24,6 +24,30 @@ function generateRollbackExecutionId(): string {
 }
 
 /**
+ * 仅补齐缺失的存储键，避免开发者模式重载或重复 install 覆盖已有任务
+ */
+export async function initializeStorageIfMissing(): Promise<void> {
+  const existing = await browser.storage.local.get([
+    'settings',
+    'bookmarks',
+    'tasks_data',
+  ]);
+  const defaults: Record<string, unknown> = {};
+  if (!existing.settings) {
+    defaults.settings = { isDarkMode: false, syncEnabled: false };
+  }
+  if (!existing.bookmarks) {
+    defaults.bookmarks = { lastUpdated: null, customData: {} };
+  }
+  if (!existing.tasks_data) {
+    defaults.tasks_data = createDefaultTaskStorage();
+  }
+  if (Object.keys(defaults).length > 0) {
+    await browser.storage.local.set(defaults);
+  }
+}
+
+/**
  * 初始化所有后台服务
  */
 async function initializeServices() {
@@ -96,18 +120,7 @@ export default defineBackground({
     browser.runtime.onInstalled.addListener(async (details) => {
       if (details.reason === 'install') {
         console.log('MarksVault 扩展已安装');
-        // 初始化存储
-        await browser.storage.local.set({
-          settings: {
-            isDarkMode: false,
-            syncEnabled: false,
-          },
-          bookmarks: {
-            lastUpdated: null,
-            customData: {},
-          },
-          tasks_data: createDefaultTaskStorage(), // 初始化任务存储
-        });
+        await initializeStorageIfMissing();
       } else if (details.reason === 'update') {
         console.log(
           'MarksVault 扩展已更新到版本 ' + browser.runtime.getManifest().version,
