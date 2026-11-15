@@ -4,6 +4,10 @@ import taskService from './task-service';
 import taskExecutor from './task-executor';
 import { BOOKMARK_WRITE_LEASE_KEY } from './task-executor-types';
 import {
+  SELF_WRITE_EVENT_SUPPRESSION_MS,
+  releaseBookmarkWriteLease,
+} from './task-executor-lease';
+import {
   EventType,
   ExecutionOutcome,
   Task,
@@ -38,6 +42,19 @@ describe('trigger-service 事件触发语义', () => {
     await triggerService.handleEventTrigger(EventType.BOOKMARK_CHANGED, {
       bookmark: { id: 'bookmark_1' },
     });
+  };
+
+  // 模拟任务完成自身写入并释放租约：释放动作会记录完成时间
+  const completeSelfWrite = async (taskId: string, executionId: string): Promise<void> => {
+    await browser.storage.local.set({
+      [BOOKMARK_WRITE_LEASE_KEY]: {
+        taskId,
+        executionId,
+        acquiredAt: Date.now(),
+        expiresAt: Date.now() + 120000,
+      },
+    });
+    await releaseBookmarkWriteLease(executionId);
   };
 
   beforeEach(async () => {
@@ -170,6 +187,50 @@ describe('trigger-service 事件触发语义', () => {
     await handleBookmarkChanged();
 
     expect(mockedExecutor.executeTask).toHaveBeenCalledWith(taskId, 0, 'event');
+  });
+
+  test('写入租约释放后 2 秒内，迟到的 BOOKMARK_CHANGED 不触发同一任务', async () => {
+    const taskId = 'late_self_write_task';
+    await createEventTask(taskId);
+
+    await completeSelfWrite(taskId, 'late_self_write_exec');
+
+    // 租约已释放，但写入自身产生的事件可能迟到
+    await handleBookmarkChanged();
+
+    expect(mockedExecutor.executeTask).not.toHaveBeenCalled();
+  });
+
+  test('超过自身写入抑制窗口后，同一任务恢复响应书签事件', async () => {
+    const taskId = 'late_self_write_expired_task';
+    await createEventTask(taskId);
+
+    await completeSelfWrite(taskId, 'late_self_write_expired_exec');
+
+    const nowSpy = jest
+      .spyOn(Date, 'now')
+      .mockReturnValue(Date.now() + SELF_WRITE_EVENT_SUPPRESSION_MS);
+    try {
+      await handleBookmarkChanged();
+    } finally {
+      nowSpy.mockRestore();
+    }
+
+    expect(mockedExecutor.executeTask).toHaveBeenCalledWith(taskId, 0, 'event');
+  });
+
+  test('自身写入抑制窗口只跳过完成写入的任务，其他任务照常触发', async () => {
+    const writerTaskId = 'self_write_only_writer';
+    const otherTaskId = 'self_write_other_task';
+    await createEventTask(writerTaskId);
+    await createEventTask(otherTaskId);
+
+    await completeSelfWrite(writerTaskId, 'self_write_only_exec');
+
+    await handleBookmarkChanged();
+
+    expect(mockedExecutor.executeTask).toHaveBeenCalledTimes(1);
+    expect(mockedExecutor.executeTask).toHaveBeenCalledWith(otherTaskId, 0, 'event');
   });
 
   test('旧数据中的 FAILED 任务迁移为 ENABLED 后可被事件自动触发', async () => {

@@ -6,7 +6,11 @@
 import { browser } from 'wxt/browser';
 import { ActionType, BackupAction, Task } from '../types/task';
 import storageService from '../utils/storage-service';
-import { Mutex } from './task-executor-mutex';
+import {
+  BOOKMARK_WRITE_LEASE_LOCK_NAME,
+  getExecutionLeaseLockName,
+  withLeaseLock,
+} from './lease-lock';
 import {
   BookmarkWriteLease,
   BOOKMARK_WRITE_LEASE_DURATION,
@@ -16,8 +20,34 @@ import {
   EXECUTION_LEASE_KEY_PREFIX,
 } from './task-executor-types';
 
-// 书签写入租约的检查-获取互斥：写入任务与回滚入口共用，避免并发请求交错导致双重获取
-const bookmarkWriteLeaseMutex = new Mutex();
+/**
+ * 自身写入完成后迟到的书签事件抑制窗口（毫秒）
+ * 浏览器派发的书签事件可能滞后于写入租约释放，窗口内仅忽略同一任务的
+ * BOOKMARK_CHANGED，避免自触发循环；其他任务与窗口外的用户操作照常触发
+ */
+export const SELF_WRITE_EVENT_SUPPRESSION_MS = 2000;
+
+// 任务最近一次自身写入完成时间；写入与事件处理都在后台 Service Worker 中，
+// 短窗口内无需持久化，避免每次写入增加一次 storage 写
+const recentSelfWriteCompletedAt = new Map<string, number>();
+
+/**
+ * 判断任务是否刚完成自身书签写入
+ * @param taskId 任务ID
+ * @param now 当前时间（毫秒），缺省取系统时间
+ * @returns true 表示处于自身写入事件抑制窗口内
+ */
+export function isRecentSelfWriteCompletion(taskId: string, now: number = Date.now()): boolean {
+  const completedAt = recentSelfWriteCompletedAt.get(taskId);
+  if (completedAt === undefined) {
+    return false;
+  }
+  if (now - completedAt >= SELF_WRITE_EVENT_SUPPRESSION_MS) {
+    recentSelfWriteCompletedAt.delete(taskId);
+    return false;
+  }
+  return true;
+}
 
 /**
  * 生成执行ID
@@ -98,19 +128,22 @@ export async function acquireExecutionLease(
  * @param executionId 本执行的执行ID
  */
 export async function releaseExecutionLease(taskId: string, executionId: string): Promise<void> {
-  try {
-    const result = await storageService.getStorageData(getExecutionLeaseKey(taskId));
-    if (!result.success) {
-      return;
+  // 读取-校验-删除在跨上下文锁内完成，避免与另一上下文的新租约获取交错
+  await withLeaseLock(getExecutionLeaseLockName(taskId), async () => {
+    try {
+      const result = await storageService.getStorageData(getExecutionLeaseKey(taskId));
+      if (!result.success) {
+        return;
+      }
+      const lease = result.data as ExecutionLease | null;
+      if (lease && lease.executionId === executionId) {
+        await browser.storage.local.remove(getExecutionLeaseKey(taskId));
+      }
+    } catch (error) {
+      // 释放失败时租约将在到期后自然失效，不会永久阻塞任务
+      console.warn(`任务 ${taskId} 释放执行租约失败:`, error);
     }
-    const lease = result.data as ExecutionLease | null;
-    if (lease && lease.executionId === executionId) {
-      await browser.storage.local.remove(getExecutionLeaseKey(taskId));
-    }
-  } catch (error) {
-    // 释放失败时租约将在到期后自然失效，不会永久阻塞任务
-    console.warn(`任务 ${taskId} 释放执行租约失败:`, error);
-  }
+  });
 }
 
 /**
@@ -147,33 +180,36 @@ export async function renewExecutionLease(
   executionId: string,
   durationMs: number = EXECUTION_LEASE_DURATION
 ): Promise<ExecutionLeaseRenewalResult> {
-  const result = await storageService.getStorageData(getExecutionLeaseKey(taskId));
-  if (!result.success) {
-    return { status: 'storage_error', lease: null };
-  }
-  const lease = result.data as ExecutionLease | null;
-  if (!lease) {
-    return { status: 'missing', lease: null };
-  }
-  if (lease.executionId !== executionId) {
-    // 租约不属于本执行：无论是否到期都按已被其他执行接管处理，
-    // 原执行不得再触碰其状态与快照
-    return { status: 'taken_over', lease };
-  }
-  if (lease.expiresAt <= Date.now()) {
-    return { status: 'expired', lease };
-  }
+  // 读取-校验-写入在跨上下文锁内完成，避免与其他上下文的获取/接管交错
+  return withLeaseLock<ExecutionLeaseRenewalResult>(getExecutionLeaseLockName(taskId), async () => {
+    const result = await storageService.getStorageData(getExecutionLeaseKey(taskId));
+    if (!result.success) {
+      return { status: 'storage_error', lease: null };
+    }
+    const lease = result.data as ExecutionLease | null;
+    if (!lease) {
+      return { status: 'missing', lease: null };
+    }
+    if (lease.executionId !== executionId) {
+      // 租约不属于本执行：无论是否到期都按已被其他执行接管处理，
+      // 原执行不得再触碰其状态与快照
+      return { status: 'taken_over', lease };
+    }
+    if (lease.expiresAt <= Date.now()) {
+      return { status: 'expired', lease };
+    }
 
-  const renewedLease: ExecutionLease = {
-    ...lease,
-    expiresAt: Date.now() + durationMs,
-  };
-  const saveResult = await storageService.setStorageData(getExecutionLeaseKey(taskId), renewedLease);
-  if (!saveResult.success) {
-    // 读取时已确认租约仍归本执行：携带租约供调用方释放，避免无意义地阻塞后续执行
-    return { status: 'storage_error', lease };
-  }
-  return { status: 'renewed', lease: renewedLease };
+    const renewedLease: ExecutionLease = {
+      ...lease,
+      expiresAt: Date.now() + durationMs,
+    };
+    const saveResult = await storageService.setStorageData(getExecutionLeaseKey(taskId), renewedLease);
+    if (!saveResult.success) {
+      // 读取时已确认租约仍归本执行：携带租约供调用方释放，避免无意义地阻塞后续执行
+      return { status: 'storage_error', lease };
+    }
+    return { status: 'renewed', lease: renewedLease };
+  });
 }
 
 export type ExecutionLeaseExtensionStatus =
@@ -203,36 +239,39 @@ export async function extendExecutionLease(
   executionId: string,
   durationMs: number
 ): Promise<ExecutionLeaseExtensionResult> {
-  const result = await storageService.getStorageData(getExecutionLeaseKey(taskId));
-  if (!result.success) {
-    return { status: 'storage_error', lease: null };
-  }
-  const lease = result.data as ExecutionLease | null;
-  if (!lease) {
-    return { status: 'missing', lease: null };
-  }
-  if (lease.executionId !== executionId) {
-    return { status: 'taken_over', lease };
-  }
-  if (lease.expiresAt <= Date.now()) {
-    return { status: 'expired', lease };
-  }
+  // 读取-校验-写入在跨上下文锁内完成，避免与其他上下文的接管交错
+  return withLeaseLock<ExecutionLeaseExtensionResult>(getExecutionLeaseLockName(taskId), async () => {
+    const result = await storageService.getStorageData(getExecutionLeaseKey(taskId));
+    if (!result.success) {
+      return { status: 'storage_error', lease: null };
+    }
+    const lease = result.data as ExecutionLease | null;
+    if (!lease) {
+      return { status: 'missing', lease: null };
+    }
+    if (lease.executionId !== executionId) {
+      return { status: 'taken_over', lease };
+    }
+    if (lease.expiresAt <= Date.now()) {
+      return { status: 'expired', lease };
+    }
 
-  // 以获取时间为基准，避免短动作在加载任务后无谓延长几毫秒
-  const desiredExpiresAt = lease.acquiredAt + durationMs;
-  if (lease.expiresAt >= desiredExpiresAt) {
-    return { status: 'unchanged', lease };
-  }
+    // 以获取时间为基准，避免短动作在加载任务后无谓延长几毫秒
+    const desiredExpiresAt = lease.acquiredAt + durationMs;
+    if (lease.expiresAt >= desiredExpiresAt) {
+      return { status: 'unchanged', lease };
+    }
 
-  const extendedLease: ExecutionLease = {
-    ...lease,
-    expiresAt: desiredExpiresAt,
-  };
-  const saveResult = await storageService.setStorageData(getExecutionLeaseKey(taskId), extendedLease);
-  if (!saveResult.success) {
-    return { status: 'storage_error', lease };
-  }
-  return { status: 'extended', lease: extendedLease };
+    const extendedLease: ExecutionLease = {
+      ...lease,
+      expiresAt: desiredExpiresAt,
+    };
+    const saveResult = await storageService.setStorageData(getExecutionLeaseKey(taskId), extendedLease);
+    if (!saveResult.success) {
+      return { status: 'storage_error', lease };
+    }
+    return { status: 'extended', lease: extendedLease };
+  });
 }
 
 /**
@@ -300,7 +339,7 @@ export async function acquireBookmarkWriteLease(
 
 /**
  * 检查并获取书签写入租约
- * 检查-获取在同一互斥临界区中完成，避免写入任务与回滚入口并发交错导致双重获取
+ * 检查-获取在同一跨上下文锁内完成，避免写入任务与回滚入口并发交错导致双重获取
  * @param taskId 持有写入租约的任务ID
  * @param executionId 本次写入操作的执行ID
  * @param durationMs 租约时长（毫秒），缺省使用默认写入租约时长
@@ -311,7 +350,7 @@ export async function tryAcquireBookmarkWriteLease(
   executionId: string,
   durationMs: number = BOOKMARK_WRITE_LEASE_DURATION
 ): Promise<{ success: boolean; denied: boolean }> {
-  return bookmarkWriteLeaseMutex.runExclusive(async () => {
+  return withLeaseLock(BOOKMARK_WRITE_LEASE_LOCK_NAME, async () => {
     if (!(await isBookmarkWriteLeaseAvailable())) {
       return { success: false, denied: true };
     }
@@ -322,21 +361,26 @@ export async function tryAcquireBookmarkWriteLease(
 
 /**
  * 释放书签写入租约
- * 仅释放本执行持有的写入租约（校验执行ID），避免误删租约到期后新获取的租约
+ * 仅释放本执行持有的写入租约（校验执行ID），避免误删租约到期后新获取的租约；
+ * 释放时记录该任务自身写入完成时间，供触发器忽略租约释放后迟到的自身写入事件
  * @param executionId 本执行的执行ID
  */
 export async function releaseBookmarkWriteLease(executionId: string): Promise<void> {
-  try {
-    const result = await storageService.getStorageData(BOOKMARK_WRITE_LEASE_KEY);
-    if (!result.success) {
-      return;
+  // 读取-校验-删除在跨上下文锁内完成，避免与另一上下文的写入租约获取交错
+  await withLeaseLock(BOOKMARK_WRITE_LEASE_LOCK_NAME, async () => {
+    try {
+      const result = await storageService.getStorageData(BOOKMARK_WRITE_LEASE_KEY);
+      if (!result.success) {
+        return;
+      }
+      const lease = result.data as BookmarkWriteLease | null;
+      if (lease && lease.executionId === executionId) {
+        recentSelfWriteCompletedAt.set(lease.taskId, Date.now());
+        await browser.storage.local.remove(BOOKMARK_WRITE_LEASE_KEY);
+      }
+    } catch (error) {
+      // 释放失败时租约将在到期后自然失效，不会永久阻塞写入任务
+      console.warn('释放书签写入租约失败:', error);
     }
-    const lease = result.data as BookmarkWriteLease | null;
-    if (lease && lease.executionId === executionId) {
-      await browser.storage.local.remove(BOOKMARK_WRITE_LEASE_KEY);
-    }
-  } catch (error) {
-    // 释放失败时租约将在到期后自然失效，不会永久阻塞写入任务
-    console.warn('释放书签写入租约失败:', error);
-  }
+  });
 }

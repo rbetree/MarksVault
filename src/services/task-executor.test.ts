@@ -5,6 +5,7 @@ import taskService from './task-service';
 import storageService from '../utils/storage-service';
 import { RetryableError, RetryableErrorCategory, GitHubApiError } from './github-service';
 import { resolveActionTimeout, runWithTimeout } from './task-executor-timeout';
+import { getExecutionLeaseLockName } from './lease-lock';
 import {
   ACTION_TIMEOUTS,
   BOOKMARK_WRITE_LEASE_DURATION,
@@ -2807,5 +2808,152 @@ describe('task-executor 超时工具', () => {
     // 定时器已在 finally 中清理；若残留，推进时间会产生未处理的 ExecutionTimeoutError
     expect(jest.getTimerCount()).toBe(0);
     expect(() => jest.advanceTimersByTime(5000)).not.toThrow();
+  });
+});
+
+describe('task-executor 跨上下文租约互斥', () => {
+  interface LockRequestRecord {
+    name: string;
+    mode: string;
+  }
+
+  // 模拟其他上下文持有的同名 Web Lock：请求按名称排队
+  class FakeLockManager {
+    readonly requests: LockRequestRecord[] = [];
+    private tails = new Map<string, Promise<void>>();
+
+    request<T>(name: string, options: LockOptions, callback: () => Promise<T>): Promise<T> {
+      this.requests.push({ name, mode: options.mode ?? 'exclusive' });
+      const previous = this.tails.get(name) ?? Promise.resolve();
+      let releaseCurrent!: () => void;
+      const current = new Promise<void>((resolve) => {
+        releaseCurrent = resolve;
+      });
+      this.tails.set(name, previous.then(() => current));
+
+      return previous.then(async () => {
+        try {
+          return await callback();
+        } finally {
+          releaseCurrent();
+        }
+      });
+    }
+  }
+
+  const originalNavigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+
+  const installNavigatorLocks = (locks?: FakeLockManager): void => {
+    Object.defineProperty(globalThis, 'navigator', {
+      value: locks ? { locks } : {},
+      configurable: true,
+      writable: true,
+    });
+  };
+
+  const createBackupTask = async (id: string): Promise<void> => {
+    await taskService.createTask({
+      id,
+      name: `跨上下文租约任务 ${id}`,
+      status: TaskStatus.ENABLED,
+      trigger: createManualTrigger('手动'),
+      action: createBackupAction('backup'),
+    });
+  };
+
+  const readLease = async (taskId: string): Promise<any> => {
+    const key = `${EXECUTION_LEASE_KEY_PREFIX}${taskId}`;
+    const result = await browser.storage.local.get(key);
+    return result[key];
+  };
+
+  beforeEach(async () => {
+    await browser.storage.local.clear();
+    await browser.storage.sync.clear();
+    jest.restoreAllMocks();
+    TaskExecutor.resetForTesting();
+  });
+
+  afterEach(() => {
+    if (originalNavigatorDescriptor) {
+      Object.defineProperty(globalThis, 'navigator', originalNavigatorDescriptor);
+    } else {
+      delete (globalThis as { navigator?: unknown }).navigator;
+    }
+  });
+
+  test('其他上下文持有执行租约锁时，本上下文的执行请求等待锁释放后再获取租约', async () => {
+    const taskId = 'cross_context_execution_lease';
+    await createBackupTask(taskId);
+
+    const locks = new FakeLockManager();
+    installNavigatorLocks(locks);
+
+    const foreignHeld = createDeferred();
+    const foreignGate = createDeferred();
+    const foreignRequest = locks.request(
+      getExecutionLeaseLockName(taskId),
+      { mode: 'exclusive' },
+      async () => {
+        foreignHeld.resolve();
+        await foreignGate.promise;
+      }
+    );
+    await foreignHeld.promise;
+
+    const executor = TaskExecutor.getInstance();
+    const actionSpy = jest.spyOn(executor as any, 'executeBackupAction').mockResolvedValue({
+      success: true,
+      timestamp: Date.now(),
+      details: '备份完成',
+    });
+
+    const executionPromise = executor.executeTask(taskId, 0, 'manual');
+
+    // 锁被其他上下文持有期间，本上下文不得完成检查-获取
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(await readLease(taskId)).toBeUndefined();
+    expect(actionSpy).not.toHaveBeenCalled();
+
+    foreignGate.resolve();
+    await foreignRequest;
+
+    const result = await executionPromise;
+    expect(result.success).toBe(true);
+    expect(actionSpy).toHaveBeenCalledTimes(1);
+    // 执行请求在外部持有者之后排队，使用该任务的执行租约锁名与独占模式
+    expect(locks.requests[locks.requests.length - 1]).toEqual({
+      name: getExecutionLeaseLockName(taskId),
+      mode: 'exclusive',
+    });
+    // 执行结束后租约已释放
+    expect(await readLease(taskId)).toBeUndefined();
+  });
+
+  test('环境不支持 navigator.locks 时回退本地互斥，同一任务并发仍只有一个被接受', async () => {
+    const taskId = 'fallback_concurrent_execution_lease';
+    await createBackupTask(taskId);
+
+    installNavigatorLocks();
+
+    const executor = TaskExecutor.getInstance();
+    const gate = createDeferred();
+    jest.spyOn(executor as any, 'executeBackupAction').mockImplementation(async () => {
+      await gate.promise;
+      return { success: true, timestamp: Date.now(), details: '备份完成' };
+    });
+
+    const firstRun = executor.executeTask(taskId, 0, 'manual');
+    const secondRun = executor.executeTask(taskId, 0, 'manual');
+
+    const rejected = await secondRun;
+    expect(rejected.success).toBe(false);
+    expect(rejected.error).toBe('任务正在执行中');
+
+    gate.resolve();
+    expect((await firstRun).success).toBe(true);
+
+    const task = (await taskService.getTaskById(taskId)).data as Task;
+    expect(task.history.executions.length).toBe(1);
   });
 });

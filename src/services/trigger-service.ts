@@ -6,6 +6,7 @@
 import { Task, TaskStatus, TriggerType, EventType } from '../types/task';
 import taskService from './task-service';
 import storageService from '../utils/storage-service';
+import { isRecentSelfWriteCompletion } from './task-executor-lease';
 import { BookmarkWriteLease, BOOKMARK_WRITE_LEASE_KEY } from './task-executor-types';
 
 class TriggerService {
@@ -122,6 +123,12 @@ class TriggerService {
       const matchingTasks = enabledTasks.filter(task => {
         if (activeWriteLease?.taskId === task.id) {
           console.log(`任务 ${task.id} 正在写入书签，跳过其自身写入产生的 ${eventType} 事件`);
+          return false;
+        }
+        // 写入租约释放后浏览器仍可能派发迟到的自身写入事件；
+        // 仅在短窗口内忽略同一任务，其他任务与用户后续操作不受影响
+        if (eventType === EventType.BOOKMARK_CHANGED && isRecentSelfWriteCompletion(task.id)) {
+          console.log(`任务 ${task.id} 刚完成书签写入，跳过迟到的 ${eventType} 事件`);
           return false;
         }
         return task.trigger.type === TriggerType.EVENT &&

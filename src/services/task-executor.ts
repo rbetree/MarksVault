@@ -23,6 +23,7 @@ import {
   resolveExecutionLeaseDuration,
 } from './task-executor-types';
 import { Mutex } from './task-executor-mutex';
+import { getExecutionLeaseLockName, withLeaseLock } from './lease-lock';
 import { ExecutionSnapshotStore } from './task-executor-snapshot';
 import {
   acquireExecutionLease as acquireExecutionLeaseInStorage,
@@ -66,8 +67,7 @@ export class TaskExecutor {
   private config: TaskExecutionConfig;
   private executingTasks: Set<string> = new Set(); // 记录正在执行的任务ID
 
-  // 互斥队列：串行化租约"检查-获取"与快照读写等临界区。
-  // MV3 扩展单线程，但 await 会使多个执行流程交错，必须互斥才能保证原子性
+  // 快照读写的本地互斥队列：MV3 扩展单线程，但 await 会使多个执行流程交错
   private readonly mutex = new Mutex();
   private readonly snapshotStore = new ExecutionSnapshotStore(this.mutex);
 
@@ -80,12 +80,15 @@ export class TaskExecutor {
   }
 
   /**
-   * 在互斥队列中串行执行临界区
+   * 在跨上下文执行租约锁内串行执行临界区
+   * 同一任务在 popup、taskconfig 与 Service Worker 中的检查-获取互斥，
+   * 不同任务使用不同锁名，互不阻塞
+   * @param taskId 任务ID
    * @param fn 需要互斥执行的异步操作
    * @returns fn 的执行结果
    */
-  private async withLeaseMutex<T>(fn: () => Promise<T>): Promise<T> {
-    return this.mutex.runExclusive(fn);
+  private async withExecutionLeaseLock<T>(taskId: string, fn: () => Promise<T>): Promise<T> {
+    return withLeaseLock(getExecutionLeaseLockName(taskId), fn);
   }
 
   /**
@@ -308,11 +311,11 @@ export class TaskExecutor {
     // - 首次执行请求（无继承租约）：检查可用性后获取新租约，租约可靠保存后执行请求才被接受
     // - 重试（继承租约）：每次尝试前续期；租约到期、失效或已被其他执行接管时停止重试。
     //   其他执行接管时只终止本次执行，不改写任务状态/历史，也不删除其快照
-    // 检查-获取在互斥中完成：避免并发请求在"检查可用"与"获取租约"之间交错
+    // 检查-获取在跨上下文锁内完成：避免并发请求在"检查可用"与"获取租约"之间交错
     // 导致同一任务被重复执行
     let activeLeaseExecutionId: string;
     if (leaseExecutionId === undefined) {
-      const leaseAcquired = await this.withLeaseMutex(async (): Promise<
+      const leaseAcquired = await this.withExecutionLeaseLock(taskId, async (): Promise<
         { success: true; executionId: string } | { success: false; error: string }
       > => {
         if (retryCount === 0) {
@@ -345,9 +348,11 @@ export class TaskExecutor {
     } else {
       // 重试前续期执行租约：每次执行尝试都会重新计算有效期，避免多次重试累计耗时
       // 超过租约时长导致合法重试被误判为租约失效。
-      // 检查-续期在互斥中完成：避免与并发执行请求的"检查-获取"交错
-      const renewal = await this.withLeaseMutex(() =>
-        renewExecutionLease(taskId, leaseExecutionId, this.resolveLeaseDuration(providedTask))
+      // 检查-续期在跨上下文锁内完成：避免与并发执行请求的"检查-获取"交错
+      const renewal = await renewExecutionLease(
+        taskId,
+        leaseExecutionId,
+        this.resolveLeaseDuration(providedTask)
       );
 
       if (renewal.status === 'taken_over') {
@@ -511,7 +516,7 @@ export class TaskExecutor {
       // 阻止多个任务同时修改书签树；只读/上传类任务不获取写入租约，可与写入任务并行。
       // 获取顺序：先执行租约（任务执行所有权），后写入租约（书签树独占权）；
       // 被写入租约阻止时拒绝执行请求（不产生执行历史），并立即释放刚获取的执行租约，避免残留
-      // 检查-获取在互斥中完成：避免并发写入请求在"检查可用"与"获取租约"之间交错导致双重获取
+      // 检查-获取在跨上下文锁内完成：避免并发写入请求在"检查可用"与"获取租约"之间交错导致双重获取
       if (isBookmarkWriteAction(task)) {
         // 写入租约时长与动作超时联动：恢复、整理验证等长写入动作不会被默认租约提前释放
         const writeLeaseResult = await this.acquireBookmarkWriteLease(
