@@ -86,7 +86,9 @@ const OrganizeOperationItem: React.FC<OrganizeOperationItemProps> = ({
             placeholder="例如: *google*"
             value={operation.filters?.pattern || ''}
             onChange={(e) => onUpdate(index, 'filters.pattern', e.target.value)}
-            helperText="支持通配符 * 匹配书签标题或URL"
+            helperText={errors[`operation_${index}_pattern`] || "支持通配符 * 匹配书签标题或URL"}
+            error={!!errors[`operation_${index}_pattern`]}
+            required={operation.operation === 'delete'}
           />
         </Grid>
 

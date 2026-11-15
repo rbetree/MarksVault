@@ -6,9 +6,27 @@
 export interface TaskExecutionConfig {
   maxRetries: number;         // 最大重试次数
   retryDelay: number;         // 重试延迟(毫秒)
-  timeout: number;            // 执行超时时间(毫秒)
+  timeout: number;            // 默认执行超时时间(毫秒)，用于未匹配动作类型
   maxHistoryLength: number;   // 执行历史记录最大长度
+  // 动作级超时覆盖：缺省时使用 ACTION_TIMEOUTS，主要供测试或特殊部署调整
+  actionTimeouts?: Partial<Record<ActionTimeoutKey, number>>;
 }
+
+/**
+ * 动作级执行超时（毫秒）
+ * 不同动作的网络往返与书签树重建耗时差异较大，按动作类型集中定义，避免统一 60 秒截断长任务。
+ * organizeValidate 指包含 URL 验证的整理任务：逐条网络探测耗时明显高于纯本地整理。
+ */
+export const ACTION_TIMEOUTS = {
+  backup: 120000,           // 备份上传
+  restore: 300000,          // 恢复下载并重建书签树
+  push: 180000,             // 推送书签到 GitHub
+  selectivePush: 180000,    // 选择性推送
+  organize: 120000,         // 本地整理书签
+  organizeValidate: 300000, // 整理并验证书签 URL
+} as const;
+
+export type ActionTimeoutKey = keyof typeof ACTION_TIMEOUTS;
 
 // 默认配置
 export const DEFAULT_CONFIG: TaskExecutionConfig = {

@@ -42,7 +42,7 @@ import {
   shouldRetryExecution,
 } from './task-executor-result';
 import { recoverInterruptedExecution } from './task-executor-recovery';
-import { runWithTimeout } from './task-executor-timeout';
+import { resolveActionTimeout, runWithTimeout } from './task-executor-timeout';
 
 export {
   EXECUTION_LEASE_KEY_PREFIX,
@@ -515,10 +515,11 @@ export class TaskExecutor {
         source,
       };
 
-      // 超时与动作执行竞争：哪个先完成就用哪个结果
+      // 超时与动作执行竞争：哪个先完成就用哪个结果；超时按动作类型决定
+      const actionTimeout = resolveActionTimeout(task, this.config);
       executionResult = await runWithTimeout(
         () => this.dispatchAction(task),
-        this.config.timeout
+        actionTimeout
       );
 
       // 添加执行持续时间

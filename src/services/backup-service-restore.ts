@@ -17,6 +17,7 @@ import {
   repositoryExists
 } from './backup-service-github';
 import {
+  PENDING_RESTORE_BACKUP_KEY,
   replaceBookmarkBarContents,
   selectBookmarksToRestore,
   stashCurrentBookmarkBar,
@@ -288,6 +289,74 @@ export async function restoreBookmarksFromGitHub(
       success: false,
       retryable: isRetryableGitHubError(error),
       error: `恢复失败: ${error instanceof Error ? error.message : String(error)}`
+    };
+  }
+}
+
+// 统计暂存书签树中的书签数量（不含文件夹）
+function countBookmarks(items: BookmarkItem[]): number {
+  return items.reduce(
+    (total, item) => total + (item.isFolder ? countBookmarks(item.children || []) : 1),
+    0
+  );
+}
+
+/**
+ * 回滚到上次恢复前暂存的书签栏
+ * 恢复失败时 pending_restore_backup 保留原书签栏序列化数据，本方法将其重新写回书签栏。
+ * 回滚成功后才清理暂存键；失败时保留暂存数据以便重试。
+ * @returns 回滚结果
+ */
+export async function restorePendingBookmarkBackup(): Promise<BackupResult> {
+  try {
+    const stashResult = await storageService.getStorageData(PENDING_RESTORE_BACKUP_KEY);
+    if (!stashResult.success) {
+      throw new Error(`读取暂存书签失败: ${stashResult.error || '未知错误'}`);
+    }
+    if (typeof stashResult.data !== 'string' || stashResult.data.length === 0) {
+      throw new Error('没有可恢复的暂存书签');
+    }
+
+    let stashedBar: BookmarkItem;
+    try {
+      stashedBar = JSON.parse(stashResult.data) as BookmarkItem;
+    } catch (error) {
+      throw new Error('暂存书签数据格式不正确');
+    }
+
+    if (!stashedBar || !Array.isArray(stashedBar.children)) {
+      throw new Error('暂存书签数据格式不正确');
+    }
+
+    // 暂存数据可能来自被篡改或损坏的存储，重建前执行与恢复相同的上限校验
+    validateBackupTreeForRestore(stashedBar.children);
+
+    const rootsResult = await bookmarkService.getBookmarkRoots();
+    if (!rootsResult.success || !rootsResult.data) {
+      throw new Error(`获取书签根文件夹失败: ${rootsResult.error}`);
+    }
+
+    const bookmarkBar = findBookmarkBar(rootsResult.data);
+    if (!bookmarkBar) {
+      throw new Error('找不到书签栏，无法回滚书签');
+    }
+
+    await replaceBookmarkBarContents(bookmarkBar, stashedBar.children);
+
+    const now = Date.now();
+    return {
+      success: true,
+      data: {
+        timestamp: now,
+        bookmarksCount: countBookmarks(stashedBar.children)
+      },
+      timestamp: now
+    };
+  } catch (error) {
+    console.error('回滚暂存书签失败:', error);
+    return {
+      success: false,
+      error: `回滚失败: ${error instanceof Error ? error.message : String(error)}`
     };
   }
 }

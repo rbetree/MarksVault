@@ -8,6 +8,7 @@ import {
 } from './backup-service-backup';
 import {
   restoreBookmarksFromGitHub,
+  restorePendingBookmarkBackup as restorePendingBookmarkBackupImpl,
   restoreSettingsFromGitHub
 } from './backup-service-restore';
 import {
@@ -69,6 +70,14 @@ class BackupService {
     } else {
       return restoreBookmarksFromGitHub(credentials, username, useTimestampedFile, timestampedFilePath);
     }
+  }
+
+  /**
+   * 回滚到上次恢复前暂存的书签栏
+   * @returns 回滚结果
+   */
+  async restorePendingBookmarkBackup(): Promise<BackupResult> {
+    return restorePendingBookmarkBackupImpl();
   }
 
   /**

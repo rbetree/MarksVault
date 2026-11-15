@@ -50,6 +50,49 @@ describe('organize-service 失败处理', () => {
     } as any);
   });
 
+  test('delete 操作缺少匹配规则时应拒绝删除，不调用删除接口', async () => {
+    const [result] = await organizeService.organizeBookmarks([
+      { operation: 'delete', filters: { pattern: '' } },
+    ]);
+
+    expect(result.success).toBe(false);
+    expect(result.processedCount).toBe(0);
+    expect(result.error).toContain('删除操作需要指定匹配规则');
+    expect(mockedBookmarkService.removeBookmark).not.toHaveBeenCalled();
+  });
+
+  test('delete 操作匹配规则只有空白字符时应拒绝删除', async () => {
+    const [result] = await organizeService.organizeBookmarks([
+      { operation: 'delete', filters: { pattern: '   ' } },
+    ]);
+
+    expect(result.success).toBe(false);
+    expect(result.processedCount).toBe(0);
+    expect(result.error).toContain('删除操作需要指定匹配规则');
+    expect(mockedBookmarkService.removeBookmark).not.toHaveBeenCalled();
+  });
+
+  test('delete 操作未提供过滤条件时应拒绝删除', async () => {
+    const [result] = await organizeService.organizeBookmarks([
+      { operation: 'delete' },
+    ]);
+
+    expect(result.success).toBe(false);
+    expect(result.processedCount).toBe(0);
+    expect(result.error).toContain('删除操作需要指定匹配规则');
+    expect(mockedBookmarkService.removeBookmark).not.toHaveBeenCalled();
+  });
+
+  test('delete 操作指定非空匹配规则时仍正常删除', async () => {
+    const [result] = await organizeService.organizeBookmarks([
+      { operation: 'delete', filters: { pattern: 'example.com' } },
+    ]);
+
+    expect(result.success).toBe(true);
+    expect(result.processedCount).toBe(1);
+    expect(mockedBookmarkService.removeBookmark).toHaveBeenCalledWith('bookmark-1');
+  });
+
   test('delete 分支应识别 removeBookmark 返回的失败结果', async () => {
     mockedBookmarkService.removeBookmark.mockResolvedValue({
       success: false,

@@ -377,6 +377,16 @@ class OrganizeService {
    * @returns 操作结果
    */
   private async deleteBookmarks(bookmarks: BookmarkItem[], operation: OrganizeOperation): Promise<OrganizeResult> {
+    // 空匹配规则会命中全部书签，删除前必须再次校验，避免绕过表单校验误删
+    if (!operation.filters?.pattern?.trim()) {
+      return {
+        success: false,
+        processedCount: 0,
+        details: '删除操作需要指定匹配规则，已取消删除',
+        error: '删除操作需要指定匹配规则'
+      };
+    }
+
     // 过滤出符合条件的书签
     const filteredBookmarks = this.filterBookmarks(bookmarks, operation.filters);
     

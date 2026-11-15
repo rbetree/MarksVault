@@ -134,14 +134,17 @@ export function validateBackupTreeForRestore(items: BookmarkItem[]): void {
   console.log(`备份数据校验通过：${totalNodes} 个节点，最大深度 ${maxDepth}`);
 }
 
+// 恢复失败时保留的书签栏暂存键，供回滚入口读取
+export const PENDING_RESTORE_BACKUP_KEY = 'pending_restore_backup';
+
 /**
  * 删除前暂存现有书签树（序列化后持久化到 storage.local）
  * 暂存失败则拒绝执行恢复，确保任何删除操作发生前数据已有保底。
- * 该数据仅作保底保留，供未来回滚入口使用；本任务不提供 UI 回滚入口。
+ * 恢复失败时该数据保留，供“恢复上次暂存书签”回滚入口使用。
  */
 export async function stashCurrentBookmarkBar(bookmarkBar: BookmarkItem): Promise<void> {
   const pendingBackupJson = JSON.stringify(bookmarkBar);
-  const stashResult = await storageService.setStorageData('pending_restore_backup', pendingBackupJson);
+  const stashResult = await storageService.setStorageData(PENDING_RESTORE_BACKUP_KEY, pendingBackupJson);
   if (!stashResult.success) {
     throw new Error(`暂存现有书签失败，已取消恢复: ${stashResult.error || '未知错误'}`);
   }
@@ -213,7 +216,7 @@ export async function replaceBookmarkBarContents(
 
   // 恢复全部成功，清理暂存备份（清理失败仅记录日志，不影响恢复结果）
   try {
-    await browser.storage.local.remove('pending_restore_backup');
+    await browser.storage.local.remove(PENDING_RESTORE_BACKUP_KEY);
     console.log('已清理恢复暂存备份 pending_restore_backup');
   } catch (cleanupError) {
     console.error('清理恢复暂存备份失败:', cleanupError);

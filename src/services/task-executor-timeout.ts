@@ -2,8 +2,49 @@
  * 任务动作执行的超时控制
  */
 
-import { TaskExecutionResult } from '../types/task';
-import { ExecutionTimeoutError } from './task-executor-types';
+import { ActionType, Task, TaskExecutionResult } from '../types/task';
+import {
+  ACTION_TIMEOUTS,
+  ActionTimeoutKey,
+  ExecutionTimeoutError,
+  TaskExecutionConfig,
+} from './task-executor-types';
+
+/**
+ * 按任务动作解析单次执行超时
+ * 动作未匹配到具体类型时回退到配置中的默认超时，显式动作级覆盖优先于集中定义
+ * @param task 任务对象
+ * @param config 执行配置
+ * @returns 单次动作执行超时（毫秒）
+ */
+export function resolveActionTimeout(task: Task, config: TaskExecutionConfig): number {
+  const action = task.action;
+  let timeoutKey: ActionTimeoutKey | undefined;
+
+  switch (action.type) {
+    case ActionType.BACKUP:
+      timeoutKey = action.operation === 'restore' ? 'restore' : 'backup';
+      break;
+    case ActionType.PUSH:
+      timeoutKey = 'push';
+      break;
+    case ActionType.SELECTIVE_PUSH:
+      timeoutKey = 'selectivePush';
+      break;
+    case ActionType.ORGANIZE:
+      timeoutKey = Array.isArray(action.operations)
+        && action.operations.some(operation => operation.operation === 'validate')
+        ? 'organizeValidate'
+        : 'organize';
+      break;
+  }
+
+  if (!timeoutKey) {
+    return config.timeout;
+  }
+
+  return config.actionTimeouts?.[timeoutKey] ?? ACTION_TIMEOUTS[timeoutKey];
+}
 
 /**
  * 在超时限制内等待动作执行结果

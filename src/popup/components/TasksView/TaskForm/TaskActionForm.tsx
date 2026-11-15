@@ -157,6 +157,17 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({
     }
   }, [action]);
 
+  // 编辑已有整理任务时也要把当前配置的校验结果同步给父组件，
+  // 避免删除操作沿用旧的空匹配规则仍允许保存
+  useEffect(() => {
+    if (action.type !== ActionType.ORGANIZE) {
+      return;
+    }
+    const validation = validateOrganizeOperations((action as OrganizeAction).operations, {});
+    setErrors(validation.errors);
+    onChange(action, validation.isValid);
+  }, []);
+
   // 处理操作类型更改
   const handleActionTypeChange = (newType: ActionType) => {
     setActionType(newType);
@@ -312,7 +323,10 @@ const TaskActionForm: React.FC<TaskActionFormProps> = ({
         operations: newOperations
       };
 
-      onChange(updatedAction, newOperations.length > 0);
+      // 删除操作后重新校验剩余规则，避免残留的无效规则被误判为可保存
+      const validation = validateOrganizeOperations(newOperations, errors);
+      setErrors(validation.errors);
+      onChange(updatedAction, validation.isValid && newOperations.length > 0);
     }
   };
 

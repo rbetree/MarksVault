@@ -18,6 +18,7 @@ import {
 } from './backup-service-paths';
 import { preloadFaviconIcons } from './backup-service-favicon';
 import { createHtmlBookmarkData } from './backup-service-html';
+import { PENDING_RESTORE_BACKUP_KEY } from './backup-service-bookmark-data';
 
 jest.mock('./github-service', () => ({
   __esModule: true,
@@ -525,6 +526,136 @@ describe('backup-service restore 前置校验与暂存保护', () => {
     // 失败路径不清理暂存数据，供未来回滚
     expect(removeSpy).not.toHaveBeenCalled();
     removeSpy.mockRestore();
+  });
+});
+
+describe('backup-service 暂存书签回滚', () => {
+  const mockedStorage = storageService as jest.Mocked<typeof storageService>;
+  const mockedBookmark = bookmarkService as jest.Mocked<typeof bookmarkService>;
+
+  const stashedBookmarkBar = {
+    id: '1',
+    title: 'Bookmarks Bar',
+    isFolder: true,
+    children: [
+      {
+        id: 'old-folder',
+        title: 'Old Folder',
+        isFolder: true,
+        children: [
+          {
+            id: 'old-nested',
+            title: 'Nested',
+            url: 'https://nested.example.com',
+            isFolder: false,
+          },
+        ],
+      },
+      {
+        id: 'old-1',
+        title: 'Old Bookmark',
+        url: 'https://old.example.com',
+        isFolder: false,
+      },
+    ],
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockedStorage.getStorageData.mockResolvedValue({
+      success: true,
+      data: JSON.stringify(stashedBookmarkBar),
+    } as any);
+    mockedBookmark.getBookmarkRoots.mockResolvedValue({
+      success: true,
+      data: [
+        {
+          id: '1',
+          title: 'Bookmarks Bar',
+          isFolder: true,
+          children: [
+            {
+              id: 'current-1',
+              title: 'Current Bookmark',
+              url: 'https://current.example.com',
+              isFolder: false,
+            },
+          ],
+        },
+      ],
+    } as any);
+    mockedBookmark.removeBookmarkTree.mockResolvedValue({ success: true } as any);
+    mockedBookmark.createFolder.mockResolvedValue({
+      success: true,
+      data: { id: 'folder-created' },
+    } as any);
+    mockedBookmark.createBookmark.mockResolvedValue({
+      success: true,
+      data: { id: 'bookmark-created' },
+    } as any);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  test('回滚会用暂存书签重建书签栏，成功后清理暂存键', async () => {
+    const removeSpy = jest.spyOn(browser.storage.local, 'remove');
+
+    const result = await backupService.restorePendingBookmarkBackup();
+
+    expect(result.success).toBe(true);
+    expect(result.data?.bookmarksCount).toBe(2);
+    expect(mockedBookmark.removeBookmarkTree).toHaveBeenCalledWith('current-1');
+    expect(mockedBookmark.createFolder).toHaveBeenCalledWith({
+      parentId: '1',
+      title: 'Old Folder',
+    });
+    expect(mockedBookmark.createBookmark).toHaveBeenCalledWith({
+      parentId: 'folder-created',
+      title: 'Nested',
+      url: 'https://nested.example.com',
+    });
+    expect(mockedBookmark.createBookmark).toHaveBeenCalledWith({
+      parentId: '1',
+      title: 'Old Bookmark',
+      url: 'https://old.example.com',
+    });
+    expect(removeSpy).toHaveBeenCalledWith(PENDING_RESTORE_BACKUP_KEY);
+  });
+
+  test('没有暂存数据时拒绝回滚且不删除现有书签', async () => {
+    mockedStorage.getStorageData.mockResolvedValue({ success: true, data: null } as any);
+
+    const result = await backupService.restorePendingBookmarkBackup();
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('没有可恢复的暂存书签');
+    expect(mockedBookmark.removeBookmarkTree).not.toHaveBeenCalled();
+  });
+
+  test('暂存数据格式损坏时拒绝回滚', async () => {
+    mockedStorage.getStorageData.mockResolvedValue({ success: true, data: '{invalid' } as any);
+
+    const result = await backupService.restorePendingBookmarkBackup();
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('暂存书签数据格式不正确');
+    expect(mockedBookmark.removeBookmarkTree).not.toHaveBeenCalled();
+  });
+
+  test('回滚中途失败时保留暂存数据，便于再次回滚', async () => {
+    mockedBookmark.createBookmark.mockResolvedValue({
+      success: false,
+      error: 'invalid url',
+    } as any);
+    const removeSpy = jest.spyOn(browser.storage.local, 'remove');
+
+    const result = await backupService.restorePendingBookmarkBackup();
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('回滚失败');
+    expect(removeSpy).not.toHaveBeenCalled();
   });
 });
 

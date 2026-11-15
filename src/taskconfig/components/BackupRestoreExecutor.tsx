@@ -24,6 +24,8 @@ import { Task, BackupAction, ActionType } from '../../types/task';
 import storageService, { GitHubCredentials } from '../../utils/storage-service';
 import githubService from '../../services/github-service';
 import taskExecutor from '../../services/task-executor';
+import backupService from '../../services/backup-service';
+import { PENDING_RESTORE_BACKUP_KEY } from '../../services/backup-service-bookmark-data';
 import { browser } from 'wxt/browser';
 
 // 备份仓库名称常量
@@ -59,6 +61,10 @@ const BackupRestoreExecutor: React.FC<BackupRestoreExecutorProps> = ({ task, onC
   const [selectedBackupPath, setSelectedBackupPath] = useState<string>(initialBackupFilePath);
   const [backupSelectionOpen, setBackupSelectionOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pendingRestoreAvailable, setPendingRestoreAvailable] = useState(false);
+  const [rollbackConfirmOpen, setRollbackConfirmOpen] = useState(false);
+  const [rollbackExecuting, setRollbackExecuting] = useState(false);
+  const [rollbackMessage, setRollbackMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const init = async () => {
@@ -66,6 +72,12 @@ const BackupRestoreExecutor: React.FC<BackupRestoreExecutorProps> = ({ task, onC
       setError(null);
 
       try {
+        // 回滚不依赖 GitHub 凭据，先检查是否存在恢复失败后保留的暂存书签
+        const stashResult = await storageService.getStorageData(PENDING_RESTORE_BACKUP_KEY);
+        setPendingRestoreAvailable(
+          stashResult.success && typeof stashResult.data === 'string' && stashResult.data.length > 0
+        );
+
         const credentialsResult = await storageService.getGitHubCredentials();
         if (!credentialsResult.success || !credentialsResult.data) {
           setError('未找到 GitHub 凭据，请先在“概览”页完成授权');
@@ -91,6 +103,7 @@ const BackupRestoreExecutor: React.FC<BackupRestoreExecutorProps> = ({ task, onC
   const canExecute =
     !loading &&
     !executing &&
+    !rollbackExecuting &&
     !!credentials &&
     !!username &&
     (restoreMode === 'latest' || (restoreMode === 'select' && !!selectedBackupPath));
@@ -163,6 +176,29 @@ const BackupRestoreExecutor: React.FC<BackupRestoreExecutorProps> = ({ task, onC
     }
   };
 
+  const handleRollbackConfirm = async () => {
+    setRollbackConfirmOpen(false);
+    setRollbackExecuting(true);
+    setError(null);
+    setRollbackMessage(null);
+
+    try {
+      const result = await backupService.restorePendingBookmarkBackup();
+      if (!result.success) {
+        throw new Error(result.error || '回滚失败');
+      }
+      setPendingRestoreAvailable(false);
+      setRollbackMessage(
+        `已恢复上次暂存书签${result.data?.bookmarksCount ? `，共 ${result.data.bookmarksCount} 个书签` : ''}`
+      );
+    } catch (e) {
+      console.error('回滚暂存书签失败:', e);
+      setError(e instanceof Error ? e.message : '回滚失败');
+    } finally {
+      setRollbackExecuting(false);
+    }
+  };
+
   return (
     <Box sx={{ p: 3 }}>
       <Paper
@@ -217,6 +253,32 @@ const BackupRestoreExecutor: React.FC<BackupRestoreExecutorProps> = ({ task, onC
             <Alert severity="warning" icon={<WarningIcon />} sx={{ mb: 2 }}>
               此操作会覆盖当前浏览器中的书签，且不可撤销。建议先执行一次“立即备份”。
             </Alert>
+
+            {rollbackMessage && (
+              <Alert severity="success" sx={{ mb: 2 }} onClose={() => setRollbackMessage(null)}>
+                {rollbackMessage}
+              </Alert>
+            )}
+
+            {pendingRestoreAvailable && (
+              <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                  恢复上次暂存书签
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                  上次恢复失败前已暂存原书签栏，可将当前书签栏回滚到恢复前的状态。
+                </Typography>
+                <Button
+                  variant="outlined"
+                  color="warning"
+                  disabled={executing || rollbackExecuting}
+                  startIcon={rollbackExecuting ? <CircularProgress size={16} color="inherit" /> : null}
+                  onClick={() => setRollbackConfirmOpen(true)}
+                >
+                  {rollbackExecuting ? '回滚中...' : '恢复上次暂存书签'}
+                </Button>
+              </Paper>
+            )}
 
             <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
               选择恢复来源
@@ -320,6 +382,29 @@ const BackupRestoreExecutor: React.FC<BackupRestoreExecutorProps> = ({ task, onC
             </Button>
             <Button onClick={handleExecuteConfirm} color="error" variant="contained" autoFocus>
               确认恢复
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* 回滚二次确认对话框 */}
+        <Dialog open={rollbackConfirmOpen} onClose={() => setRollbackConfirmOpen(false)}>
+          <DialogTitle>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <WarningIcon color="warning" />
+              <span>确认恢复上次暂存书签</span>
+            </Box>
+          </DialogTitle>
+          <DialogContent>
+            <DialogContentText>
+              此操作会用上次恢复前暂存的书签栏覆盖当前书签栏。仅在恢复失败后需要撤销时使用。
+            </DialogContentText>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setRollbackConfirmOpen(false)} color="inherit">
+              取消
+            </Button>
+            <Button onClick={handleRollbackConfirm} color="error" variant="contained" autoFocus>
+              确认回滚
             </Button>
           </DialogActions>
         </Dialog>

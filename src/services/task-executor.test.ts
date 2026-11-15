@@ -4,7 +4,8 @@ import * as taskExecutorLease from './task-executor-lease';
 import taskService from './task-service';
 import storageService from '../utils/storage-service';
 import { RetryableError, RetryableErrorCategory, GitHubApiError } from './github-service';
-import { runWithTimeout } from './task-executor-timeout';
+import { resolveActionTimeout, runWithTimeout } from './task-executor-timeout';
+import { ACTION_TIMEOUTS, DEFAULT_CONFIG } from './task-executor-types';
 import {
   BackupAction,
   BookmarkSelection,
@@ -587,7 +588,7 @@ describe('task-executor 三态结果与中断恢复', () => {
     await createBackupTask(taskId);
 
     const executor = TaskExecutor.getInstance();
-    executor.updateConfig({ timeout: 50 });
+    executor.updateConfig({ actionTimeouts: { backup: 50 } });
     const backupSpy = hangExecution(executor);
 
     const result = await executor.executeTask(taskId);
@@ -696,7 +697,7 @@ describe('task-executor 三态结果与中断恢复', () => {
 
     // 超时收尾后：任务保持 RUNNING，快照与执行租约已在收尾时清理
     const executor = TaskExecutor.getInstance();
-    executor.updateConfig({ timeout: 30 });
+    executor.updateConfig({ actionTimeouts: { backup: 30 } });
     hangExecution(executor);
     const result = await executor.executeTask(taskId);
     expect(result.outcome).toBe(ExecutionOutcome.UNCERTAIN);
@@ -719,7 +720,7 @@ describe('task-executor 三态结果与中断恢复', () => {
     await createBackupTask(taskId);
 
     const executor = TaskExecutor.getInstance();
-    executor.updateConfig({ timeout: 30, maxRetries: 3 });
+    executor.updateConfig({ actionTimeouts: { backup: 30 }, maxRetries: 3 });
     const backupSpy = hangExecution(executor);
     const executeSpy = jest.spyOn(executor, 'executeTask');
 
@@ -2229,7 +2230,7 @@ describe('task-executor bug 修复回归', () => {
     await createBackupTask(taskId);
 
     const executor = TaskExecutor.getInstance();
-    executor.updateConfig({ timeout: 50 });
+    executor.updateConfig({ actionTimeouts: { backup: 50 } });
     hangExecution(executor);
 
     const result = await executor.executeTask(taskId);
@@ -2265,7 +2266,7 @@ describe('task-executor bug 修复回归', () => {
     await createOrganizeTask(organizeId);
 
     const executor = TaskExecutor.getInstance();
-    executor.updateConfig({ timeout: 50 });
+    executor.updateConfig({ actionTimeouts: { restore: 50 } });
     hangExecution(executor);
 
     const result = await executor.executeTask(restoreId, 0, 'manual');
@@ -2562,6 +2563,58 @@ describe('task-executor bug 修复回归', () => {
     const task = (await taskService.getTaskById(taskId)).data as Task;
     expect(task.history.executions.length).toBe(1);
     expect(task.history.lastExecution?.success).toBe(true);
+  });
+});
+
+describe('task-executor 动作级超时', () => {
+  const buildTask = (action: Task['action']): Task => ({
+    id: 'timeout_resolution_task',
+    name: '动作级超时解析',
+    status: TaskStatus.ENABLED,
+    createdAt: 0,
+    updatedAt: 0,
+    trigger: createManualTrigger('手动'),
+    action,
+    history: { executions: [] },
+  });
+
+  test('按动作类型解析到不同的集中定义超时', () => {
+    expect(resolveActionTimeout(buildTask(createBackupAction('backup')), DEFAULT_CONFIG))
+      .toBe(ACTION_TIMEOUTS.backup);
+    expect(resolveActionTimeout(buildTask(createBackupAction('restore')), DEFAULT_CONFIG))
+      .toBe(ACTION_TIMEOUTS.restore);
+    expect(resolveActionTimeout(buildTask(createPushAction()), DEFAULT_CONFIG))
+      .toBe(ACTION_TIMEOUTS.push);
+    expect(resolveActionTimeout(buildTask(createSelectivePushAction()), DEFAULT_CONFIG))
+      .toBe(ACTION_TIMEOUTS.selectivePush);
+
+    const organizeAction = createOrganizeAction();
+    expect(resolveActionTimeout(buildTask(organizeAction), DEFAULT_CONFIG))
+      .toBe(ACTION_TIMEOUTS.organize);
+
+    organizeAction.operations = [{ operation: 'validate', filters: { pattern: '*' } }];
+    expect(resolveActionTimeout(buildTask(organizeAction), DEFAULT_CONFIG))
+      .toBe(ACTION_TIMEOUTS.organizeValidate);
+  });
+
+  test('未匹配动作类型时保持默认超时', () => {
+    expect(DEFAULT_CONFIG.timeout).toBe(60000);
+    expect(resolveActionTimeout(buildTask({ type: 'unknown' } as unknown as Task['action']), DEFAULT_CONFIG))
+      .toBe(DEFAULT_CONFIG.timeout);
+  });
+
+  test('显式动作级超时覆盖优先于集中定义', () => {
+    const config = {
+      ...DEFAULT_CONFIG,
+      actionTimeouts: { backup: 1000, restore: 2000, organizeValidate: 3000 },
+    };
+
+    expect(resolveActionTimeout(buildTask(createBackupAction('backup')), config)).toBe(1000);
+    expect(resolveActionTimeout(buildTask(createBackupAction('restore')), config)).toBe(2000);
+
+    const organizeAction = createOrganizeAction();
+    organizeAction.operations = [{ operation: 'validate' }];
+    expect(resolveActionTimeout(buildTask(organizeAction), config)).toBe(3000);
   });
 });
 
