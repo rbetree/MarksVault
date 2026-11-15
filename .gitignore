@@ -10,6 +10,8 @@
 /docs/*
 !/docs/agents/
 !/docs/agents/**
+!/docs/adr/
+!/docs/adr/**
 docs-myself/
 
 # 开发工具文件
@@ -23,6 +25,7 @@ docs-myself/
 .spec-workflow/
 .claude/
 paseo.json
+/.roo/
 
 # 系统文件
 .DS_Store

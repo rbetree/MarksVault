@@ -29,6 +29,15 @@ const readChromiumExtensionKey = (): string | undefined => {
 export default defineConfig({
   srcDir: 'src',
   modules: ['@wxt-dev/module-react'],
+  // Firefox AMO 源码包只需构建所需文件，排除本地文档、临时产物、关联仓库与 README 素材
+  zip: {
+    excludeSources: [
+      'docs-myself/**',
+      'build-temp/**',
+      'menav/**',
+      'assets/images/**',
+    ],
+  },
   vite: (env) => {
     // 仅开发模式调整依赖预构建（optimizeDeps）。
     //

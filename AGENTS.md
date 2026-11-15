@@ -29,7 +29,7 @@ MarksVault is a browser extension built with WXT (Vite), React, TypeScript, and 
   - `src/entrypoints/popup/*`: popup page -> `popup.html`
   - `src/entrypoints/options/*`: options page -> `options.html`
   - `src/entrypoints/taskconfig/*`: unlisted page -> `taskconfig.html`
-- **Service Architecture**: All services in [`src/services/`](./src/services/) are singletons. Always use `ServiceClass.getInstance()` instead of `new ServiceClass()`.
+- **Service Architecture**: Most services in [`src/services/`](./src/services/) are singletons. Use `ServiceClass.getInstance()` instead of `new ServiceClass()`. Exceptions: [`favicon-warmup-service.ts`](./src/services/favicon-warmup-service.ts) exports functions (e.g. `warmupBookmarkFavicons`), and `ExecutionSnapshotStore` in [`task-executor-snapshot.ts`](./src/services/task-executor-snapshot.ts) is a plain class constructed with a `Mutex`.
 - **Storage Strategy**: The extension uses a mixed storage model. GitHub credentials are in `browser.storage.sync` for cross-device access, while all other data is in `browser.storage.local`. See [`src/utils/storage-service.ts`](./src/utils/storage-service.ts).
 - **Event System**: All bookmark events (`onCreated`, `onRemoved`, `onChanged`, `onMoved`) are unified into a single `EventType.BOOKMARK_CHANGED` for task handling. See [`src/entrypoints/background.ts`](./src/entrypoints/background.ts).
 - **MV3 SW Cold Start**: The MV3 Service Worker can be restarted frequently; event handlers should ensure required services are initialized (see `ensureServicesInitialized` in `src/entrypoints/background.ts`).
@@ -37,5 +37,5 @@ MarksVault is a browser extension built with WXT (Vite), React, TypeScript, and 
 ## Critical Patterns
 
 - **GitHub API Encoding**: For file uploads, you **MUST** use `btoa(unescape(encodeURIComponent(content)))` to handle Unicode characters correctly. Standard `btoa()` will corrupt non-ASCII data. See [`src/services/github-service.ts`](./src/services/github-service.ts).
-- **Storage Write Retries**: All writes to extension storage are wrapped in a 3-retry mechanism with exponential backoff. This is not obvious from the calling code. See [`src/utils/storage-service.ts`](./src/utils/storage-service.ts).
+- **Storage Write Retries**: Only `setStorageData` retries writes (3 attempts with exponential backoff). The other `save*` methods write directly. See [`src/utils/storage-service.ts`](./src/utils/storage-service.ts).
 - **Settings Updates**: The settings object has nested properties. Updates **MUST** be deep-merged to avoid data loss. See [`src/utils/storage-service.ts`](./src/utils/storage-service.ts).

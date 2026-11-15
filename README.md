@@ -39,11 +39,11 @@
 
 | 分类 | 核心技术 |
 |------|---------|
-| **前端核心** | React 18.2.0, TypeScript 5.0.4, Material-UI(MUI) 5.13.0 |
+| **前端核心** | React 18.3.1, TypeScript 5.8.3, Material-UI(MUI) 5.17.1 |
 | **扩展APIs** | Chrome/Edge Manifest V3, Firefox Manifest V2, Bookmarks API, Storage API, Tabs API, Runtime API |
 | **状态管理** | React Context API + Hooks |
 | **外部集成** | GitHub API (仓库操作与内容管理) |
-| **构建与测试** | WXT（Vite）, ESLint 8.40.0, Jest 29.5.0 |
+| **构建与测试** | WXT（Vite）, ESLint 8.57.1, Jest 29.7.0 |
 | **项目结构** | 功能模块化设计, Service Worker后台, React弹出界面 |
 
 ## 🚀 功能
@@ -76,7 +76,9 @@
 
 ```
 public/                   # 静态资源（原样拷贝到输出目录）
-└── assets/               # 图标、截图等资源
+└── assets/icons/         # 扩展图标（manifest 与 UI 引用）
+
+assets/images/            # README 截图与宣传图（不参与构建）
 
 src/                      # 源代码（WXT srcDir）
 ├── entrypoints/          # WXT 入口（自动生成 manifest）
@@ -133,7 +135,7 @@ wxt.config.ts             # WXT 配置（manifest/构建）
    git clone https://github.com/rbetree/MarksVault.git
    cd MarksVault
    ```
-2. 安装项目依赖
+2. 确认 Node.js 版本满足 `^20.19.0 || >=22.12.0`（最低 20.19.0），然后安装项目依赖
    ```bash
    npm install
    ```

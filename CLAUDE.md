@@ -62,7 +62,7 @@ test/mocks/               # Jest 使用的 wxt/browser mock
 
 - Jest + ts-jest，测试文件与源码同目录，命名为 `*.test.ts`。
 - `wxt/browser` 在 Jest 中映射到 `test/mocks/wxt-browser.ts`。
-- 核心服务（任务执行、备份、整理、GitHub）已有单元测试；新增失败分支或状态迁移时同步补测试。
+- 核心服务（任务执行、备份、整理）已有单元测试；`github-service.test.ts` 目前仅覆盖 `validateCredentials`。新增失败分支或状态迁移时同步补测试。
 
 ## 七、文档
 
