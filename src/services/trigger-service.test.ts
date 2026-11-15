@@ -1,92 +1,203 @@
 import { browser } from 'wxt/browser';
 import triggerService from './trigger-service';
 import taskService from './task-service';
+import taskExecutor from './task-executor';
+import { BOOKMARK_WRITE_LEASE_KEY } from './task-executor-types';
 import {
+  EventType,
+  ExecutionOutcome,
   Task,
   TaskStatus,
-  TaskExecutionResult,
-  ExecutionOutcome,
-  createBackupAction,
-  createManualTrigger,
+  TaskStorage,
+  createEventTrigger,
+  createOrganizeAction,
 } from '../types/task';
 
-describe('trigger-service 失败任务恢复', () => {
-  beforeEach(async () => {
-    await browser.storage.local.clear();
-    await browser.storage.sync.clear();
-  });
+jest.mock('./task-executor', () => ({
+  __esModule: true,
+  default: {
+    executeTask: jest.fn(),
+  },
+}));
 
-  // 构造一个 FAILED 状态且历史最后一条为指定执行结果的任务
-  // 注意：updateTask 已拒绝覆盖 history 字段（保护执行历史不被编辑保存回滚），
-  // 因此通过正规历史写入途径 updateTaskExecutionHistory 注入执行结果；
-  // 任务初始为 FAILED（非 RUNNING/ENABLED），updateTaskExecutionHistory 保持状态不流转
-  const createFailedTask = async (id: string, lastExecution: TaskExecutionResult): Promise<void> => {
-    await taskService.createTask({
+describe('trigger-service 事件触发语义', () => {
+  const mockedExecutor = taskExecutor as unknown as { executeTask: jest.Mock };
+
+  const createEventTask = async (id: string): Promise<void> => {
+    const result = await taskService.createTask({
       id,
-      name: `失败任务 ${id}`,
-      status: TaskStatus.FAILED,
-      trigger: createManualTrigger('手动'),
-      action: createBackupAction('backup'),
+      name: `事件任务 ${id}`,
+      status: TaskStatus.ENABLED,
+      trigger: createEventTrigger(EventType.BOOKMARK_CHANGED),
+      action: createOrganizeAction(),
     });
-    const result = await taskService.updateTaskExecutionHistory(id, lastExecution);
     expect(result.success).toBe(true);
   };
 
-  test('上次执行 outcome=INTERRUPTED 的任务不被自动恢复（保持 FAILED）', async () => {
-    const taskId = 'recover_interrupted_not_enabled';
-    await createFailedTask(taskId, {
+  const handleBookmarkChanged = async (): Promise<void> => {
+    await triggerService.handleEventTrigger(EventType.BOOKMARK_CHANGED, {
+      bookmark: { id: 'bookmark_1' },
+    });
+  };
+
+  beforeEach(async () => {
+    await browser.storage.local.clear();
+    await browser.storage.sync.clear();
+    jest.clearAllMocks();
+    mockedExecutor.executeTask.mockResolvedValue({
+      success: true,
+      timestamp: Date.now(),
+    });
+  });
+
+  test('上次执行失败后任务仍保持 ENABLED，可被事件自动触发', async () => {
+    const taskId = 'failure_still_enabled';
+    await createEventTask(taskId);
+
+    await taskService.updateTaskExecutionHistory(taskId, {
+      success: false,
+      timestamp: Date.now(),
+      outcome: ExecutionOutcome.FAILURE,
+      error: '网络错误',
+    });
+
+    const task = (await taskService.getTaskById(taskId)).data as Task;
+    expect(task.status).toBe(TaskStatus.ENABLED);
+
+    await handleBookmarkChanged();
+
+    expect(mockedExecutor.executeTask).toHaveBeenCalledWith(taskId, 0, 'event');
+  });
+
+  test('上次执行中断后任务仍保持 ENABLED，可被事件自动触发', async () => {
+    const taskId = 'interrupted_still_enabled';
+    await createEventTask(taskId);
+
+    await taskService.updateTaskExecutionHistory(taskId, {
       success: false,
       timestamp: Date.now(),
       outcome: ExecutionOutcome.INTERRUPTED,
       error: '任务执行中断（扩展后台终止）',
     });
 
-    await triggerService.tryRecoverFailedTasks();
-
-    // 执行中断不会自动续跑：任务保持 FAILED
     const task = (await taskService.getTaskById(taskId)).data as Task;
-    expect(task.status).toBe(TaskStatus.FAILED);
+    expect(task.status).toBe(TaskStatus.ENABLED);
+
+    await handleBookmarkChanged();
+
+    expect(mockedExecutor.executeTask).toHaveBeenCalledWith(taskId, 0, 'event');
   });
 
-  test('普通失败（outcome 缺省或 failure，非凭据错误）恢复为 ENABLED', async () => {
-    // 旧数据：outcome 缺省（仅 success=false），非凭据错误
-    const legacyId = 'recover_failure_legacy';
-    await createFailedTask(legacyId, {
-      success: false,
-      timestamp: Date.now(),
-      error: 'GitHub备份失败: 网络错误: Failed to fetch',
-    });
+  test('用户禁用的任务不被执行结果覆盖，也不会被事件自动触发', async () => {
+    const taskId = 'disabled_not_overridden';
+    await createEventTask(taskId);
+    await taskService.disableTask(taskId);
 
-    // 新数据：显式 outcome=failure，非凭据错误
-    const explicitId = 'recover_failure_explicit';
-    await createFailedTask(explicitId, {
+    await taskService.updateTaskExecutionHistory(taskId, {
       success: false,
       timestamp: Date.now(),
       outcome: ExecutionOutcome.FAILURE,
-      error: '整理书签失败',
+      error: '网络错误',
     });
 
-    await triggerService.tryRecoverFailedTasks();
+    const task = (await taskService.getTaskById(taskId)).data as Task;
+    expect(task.status).toBe(TaskStatus.DISABLED);
 
-    const legacy = (await taskService.getTaskById(legacyId)).data as Task;
-    expect(legacy.status).toBe(TaskStatus.ENABLED);
-    const explicit = (await taskService.getTaskById(explicitId)).data as Task;
-    expect(explicit.status).toBe(TaskStatus.ENABLED);
+    await handleBookmarkChanged();
+
+    expect(mockedExecutor.executeTask).not.toHaveBeenCalled();
   });
 
-  test('凭据错误（未找到GitHub凭据）的任务不被自动恢复', async () => {
-    const taskId = 'recover_credential_error';
-    await createFailedTask(taskId, {
-      success: false,
-      timestamp: Date.now(),
-      outcome: ExecutionOutcome.FAILURE,
-      error: '未找到GitHub凭据，请在设置中配置',
+  test('任务自身持有书签写入租约时，BOOKMARK_CHANGED 不再触发同一任务', async () => {
+    const taskId = 'self_write_task';
+    await createEventTask(taskId);
+
+    await browser.storage.local.set({
+      [BOOKMARK_WRITE_LEASE_KEY]: {
+        taskId,
+        executionId: 'execution_1',
+        acquiredAt: Date.now(),
+        expiresAt: Date.now() + 120000,
+      },
     });
 
-    await triggerService.tryRecoverFailedTasks();
+    await handleBookmarkChanged();
 
-    // 凭据问题需要用户重新授权后手动恢复
-    const task = (await taskService.getTaskById(taskId)).data as Task;
-    expect(task.status).toBe(TaskStatus.FAILED);
+    expect(mockedExecutor.executeTask).not.toHaveBeenCalled();
+  });
+
+  test('用户操作在无写入租约时仍触发任务', async () => {
+    const taskId = 'user_operation_task';
+    await createEventTask(taskId);
+
+    await handleBookmarkChanged();
+
+    expect(mockedExecutor.executeTask).toHaveBeenCalledTimes(1);
+    expect(mockedExecutor.executeTask).toHaveBeenCalledWith(taskId, 0, 'event');
+  });
+
+  test('其他任务持有写入租约时，用户操作仍触发当前任务', async () => {
+    const taskId = 'other_writer_task';
+    await createEventTask(taskId);
+
+    await browser.storage.local.set({
+      [BOOKMARK_WRITE_LEASE_KEY]: {
+        taskId: 'another_task',
+        executionId: 'execution_other',
+        acquiredAt: Date.now(),
+        expiresAt: Date.now() + 120000,
+      },
+    });
+
+    await handleBookmarkChanged();
+
+    expect(mockedExecutor.executeTask).toHaveBeenCalledWith(taskId, 0, 'event');
+  });
+
+  test('已过期的写入租约不阻止事件触发', async () => {
+    const taskId = 'expired_write_lease_task';
+    await createEventTask(taskId);
+
+    await browser.storage.local.set({
+      [BOOKMARK_WRITE_LEASE_KEY]: {
+        taskId,
+        executionId: 'expired_execution',
+        acquiredAt: Date.now() - 200000,
+        expiresAt: Date.now() - 1000,
+      },
+    });
+
+    await handleBookmarkChanged();
+
+    expect(mockedExecutor.executeTask).toHaveBeenCalledWith(taskId, 0, 'event');
+  });
+
+  test('旧数据中的 FAILED 任务迁移为 ENABLED 后可被事件自动触发', async () => {
+    const taskId = 'legacy_failed_task';
+    await browser.storage.local.set({
+      tasks_data: {
+        tasks: {
+          [taskId]: {
+            id: taskId,
+            name: '旧失败任务',
+            status: TaskStatus.FAILED,
+            createdAt: 1,
+            updatedAt: 1,
+            trigger: createEventTrigger(EventType.BOOKMARK_CHANGED),
+            action: createOrganizeAction(),
+            history: { executions: [] },
+          },
+        },
+        lastUpdated: 1,
+      },
+    });
+
+    await handleBookmarkChanged();
+
+    expect(mockedExecutor.executeTask).toHaveBeenCalledWith(taskId, 0, 'event');
+
+    const stored = await browser.storage.local.get('tasks_data');
+    const storage = stored.tasks_data as TaskStorage;
+    expect(storage.tasks[taskId].status).toBe(TaskStatus.ENABLED);
   });
 });

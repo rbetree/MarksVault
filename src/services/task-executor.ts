@@ -370,8 +370,9 @@ export class TaskExecutor {
         executionResult.details = '执行租约已到期或失效，原执行已失去运行所有权，停止重试';
         executionResult.source = source;
         await taskService.updateTaskExecutionHistory(taskId, executionResult);
-        // 保留用户的禁用意图：执行期间被禁用的任务不因收尾改回 FAILED
-        await setTaskStatusPreservingDisabled(taskId, TaskStatus.FAILED);
+        // 执行结果只写入历史；收尾把执行期 RUNNING 恢复为 ENABLED，
+        // 执行期间被用户禁用的任务保持 DISABLED
+        await setTaskStatusPreservingDisabled(taskId, TaskStatus.ENABLED);
         // 重试链在此终止，外层 finally 因 retrying 跳过快照删除，必须在此清理，
         // 避免本次执行输入残留在 storage.local
         await this.snapshotStore.delete(taskId);
@@ -535,13 +536,13 @@ export class TaskExecutor {
       // 执行失败（含可重试的临时性失败）统一走重试判定与失败收尾
       if (executionResult.success) {
         console.log(`更新任务 ${taskId} 执行历史记录...`);
-        // 历史+状态为同一次写入：写入失败时任务可能残留 RUNNING，
-        // 单独兜底恢复 ENABLED（读取当前状态，DISABLED 保持禁用意图）
+        // 执行结果只写入历史；无论历史写入是否成功，都把执行期 RUNNING
+        // 恢复为 ENABLED，用户执行期间禁用的任务保持 DISABLED
         const historyResult = await taskService.updateTaskExecutionHistory(taskId, executionResult);
         if (!historyResult.success) {
           console.error(`任务 ${taskId} 更新执行历史失败:`, historyResult.error);
-          await setTaskStatusPreservingDisabled(taskId, TaskStatus.ENABLED);
         }
+        await setTaskStatusPreservingDisabled(taskId, TaskStatus.ENABLED);
 
         const executionEndTime = new Date();
         const executionTimeMessage = `开始: ${executionStartTime.toLocaleString()}, 结束: ${executionEndTime.toLocaleString()}, 耗时: ${Math.round((executionEndTime.getTime() - executionStartTime.getTime()) / 1000)}秒`;
@@ -563,8 +564,8 @@ export class TaskExecutor {
       return finalizeFailureResult(executionResult, taskId, executionStartTime);
     } catch (error) {
       // 超时结束的执行：底层操作可能仍在进行（外部副作用不确定），
-      // 本次执行结果应为"结果不确定"：不进入重试、不把任务标记为 FAILED，
-      // 保持 RUNNING 由租约驱动的恢复逻辑处理
+      // 本次执行结果应为"结果不确定"：不进入重试、不标记失败；
+      // 执行租约保留至到期以阻止并发重入，启用状态恢复稳定配置
       if (error instanceof ExecutionTimeoutError) {
         // 标记超时：finally 中保留租约直至自然到期，阻止底层仍在运行的操作被并发重入
         timeoutOccurred = true;
@@ -578,8 +579,9 @@ export class TaskExecutor {
         executionResult.source = source;
         console.warn(`任务 ${taskId} 执行超时，结果不确定（底层操作可能仍在进行）`);
 
-        // 更新任务历史记录
+        // 更新任务历史记录；结果不确定不改变启用状态
         await taskService.updateTaskExecutionHistory(taskId, executionResult);
+        await setTaskStatusPreservingDisabled(taskId, TaskStatus.ENABLED);
         return executionResult;
       }
 

@@ -16,9 +16,9 @@ import Skeleton from '@mui/material/Skeleton';
 
 import backupService from '../../../services/backup-service';
 import { BackupStatus } from '../../../types/backup';
-import { formatDate } from '../../../utils/date-utils';
+import { formatDate, resolveExecutionOutcome } from '../../../utils/date-utils';
 import taskService, { isSystemTaskId } from '../../../services/task-service';
-import { Task, TaskStatus } from '../../../types/task';
+import { ExecutionOutcome, Task, TaskStatus } from '../../../types/task';
 
 /**
  * 概览页内容（保留文件名以避免大规模改动）：
@@ -73,7 +73,12 @@ const SyncOperations: React.FC = () => {
 
       const enabled = tasks.filter(t => t.status === TaskStatus.ENABLED).length;
       const disabled = tasks.filter(t => t.status === TaskStatus.DISABLED).length;
-      const failed = tasks.filter(t => t.status === TaskStatus.FAILED).length;
+      // 失败次数来自最近一次执行结果，不再依赖已被执行结果覆盖的状态字段
+      const failed = tasks.filter(t => {
+        const lastExecution = t.history?.lastExecution;
+        return !!lastExecution &&
+          resolveExecutionOutcome(lastExecution.success, lastExecution.outcome) === ExecutionOutcome.FAILURE;
+      }).length;
 
       const lastExecutionTime = tasks.reduce((max, t) => {
         const ts = t.history?.lastExecution?.timestamp;

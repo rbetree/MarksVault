@@ -35,8 +35,7 @@ import TaskStatusChip from './TaskStatusChip';
 import TaskTriggerInfo from './TaskTriggerInfo';
 import TaskActionInfo from './TaskActionInfo';
 import taskService from '../../../services/task-service';
-import taskExecutor from '../../../services/task-executor';
-import { 
+import {
   taskCardStyles, 
   getTaskCardBorderStyle, 
   dateDisplayStyles,
@@ -81,11 +80,11 @@ const TaskCard: React.FC<TaskCardProps> = ({
   // 处理启用/禁用任务
   const handleToggleStatus = async () => {
     if (loading) return;
-    
+
     setLoading(true);
     try {
-      const isEnabled = task.status === TaskStatus.ENABLED;
-      const result = isEnabled 
+      const isEnabled = task.status !== TaskStatus.DISABLED;
+      const result = isEnabled
         ? await taskService.disableTask(task.id)
         : await taskService.enableTask(task.id);
       
@@ -103,10 +102,26 @@ const TaskCard: React.FC<TaskCardProps> = ({
     }
   };
   
+  // 写入 popup 展示用的执行结果（真正执行发生在 background）
+  const reportExecutionResult = async (success: boolean, message: string) => {
+    try {
+      await browser.storage.local.set({
+        taskExecutionResult: {
+          taskId: task.id,
+          success,
+          timestamp: Date.now(),
+          message,
+        },
+      });
+    } catch (error) {
+      console.warn('写入任务执行结果失败:', error);
+    }
+  };
+
   // 手动执行任务
   const handleExecuteTask = async () => {
     if (executing) return;
-    
+
     // 如果是选择性推送任务，打开任务配置页面（执行模式）
     if (task.action.type === ActionType.SELECTIVE_PUSH) {
       const url = browser.runtime.getURL(`/taskconfig.html?mode=execute&taskId=${task.id}`);
@@ -123,32 +138,37 @@ const TaskCard: React.FC<TaskCardProps> = ({
       browser.tabs.create({ url });
       return;
     }
-    
-    // 其他类型的任务，直接执行
+
+    // 通过 background Service Worker 执行，popup 关闭后任务仍可继续；
+    // 与快捷备份共用 EXECUTE_TASK 消息通道
     setExecuting(true);
     try {
       console.log(`手动执行任务: ${task.id}`);
-      const result = await taskExecutor.executeTask(task.id);
-
-      await browser.storage.local.set({
-        taskExecutionResult: {
-          taskId: task.id,
-          success: result.success,
-          timestamp: Date.now(),
-          message: result.success ? '任务执行成功' : (result.error || '任务执行失败'),
-        },
+      const response = await browser.runtime.sendMessage({
+        type: 'EXECUTE_TASK',
+        payload: { taskId: task.id },
       });
+
+      const isPlainObject = (value: unknown): value is Record<string, unknown> => {
+        return typeof value === 'object' && value !== null && !Array.isArray(value);
+      };
+
+      if (!isPlainObject(response)) {
+        throw new Error('任务执行请求返回格式异常');
+      }
+
+      const success = response.success === true;
+      const errorMessage = typeof response.error === 'string' ? response.error : undefined;
+      await reportExecutionResult(
+        success,
+        success ? '任务执行成功' : (errorMessage || '任务执行失败')
+      );
     } catch (error) {
       console.error('手动执行任务失败:', error);
-
-      await browser.storage.local.set({
-        taskExecutionResult: {
-          taskId: task.id,
-          success: false,
-          timestamp: Date.now(),
-          message: error instanceof Error ? error.message : '任务执行失败',
-        },
-      });
+      await reportExecutionResult(
+        false,
+        error instanceof Error ? error.message : '任务执行失败'
+      );
     } finally {
       setExecuting(false);
     }
@@ -177,12 +197,13 @@ const TaskCard: React.FC<TaskCardProps> = ({
     );
   };
   
-  // 判断是否显示错误信息
+  // 判断是否显示错误信息：执行失败只影响结果展示，不再改变启用状态
   const shouldShowErrorInfo = () => {
-    return task.status === TaskStatus.FAILED && 
-           task.history.lastExecution && 
-           !task.history.lastExecution.success && 
-           task.history.lastExecution.error;
+    const lastExecution = task.history.lastExecution;
+    return !!lastExecution &&
+           !lastExecution.success &&
+           resolveExecutionOutcome(lastExecution.success, lastExecution.outcome) === ExecutionOutcome.FAILURE &&
+           !!lastExecution.error;
   };
   
   // 判断错误是否与GitHub凭据相关。
@@ -201,13 +222,13 @@ const TaskCard: React.FC<TaskCardProps> = ({
   const isManualTask = task.trigger.type === TriggerType.MANUAL;
   
   // 判断任务是否可以启用/禁用（手动任务不需要此功能）
-  const canToggleStatus = !isManualTask &&
-                          task.status !== TaskStatus.COMPLETED &&
-                          task.status !== TaskStatus.RUNNING;
-  
-  // 判断任务是否可以手动执行
-  const canExecuteTask = task.status !== TaskStatus.RUNNING &&
-                         task.status !== TaskStatus.DISABLED;
+  const canToggleStatus = !isManualTask && task.status !== TaskStatus.RUNNING;
+
+  // 手动执行不受启用状态限制：启用状态只约束事件自动触发
+  const canExecuteTask = task.status !== TaskStatus.RUNNING;
+
+  // 稳定的启用配置：只有 DISABLED 表示用户主动禁用
+  const isTaskEnabled = task.status !== TaskStatus.DISABLED;
   
   // 创建自定义样式对象，去除下边距
   const noBottomPaddingStyles = {
@@ -400,7 +421,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
           <Typography variant="h6" component="div" sx={{ fontWeight: 500, fontSize: '13px' }}>
             {task.name}
           </Typography>
-          <TaskStatusChip status={task.status} outcome={task.history.lastExecution?.outcome} />
+          <TaskStatusChip status={task.status} />
         </Box>
         
         {task.description && (
@@ -500,16 +521,16 @@ const TaskCard: React.FC<TaskCardProps> = ({
                   </span>
                 </Tooltip>
                 
-                <Tooltip title={task.status === TaskStatus.ENABLED ? '禁用任务' : '启用任务'}>
+                <Tooltip title={isTaskEnabled ? '禁用任务' : '启用任务'}>
                   <span style={{ display: 'inline-block' }}>
                     <IconButton
                       onClick={handleToggleStatus}
                       disabled={!canToggleStatus || loading}
-                      color={task.status === TaskStatus.ENABLED ? 'primary' : 'default'}
+                      color={isTaskEnabled ? 'primary' : 'default'}
                       size="small"
                       sx={{ padding: 0.4 }}
                     >
-                      {task.status === TaskStatus.ENABLED ?
+                      {isTaskEnabled ?
                       <PauseIcon sx={{ fontSize: '14px' }} /> :
                       <PlayArrowIcon sx={{ fontSize: '14px' }} />}
                     </IconButton>

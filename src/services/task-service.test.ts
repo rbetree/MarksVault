@@ -1,6 +1,11 @@
 import taskService from './task-service';
 import storageService from '../utils/storage-service';
-import { Task, TaskStatus } from '../types/task';
+import {
+  ExecutionOutcome,
+  Task,
+  TaskStatus,
+  TaskStorage,
+} from '../types/task';
 
 jest.mock('../utils/storage-service', () => ({
   __esModule: true,
@@ -85,6 +90,123 @@ describe('task-service 持久化结果', () => {
 
       expect(result.success).toBe(true);
       expect((result.data as Task).status).toBe(TaskStatus.DISABLED);
+    });
+  });
+
+  describe('启用状态与执行结果解耦', () => {
+    const buildTask = (id: string, status: TaskStatus) => ({
+      id,
+      name: `任务 ${id}`,
+      status,
+      createdAt: 1,
+      updatedAt: 1,
+      history: { executions: [] },
+    });
+
+    const buildStorage = (status: TaskStatus = TaskStatus.ENABLED) => ({
+      tasks: {
+        task_1: buildTask('task_1', status),
+      },
+      lastUpdated: 1,
+    });
+
+    beforeEach(() => {
+      mockedStorage.getStorageData.mockResolvedValue({
+        success: true,
+        data: buildStorage(),
+      } as any);
+    });
+
+    test('读取旧 FAILED/COMPLETED 任务时迁移为 ENABLED 并持久化', async () => {
+      mockedStorage.getStorageData.mockResolvedValue({
+        success: true,
+        data: {
+          tasks: {
+            failed: buildTask('failed', TaskStatus.FAILED),
+            completed: buildTask('completed', TaskStatus.COMPLETED),
+            disabled: buildTask('disabled', TaskStatus.DISABLED),
+          },
+          lastUpdated: 1,
+        },
+      } as any);
+
+      const result = await taskService.getTasks();
+
+      expect(result.success).toBe(true);
+      const storage = result.data as TaskStorage;
+      expect(storage.tasks.failed.status).toBe(TaskStatus.ENABLED);
+      expect(storage.tasks.completed.status).toBe(TaskStatus.ENABLED);
+      // 用户主动禁用是稳定配置，迁移不能把它改回启用
+      expect(storage.tasks.disabled.status).toBe(TaskStatus.DISABLED);
+
+      expect(mockedStorage.setStorageData).toHaveBeenCalledTimes(1);
+      const saved = mockedStorage.setStorageData.mock.calls[0][1] as TaskStorage;
+      expect(saved.tasks.failed.status).toBe(TaskStatus.ENABLED);
+      expect(saved.tasks.completed.status).toBe(TaskStatus.ENABLED);
+    });
+
+    test('执行失败只写入历史，不改变 ENABLED 启用状态', async () => {
+      const failure = {
+        success: false,
+        timestamp: 2,
+        outcome: ExecutionOutcome.FAILURE,
+        error: '网络错误',
+      };
+
+      const result = await taskService.updateTaskExecutionHistory('task_1', failure);
+
+      expect(result.success).toBe(true);
+      const saved = mockedStorage.setStorageData.mock.calls[0][1] as TaskStorage;
+      expect(saved.tasks.task_1.status).toBe(TaskStatus.ENABLED);
+      expect(saved.tasks.task_1.history.lastExecution).toEqual(failure);
+    });
+
+    test('执行成功不改变用户 DISABLED 启用状态', async () => {
+      mockedStorage.getStorageData.mockResolvedValue({
+        success: true,
+        data: buildStorage(TaskStatus.DISABLED),
+      } as any);
+
+      const success = {
+        success: true,
+        timestamp: 3,
+        outcome: ExecutionOutcome.SUCCESS,
+      };
+
+      const result = await taskService.updateTaskExecutionHistory('task_1', success);
+
+      expect(result.success).toBe(true);
+      const saved = mockedStorage.setStorageData.mock.calls[0][1] as TaskStorage;
+      expect(saved.tasks.task_1.status).toBe(TaskStatus.DISABLED);
+      expect(saved.tasks.task_1.history.lastExecution).toEqual(success);
+    });
+
+    test('setTaskStatus 不再持久化 FAILED/COMPLETED', async () => {
+      mockedStorage.getStorageData.mockImplementation(async () => ({
+        success: true,
+        data: buildStorage(TaskStatus.ENABLED),
+      } as any));
+
+      const failedResult = await taskService.setTaskStatus('task_1', TaskStatus.FAILED);
+      expect((failedResult.data as Task).status).toBe(TaskStatus.ENABLED);
+
+      const completedResult = await taskService.setTaskStatus('task_1', TaskStatus.COMPLETED);
+      expect((completedResult.data as Task).status).toBe(TaskStatus.ENABLED);
+    });
+
+    test('创建任务时 FAILED/COMPLETED 归一化为 ENABLED', async () => {
+      mockedStorage.getStorageData.mockResolvedValue({
+        success: true,
+        data: { tasks: {}, lastUpdated: 1 },
+      } as any);
+
+      const result = await taskService.createTask({
+        id: 'new_task',
+        status: TaskStatus.FAILED,
+      });
+
+      expect(result.success).toBe(true);
+      expect((result.data as Task).status).toBe(TaskStatus.ENABLED);
     });
   });
 });

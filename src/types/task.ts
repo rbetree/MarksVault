@@ -4,12 +4,14 @@
  */
 
 // 任务状态枚举
+// ENABLED/DISABLED 是稳定的启用配置；RUNNING 是执行期间的临时状态；
+// 执行成功、失败、中断只写入 history，不改变启用配置
 export enum TaskStatus {
-  ENABLED = 'enabled',   // 已启用，等待执行
-  DISABLED = 'disabled', // 已禁用，不会执行
-  RUNNING = 'running',   // 正在执行
-  COMPLETED = 'completed', // 执行完成（一次性任务）
-  FAILED = 'failed'      // A状态，上次执行失败
+  ENABLED = 'enabled',   // 已启用，允许被事件自动触发
+  DISABLED = 'disabled', // 已禁用，不会被事件自动触发（用户仍可手动执行）
+  RUNNING = 'running',   // 正在执行（临时运行态，执行收尾后恢复启用配置）
+  COMPLETED = 'completed', // @deprecated 旧版本一次性任务状态，读取时迁移为 ENABLED
+  FAILED = 'failed'      // @deprecated 旧版本用执行结果覆盖启用状态，读取时迁移为 ENABLED
 }
 
 // 触发器类型枚举

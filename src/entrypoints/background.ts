@@ -243,7 +243,8 @@ export default defineBackground({
             return { success: false, error: '后台服务尚未准备就绪，请稍后重试' };
           }
 
-          const taskId = message?.payload?.taskId as unknown;
+          // 规范消息使用 payload.taskId；兼容早期快捷备份发送的顶层 taskId
+          const taskId = (message?.payload?.taskId ?? message?.taskId) as unknown;
 
           // 数据校验
           if (!taskId || typeof taskId !== 'string') {

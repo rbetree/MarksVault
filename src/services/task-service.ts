@@ -3,7 +3,6 @@ import {
     TaskStatus,
     TaskStorage,
     TaskExecutionResult,
-    ExecutionOutcome,
     createDefaultTask,
   createDefaultTaskStorage,
   TriggerType,
@@ -89,12 +88,22 @@ class TaskService {
     };
   }
 
-  private coerceTask(value: unknown): Task | null {
-    if (!this.isPlainObject(value)) return null;
+  /**
+   * 归一化持久化状态：执行结果不再覆盖启用状态，
+   * 旧数据中的 FAILED/COMPLETED 统一迁移为 ENABLED
+   */
+  private normalizeEnableStatus(status: TaskStatus): TaskStatus {
+    return status === TaskStatus.FAILED || status === TaskStatus.COMPLETED
+      ? TaskStatus.ENABLED
+      : status;
+  }
+
+  private coerceTask(value: unknown): { task: Task | null; statusMigrated: boolean } {
+    if (!this.isPlainObject(value)) return { task: null, statusMigrated: false };
 
     const idRaw = value['id'];
     const id = typeof idRaw === 'string' ? idRaw.trim() : '';
-    if (!id) return null;
+    if (!id) return { task: null, statusMigrated: false };
 
     const now = Date.now();
     const base = createDefaultTask();
@@ -106,10 +115,12 @@ class TaskService {
     const description = typeof descriptionRaw === 'string' ? descriptionRaw : '';
 
     const statusRaw = value['status'];
-    const status =
+    const parsedStatus =
       typeof statusRaw === 'string' && (Object.values(TaskStatus) as string[]).includes(statusRaw)
         ? (statusRaw as TaskStatus)
         : base.status;
+    const status = this.normalizeEnableStatus(parsedStatus);
+    const statusMigrated = status !== parsedStatus;
 
     const createdAtRaw = value['createdAt'];
     const createdAt = typeof createdAtRaw === 'number' && Number.isFinite(createdAtRaw) ? createdAtRaw : now;
@@ -130,16 +141,19 @@ class TaskService {
     const history = this.coerceHistory(value['history']);
 
     return {
-      ...base,
-      id,
-      name,
-      description,
-      status,
-      createdAt,
-      updatedAt,
-      trigger,
-      action,
-      history,
+      task: {
+        ...base,
+        id,
+        name,
+        description,
+        status,
+        createdAt,
+        updatedAt,
+        trigger,
+        action,
+        history,
+      },
+      statusMigrated,
     };
   }
 
@@ -154,7 +168,7 @@ class TaskService {
     if (Array.isArray(raw)) {
       const tasks: Record<string, Task> = {};
       for (const item of raw) {
-        const task = this.coerceTask(item);
+        const { task } = this.coerceTask(item);
         if (task) {
           tasks[task.id] = task;
         }
@@ -174,11 +188,13 @@ class TaskService {
 
       if (this.isPlainObject(tasksRaw)) {
         const tasks: Record<string, Task> = {};
+        let statusMigrated = false;
         for (const value of Object.values(tasksRaw)) {
-          const task = this.coerceTask(value);
-          if (task) {
-            tasks[task.id] = task;
+          const coerced = this.coerceTask(value);
+          if (coerced.task) {
+            tasks[coerced.task.id] = coerced.task;
           }
+          statusMigrated = statusMigrated || coerced.statusMigrated;
         }
 
         const lastUpdatedRaw = raw['lastUpdated'];
@@ -190,7 +206,7 @@ class TaskService {
             tasks,
             lastUpdated,
           },
-          migrated: !(typeof lastUpdatedRaw === 'number' && Number.isFinite(lastUpdatedRaw)),
+          migrated: statusMigrated || !(typeof lastUpdatedRaw === 'number' && Number.isFinite(lastUpdatedRaw)),
         };
       }
 
@@ -198,7 +214,7 @@ class TaskService {
       const tasks: Record<string, Task> = {};
       let found = false;
       for (const value of Object.values(raw)) {
-        const task = this.coerceTask(value);
+        const { task } = this.coerceTask(value);
         if (task) {
           tasks[task.id] = task;
           found = true;
@@ -455,7 +471,11 @@ class TaskService {
           taskId = `task_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
         }
 
-        const newTask: Task = { ...baseTask, id: taskId };
+        const newTask: Task = {
+          ...baseTask,
+          id: taskId,
+          status: this.normalizeEnableStatus(baseTask.status),
+        };
 
         // 更新存储
         taskStorage.tasks[newTask.id] = newTask;
@@ -523,7 +543,7 @@ class TaskService {
 
         // 更新任务数据：剥离传入的 history 与 status 字段。
         // UI 编辑保存会传回含旧历史、旧状态的完整任务对象，浅合并会回滚执行期间
-        // 已写入的新历史或执行器置位的 RUNNING/FAILED；状态变更只走 setTaskStatus
+        // 已写入的新历史或执行器置位的 RUNNING；状态变更只走 setTaskStatus
         const updates = { ...taskData };
         delete updates.history;
         if (!allowStatus) {
@@ -634,8 +654,13 @@ class TaskService {
    * @returns 设置结果
    */
   public async setTaskStatus(taskId: string, status: TaskStatus): Promise<StorageResult> {
-    // 状态是执行器与用户显式控制的字段，绕过 updateTask 对表单回传状态的剥离
-    return await this.applyTaskUpdates(taskId, { status }, true);
+    // 状态是执行器与用户显式控制的字段，绕过 updateTask 对表单回传状态的剥离；
+    // FAILED/COMPLETED 不再作为持久化启用状态写入，统一归一化为 ENABLED
+    return await this.applyTaskUpdates(
+      taskId,
+      { status: this.normalizeEnableStatus(status) },
+      true
+    );
   }
 
   /**
@@ -676,31 +701,10 @@ class TaskService {
           ...task.history.executions.slice(0, MAX_HISTORY_ITEMS - 1)
         ];
 
-        // 确定结果类型：显式 outcome 优先，否则按 success 推断（兼容旧记录与旧格式结果）
-        const outcome = executionResult.outcome ?? (
-          executionResult.success ? ExecutionOutcome.SUCCESS : ExecutionOutcome.FAILURE
-        );
-
-        // 确定任务状态：启用状态是稳定配置，执行结果不覆盖。
-        // 仅当前状态为 RUNNING 或 ENABLED（执行器置位/正常态）时才按执行结果流转；
-        // 用户禁用的任务（DISABLED）及一次性完成（COMPLETED）等稳定状态一律保持，
-        // 避免执行收尾静默改变用户的启用/禁用意图
-        let newStatus = task.status;
-
-        if (task.status !== TaskStatus.RUNNING && task.status !== TaskStatus.ENABLED) {
-          console.log(`任务 ${taskId} 当前状态为 ${task.status}，执行结果不改变启用状态`);
-        } else if (outcome === ExecutionOutcome.SUCCESS) {
-          // 成功执行的情况，回到启用状态
-          newStatus = TaskStatus.ENABLED;
-          console.log(`任务 ${taskId} 执行成功，状态更新为 ENABLED`);
-        } else if (outcome === ExecutionOutcome.UNCERTAIN) {
-          // 结果不确定：系统无法确认任务操作是否完成，不等于失败；
-          // 保持当前状态（执行中为 RUNNING），由租约驱动的恢复流程或下一次执行刷新
-          console.warn(`任务 ${taskId} 执行结果不确定，保持当前状态 ${task.status}，不标记为 FAILED`);
-        } else {
-          // 执行失败或执行中断的处理
-          newStatus = TaskStatus.FAILED;
-
+        // 启用状态是稳定配置，执行结果只写入历史，不覆盖 status。
+        // 执行中的 RUNNING 由执行器收尾恢复为 ENABLED/DISABLED；
+        // 用户显式禁用的 DISABLED 不会被任何执行结果改变
+        if (!executionResult.success) {
           // 特殊处理：检查是否为GitHub凭据相关错误
           // 只精确匹配凭据缺失/失效的明确消息，避免网络错误消息（如
           // “GitHub凭据验证失败（网络或服务端错误）”仅含“GitHub凭据”子串）被误判为凭据错误
@@ -714,12 +718,11 @@ class TaskService {
           }
         }
 
-        // 更新任务历史与状态（同一次写入，保证原子性）
+        // 仅更新执行历史；启用状态保持不变
         task.history = {
           executions,
           lastExecution: executionResult
         };
-        task.status = newStatus;
         task.updatedAt = Date.now();
 
         taskStorage.lastUpdated = Date.now();

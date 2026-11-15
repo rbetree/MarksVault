@@ -3,8 +3,10 @@
  * 管理基于事件的触发器
  */
 
-import { Task, TaskStatus, TriggerType, EventType, ExecutionOutcome } from '../types/task';
+import { Task, TaskStatus, TriggerType, EventType } from '../types/task';
 import taskService from './task-service';
+import storageService from '../utils/storage-service';
+import { BookmarkWriteLease, BOOKMARK_WRITE_LEASE_KEY } from './task-executor-types';
 
 class TriggerService {
   private static instance: TriggerService;
@@ -43,74 +45,54 @@ class TriggerService {
   }
 
   /**
-   * 尝试恢复因特定原因失败的任务
-   * 主要针对因GitHub凭据问题而失败的任务
+   * 兼容旧数据：旧版本用 FAILED 表示“上次执行失败”，现已由 task-service
+   * 在读取时迁移为 ENABLED。此处仅兜底处理绕过规范化写入的遗留 FAILED 任务，
+   * 执行结果不再参与启用状态的恢复判定
    */
   public async tryRecoverFailedTasks(): Promise<void> {
     try {
-      // 获取所有失败状态的任务
       const result = await taskService.getTasksByStatus(TaskStatus.FAILED);
       if (!result.success) {
-        console.error('获取失败任务列表失败:', result.error);
+        console.error('获取遗留失败任务列表失败:', result.error);
         return;
       }
 
-      const failedTasks = result.data as Task[];
-      if (failedTasks.length === 0) {
-        return; // 没有失败的任务，直接返回
-      }
-
-      console.log(`找到 ${failedTasks.length} 个失败状态的任务，尝试恢复...`);
-      
-      let recoveredCount = 0;
-      
-      // 检查每个失败的任务，判断是否可以恢复
-      for (const task of failedTasks) {
-        // 查看最后执行的历史记录
-        const lastExecution = task.history.lastExecution;
-        
-        // 如果没有执行历史，或者最后执行成功，则不需要恢复
-        if (!lastExecution || lastExecution.success) {
-          continue;
+      const legacyFailedTasks = result.data as Task[];
+      for (const task of legacyFailedTasks) {
+        const recoverResult = await taskService.setTaskStatus(task.id, TaskStatus.ENABLED);
+        if (recoverResult.success) {
+          console.log(`已将遗留失败任务 ${task.id} 迁移为 ENABLED`);
         }
-        
-        // 执行中断或结果不确定的任务不自动恢复（中断不会自动续跑，
-        // 结果不确定不得自动重试）；仅恢复普通失败且非凭据错误的任务。
-        // 旧数据 outcome 缺省为 undefined，不在此列，仍按后续逻辑处理
-        if (lastExecution.outcome === ExecutionOutcome.INTERRUPTED ||
-            lastExecution.outcome === ExecutionOutcome.UNCERTAIN) {
-          console.log(`任务 ${task.id} 上次执行中断或结果不确定，不自动恢复`);
-          continue;
-        }
-        
-        // 检查错误原因
-        const errorMessage = lastExecution.error || '';
-        
-        // 如果是凭据相关错误，不自动恢复，需要用户先更新凭据。
-        // 与 task-service 的 isCredentialError 判定保持一致：精确匹配凭据缺失/失效的
-        // 明确消息，避免“GitHub凭据验证失败（网络或服务端错误）”这类仅含
-        // “GitHub凭据”子串的网络错误消息被误判为凭据错误而放弃自动恢复
-        const isCredentialError = errorMessage.includes('未找到GitHub凭据') ||
-                                errorMessage.includes('凭据无效或已过期');
-        
-        if (isCredentialError) {
-          console.log(`任务 ${task.id} 因GitHub凭据问题失败，需要用户在“概览”页面重新授权后才能恢复`);
-          continue;
-        }
-        
-        // 其他类型的错误可以尝试自动恢复
-        // 例如网络错误、临时服务不可用等
-        await taskService.setTaskStatus(task.id, TaskStatus.ENABLED);
-        recoveredCount++;
-        
-        console.log(`已自动恢复任务 ${task.id} 的状态为 ENABLED`);
-      }
-      
-      if (recoveredCount > 0) {
-        console.log(`成功恢复了 ${recoveredCount} 个失败的任务`);
       }
     } catch (error) {
-      console.error('恢复失败任务时出错:', error);
+      console.error('迁移遗留失败任务时出错:', error);
+    }
+  }
+
+  /**
+   * 读取仍在有效期内的书签写入租约
+   * 任务执行整理/恢复时会持续修改书签树，其自身写入产生的 BOOKMARK_CHANGED
+   * 事件不应再次触发同一任务；租约只用于识别持有者，不阻止其他任务响应用户操作
+   */
+  private async getActiveBookmarkWriteLease(): Promise<BookmarkWriteLease | null> {
+    try {
+      const result = await storageService.getStorageData(BOOKMARK_WRITE_LEASE_KEY);
+      if (!result.success || !result.data) {
+        return null;
+      }
+
+      const lease = result.data as Partial<BookmarkWriteLease>;
+      if (
+        typeof lease.taskId !== 'string' ||
+        typeof lease.expiresAt !== 'number' ||
+        lease.expiresAt <= Date.now()
+      ) {
+        return null;
+      }
+      return lease as BookmarkWriteLease;
+    } catch (error) {
+      console.error('读取书签写入租约失败:', error);
+      return null;
     }
   }
 
@@ -129,9 +111,19 @@ class TriggerService {
       }
 
       const enabledTasks = result.data as Task[];
-      
+
+      // 书签变更可能由任务自身的整理/恢复写入产生：
+      // 写入租约持有者跳过本次 BOOKMARK_CHANGED，避免自触发循环
+      const activeWriteLease = eventType === EventType.BOOKMARK_CHANGED
+        ? await this.getActiveBookmarkWriteLease()
+        : null;
+
       // 筛选与事件类型匹配的事件触发器任务
       const matchingTasks = enabledTasks.filter(task => {
+        if (activeWriteLease?.taskId === task.id) {
+          console.log(`任务 ${task.id} 正在写入书签，跳过其自身写入产生的 ${eventType} 事件`);
+          return false;
+        }
         return task.trigger.type === TriggerType.EVENT &&
                task.trigger.event === eventType &&
                this.matchesConditions(task, eventData);

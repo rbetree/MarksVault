@@ -9,10 +9,10 @@ import { isRetryableGitHubError } from './github-service';
 import { ExecutionTimeoutError } from './task-executor-types';
 
 /**
- * 按当前状态更新任务状态（恢复与收尾兜底专用）
+ * 按当前状态恢复执行期状态（恢复与收尾专用）
  * 启用状态是稳定配置，执行结果不覆盖：当前状态为 DISABLED（用户主动禁用）时
- * 保持禁用，仅由调用方负责写入执行历史；仅 RUNNING/ENABLED 等可流转状态
- * 才按预期状态更新，避免执行收尾静默改变用户的启用/禁用意图
+ * 保持禁用，仅由调用方负责写入执行历史；其他情况恢复为预期状态（通常为 ENABLED），
+ * 避免执行收尾静默改变用户的启用/禁用意图
  * @param taskId 任务ID
  * @param status 预期状态（仅当前状态非 DISABLED 时生效）
  */
@@ -28,6 +28,9 @@ export async function setTaskStatusPreservingDisabled(taskId: string, status: Ta
       console.warn(`任务 ${taskId} 已被用户禁用，保持 DISABLED，不覆盖为 ${status}`);
       return;
     }
+    if (currentStatus === status) {
+      return;
+    }
     await taskService.setTaskStatus(taskId, status);
   } catch (error) {
     console.error(`任务 ${taskId} 更新状态为 ${status} 失败:`, error);
@@ -36,8 +39,9 @@ export async function setTaskStatusPreservingDisabled(taskId: string, status: Ta
 
 /**
  * 失败结果收尾（结果路径与异常路径共用）
- * 结果不确定（UNCERTAIN）只记录历史，不标记 FAILED；
- * 其余失败记录执行历史并将任务状态设置为失败
+ * 执行结果只记录到执行历史；启用状态是稳定配置，不因失败、中断或
+ * 结果不确定而改变。执行期间的 RUNNING 在收尾时恢复为 ENABLED，
+ * 用户显式禁用的 DISABLED 保持不变。
  * @param executionResult 失败的执行结果
  * @param taskId 任务ID
  * @param executionStartTime 本次执行尝试的开始时间
@@ -48,36 +52,20 @@ export async function finalizeFailureResult(
   taskId: string,
   executionStartTime: Date
 ): Promise<TaskExecutionResult> {
-  // 结果不确定：系统无法确认任务操作是否完成，不得自动重试；
-  // 不标记 FAILED，保持当前状态由租约驱动的恢复逻辑处理
-  if (executionResult.outcome === ExecutionOutcome.UNCERTAIN) {
-    console.warn(`任务 ${taskId} 执行结果不确定，记录历史但不标记为 FAILED`);
-    await taskService.updateTaskExecutionHistory(taskId, executionResult);
-    return executionResult;
-  }
-
-  // 失败收尾：记录执行历史并将任务状态设置为失败
   console.log(`更新任务 ${taskId} 执行历史(失败)...`);
-  // 历史+状态为同一次写入，成功时状态已按执行结果流转；
-  // 仅在写入失败、任务可能残留 RUNNING 时兜底标记 FAILED
   const historyResult = await taskService.updateTaskExecutionHistory(taskId, executionResult);
   if (!historyResult.success) {
     console.error(`任务 ${taskId} 更新执行历史(失败)失败:`, historyResult.error);
-    await setTaskStatusPreservingDisabled(taskId, TaskStatus.FAILED);
   }
 
-  // 历史写入已按当前状态流转：DISABLED/COMPLETED 等稳定状态保持原值。
-  // 读取最终状态后再输出准确日志，避免误报“状态为 FAILED”
-  const finalTaskResult = await taskService.getTaskById(taskId);
-  const finalStatus = finalTaskResult.success
-    ? (finalTaskResult.data as { status: TaskStatus }).status
-    : undefined;
-  if (finalStatus === TaskStatus.FAILED) {
-    console.log(`更新任务 ${taskId} 状态为 FAILED`);
-  } else if (finalStatus) {
-    console.warn(`任务 ${taskId} 保持当前状态 ${finalStatus}，执行失败不覆盖启用状态`);
+  // 执行结果不改变启用状态：仅把执行期 RUNNING 恢复为 ENABLED，
+  // 用户执行期间禁用的任务保持 DISABLED
+  await setTaskStatusPreservingDisabled(taskId, TaskStatus.ENABLED);
+
+  if (executionResult.outcome === ExecutionOutcome.UNCERTAIN) {
+    console.warn(`任务 ${taskId} 执行结果不确定，结果已写入执行历史，启用状态保持不变`);
   } else {
-    console.warn(`任务 ${taskId} 执行失败收尾完成（无法读取最终状态）`);
+    console.warn(`任务 ${taskId} 执行失败，结果已写入执行历史，启用状态保持不变`);
   }
 
   const executionEndTime = new Date();

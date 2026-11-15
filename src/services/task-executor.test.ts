@@ -601,9 +601,10 @@ describe('task-executor 三态结果与中断恢复', () => {
     // 不进入重试：动作执行器只被调用一次
     expect(backupSpy).toHaveBeenCalledTimes(1);
 
-    // 任务不标记为 FAILED：保持 RUNNING，由租约驱动的恢复逻辑处理
+    // 执行结果不改变启用状态：任务恢复为 ENABLED，
+    // 未到期执行租约保留以阻止并发重入
     const task = (await taskService.getTaskById(taskId)).data as Task;
-    expect(task.status).toBe(TaskStatus.RUNNING);
+    expect(task.status).toBe(TaskStatus.ENABLED);
     expect(task.history.lastExecution?.outcome).toBe(ExecutionOutcome.UNCERTAIN);
     expect(task.history.lastExecution?.success).toBe(false);
   });
@@ -679,29 +680,41 @@ describe('task-executor 三态结果与中断恢复', () => {
     expect(task.history.lastExecution?.success).toBe(false);
     expect(task.history.lastExecution?.source).toBe('manual');
 
-    // 执行中断的任务标记为 FAILED（与旧恢复行为一致）
-    expect(task.status).toBe(TaskStatus.FAILED);
+    // 执行中断只记录结果，不改变启用状态：任务保持 ENABLED
+    expect(task.status).toBe(TaskStatus.ENABLED);
 
     // 已到期租约被清理，快照（执行输入）已清理
     expect(await readLease(taskId)).toBeUndefined();
     expect(await executor2.getPendingSnapshot(taskId)).toBeNull();
+
+    // 中断后任务仍启用：可以再次发起执行，不会因一次中断永久停掉自动任务
+    jest.spyOn(executor2 as any, 'executeBackupAction').mockResolvedValue({
+      success: true,
+      timestamp: Date.now(),
+      details: '中断后重新执行完成',
+    });
+    const rerun = await executor2.executeTask(taskId);
+    expect(rerun.success).toBe(true);
 
     // 清理重启前的悬挂执行
     gate.resolve();
     await firstRun;
   });
 
-  test('验收4：不再一律恢复为 FAILED——无遗留执行的 RUNNING 残留恢复为 ENABLED 且不重复写入历史', async () => {
+  test('验收4：无遗留执行的 RUNNING 残留恢复为 ENABLED 且不重复写入历史', async () => {
     const taskId = 'recover_stale_running_task';
     await createBackupTask(taskId);
 
-    // 超时收尾后：任务保持 RUNNING，快照与执行租约已在收尾时清理
+    // 超时收尾后：执行结果已写入历史，启用状态已恢复 ENABLED
     const executor = TaskExecutor.getInstance();
     executor.updateConfig({ actionTimeouts: { backup: 30 } });
     hangExecution(executor);
     const result = await executor.executeTask(taskId);
     expect(result.outcome).toBe(ExecutionOutcome.UNCERTAIN);
-    expect((await taskService.getTaskById(taskId)).data.status).toBe(TaskStatus.RUNNING);
+    expect((await taskService.getTaskById(taskId)).data.status).toBe(TaskStatus.ENABLED);
+
+    // 模拟收尾前 SW 中断留下的 RUNNING 残留（无快照、无执行租约）
+    await taskService.setTaskStatus(taskId, TaskStatus.RUNNING);
 
     // 模拟 Service Worker 重启：重建执行引擎实例并重新初始化
     TaskExecutor.resetForTesting();
@@ -750,7 +763,7 @@ describe('task-executor 三态结果与中断恢复', () => {
     expect(successTask.history.lastExecution?.outcome).toBe(ExecutionOutcome.SUCCESS);
     expect(successTask.status).toBe(TaskStatus.ENABLED);
 
-    // 失败路径：历史记录携带 outcome=failure，任务状态为 FAILED
+    // 失败路径：历史记录携带 outcome=failure，启用状态保持 ENABLED
     const failureId = 'outcome_failure_task';
     await createBackupTask(failureId);
     jest.spyOn(executor as any, 'executeBackupAction').mockResolvedValue({
@@ -763,7 +776,7 @@ describe('task-executor 三态结果与中断恢复', () => {
 
     const failureTask = (await taskService.getTaskById(failureId)).data as Task;
     expect(failureTask.history.lastExecution?.outcome).toBe(ExecutionOutcome.FAILURE);
-    expect(failureTask.status).toBe(TaskStatus.FAILED);
+    expect(failureTask.status).toBe(TaskStatus.ENABLED);
   });
 });
 
@@ -1764,9 +1777,9 @@ describe('task-executor 重试策略', () => {
     expect(backupSpy).toHaveBeenCalledTimes(1);
     expect(result.success).toBe(false);
     expect(result.error).toContain('停止重试');
-    // 按失败收尾
+    // 按失败收尾：结果写入历史，启用状态保持 ENABLED
     const task = (await taskService.getTaskById(taskId)).data as Task;
-    expect(task.status).toBe(TaskStatus.FAILED);
+    expect(task.status).toBe(TaskStatus.ENABLED);
     expect(task.history.executions.length).toBe(1);
     // 快照清理，且仍归本执行的租约被释放，不阻塞后续执行 120 秒
     expect(await executor.getPendingSnapshot(taskId)).toBeNull();
@@ -1840,9 +1853,9 @@ describe('task-executor 重试策略', () => {
     expect(result.success).toBe(false);
     expect(result.outcome).toBe(ExecutionOutcome.FAILURE);
     expect(result.error).toContain('停止重试');
-    // 按失败收尾：任务标记为 FAILED，历史只记录最终失败
+    // 按失败收尾：历史只记录最终失败，启用状态保持 ENABLED
     const task = (await taskService.getTaskById(taskId)).data as Task;
-    expect(task.status).toBe(TaskStatus.FAILED);
+    expect(task.status).toBe(TaskStatus.ENABLED);
     expect(task.history.executions.length).toBe(1);
     expect(task.history.lastExecution?.outcome).toBe(ExecutionOutcome.FAILURE);
     // 重试链在此终止：执行快照必须清理，不能因外层 finally 跳过快照删除而残留
@@ -1873,9 +1886,9 @@ describe('task-executor 重试策略', () => {
     expect(backupSpy).toHaveBeenCalledTimes(1);
     expect(result.success).toBe(false);
     expect(result.outcome).toBe(ExecutionOutcome.UNCERTAIN);
-    // 结果不确定不标记 FAILED
+    // 结果不确定不改变启用状态
     const task = (await taskService.getTaskById(taskId)).data as Task;
-    expect(task.status).toBe(TaskStatus.RUNNING);
+    expect(task.status).toBe(TaskStatus.ENABLED);
   });
 
   test('验收4：错误消息包含旧关键词（timeout/network）不再触发重试，判定仅依赖结构化信息', async () => {
@@ -1896,7 +1909,7 @@ describe('task-executor 重试策略', () => {
     expect(result.success).toBe(false);
     expect(result.outcome).toBe(ExecutionOutcome.FAILURE);
     const task = (await taskService.getTaskById(taskId)).data as Task;
-    expect(task.status).toBe(TaskStatus.FAILED);
+    expect(task.status).toBe(TaskStatus.ENABLED);
   });
 
   test('验收1：达到重试上限后停止重试，按失败收尾且历史只记录最终失败', async () => {
@@ -1921,7 +1934,7 @@ describe('task-executor 重试策略', () => {
     expect(result.success).toBe(false);
     expect(result.outcome).toBe(ExecutionOutcome.FAILURE);
     const task = (await taskService.getTaskById(taskId)).data as Task;
-    expect(task.status).toBe(TaskStatus.FAILED);
+    expect(task.status).toBe(TaskStatus.ENABLED);
     // 重试属于同一任务执行：历史只记录最终失败结果
     expect(task.history.executions.length).toBe(1);
     expect(task.history.lastExecution?.details).toContain('已重试 2 次');
@@ -2237,11 +2250,11 @@ describe('task-executor bug 修复回归', () => {
     expect(result.success).toBe(false);
     expect(result.outcome).toBe(ExecutionOutcome.UNCERTAIN);
 
-    // ① 执行历史 1 条且 outcome=uncertain，任务保持 RUNNING（不标记 FAILED）
+    // ① 执行历史 1 条且 outcome=uncertain，启用状态保持 ENABLED
     const task = (await taskService.getTaskById(taskId)).data as Task;
     expect(task.history.executions.length).toBe(1);
     expect(task.history.lastExecution?.outcome).toBe(ExecutionOutcome.UNCERTAIN);
-    expect(task.status).toBe(TaskStatus.RUNNING);
+    expect(task.status).toBe(TaskStatus.ENABLED);
 
     // ② 执行租约仍保留在 storage（未在超时收尾时误删）
     const lease = await readLease(taskId);
@@ -2393,7 +2406,7 @@ describe('task-executor bug 修复回归', () => {
     expect(await readLease(taskId)).toBeUndefined();
   });
 
-  test('P3：失败收尾由历史写入原子完成状态流转，不重复检查-写入状态', async () => {
+  test('P3：失败收尾只写入历史并恢复 ENABLED，不写入 FAILED 状态', async () => {
     const taskId = 'regression_failure_status_atomic';
     await createBackupTask(taskId);
 
@@ -2409,12 +2422,12 @@ describe('task-executor bug 修复回归', () => {
     const result = await executor.executeTask(taskId, 0, 'manual');
 
     expect(result.success).toBe(false);
-    // 历史写入已原子完成 FAILED 状态流转，收尾不再单独调用 setTaskStatus(FAILED)
+    // 执行结果只写入历史；收尾只把 RUNNING 恢复为 ENABLED，不写 FAILED
     expect(
       setStatusSpy.mock.calls.filter(([, status]) => status === TaskStatus.FAILED)
     ).toHaveLength(0);
     const task = (await taskService.getTaskById(taskId)).data as Task;
-    expect(task.status).toBe(TaskStatus.FAILED);
+    expect(task.status).toBe(TaskStatus.ENABLED);
     expect(task.history.executions.length).toBe(1);
   });
 
@@ -2524,11 +2537,11 @@ describe('task-executor bug 修复回归', () => {
     gate.resolve();
     const result = await executionPromise;
 
-    // 重试耗尽后按失败收尾：任务 FAILED、历史只记录最终失败、快照已清理
+    // 重试耗尽后按失败收尾：启用状态保持 ENABLED、历史只记录最终失败、快照已清理
     expect(result.success).toBe(false);
     expect(result.outcome).toBe(ExecutionOutcome.FAILURE);
     const task = (await taskService.getTaskById(taskId)).data as Task;
-    expect(task.status).toBe(TaskStatus.FAILED);
+    expect(task.status).toBe(TaskStatus.ENABLED);
     expect(task.history.executions.length).toBe(1);
     expect(await executor.getPendingSnapshot(taskId)).toBeNull();
   });
